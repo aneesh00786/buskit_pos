@@ -48,3 +48,16 @@ Thumbs.db
 *.mov
 *.wmv
 
+
+# Flutter / Dart
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+android/local.properties
+ios/Flutter/Generated.xcconfig
+
+# Database backups and secrets must never be committed
+backups/
+.env
