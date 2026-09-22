@@ -61,3 +61,12 @@ ios/Flutter/Generated.xcconfig
 # Database backups and secrets must never be committed
 backups/
 .env
+
+# Local-only dev/test notes (device identifiers, secrets, PINs, sample
+# credentials for manual testing). Never belongs in lib/ or anywhere else in
+# the repo; keep it under a *.local name or the ignored local/ folder instead.
+# See docs/local-test-credentials.md for the non-secret template.
+*.local
+*.local.*
+local/
+lib/core/config/*.local
