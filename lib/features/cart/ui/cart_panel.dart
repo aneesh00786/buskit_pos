@@ -12,6 +12,7 @@ import '../state/cart_controller.dart';
 import '../../checkout/ui/pay_modal.dart';
 import 'cart_item_tile.dart';
 import 'customer_dialog.dart';
+import 'promotion_picker.dart';
 
 /// "Current Sale": the draft sale exactly as the server computed it, with
 /// quantity update, remove, clear all and hold. Every price, tax figure and
@@ -324,6 +325,93 @@ class _CustomerRow extends StatelessWidget {
   }
 }
 
+/// "Promotion": no promotion / an applied one (with Change/Remove) / an
+/// applied-but-no-longer-eligible one (shown as a warning, not silently
+/// dropped — the cart contents or the promotion itself changed since it was
+/// applied). The discount shown always comes from the server.
+class _PromotionRow extends StatelessWidget {
+  const _PromotionRow({required this.sale});
+  final CartSale sale;
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.watch<CartController>();
+    final t = PosTokens.of(context);
+    final theme = Theme.of(context);
+    final promo = sale.promotion;
+    final editable = cart.canChoosePromotion;
+
+    if (promo == null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: PosTokens.s8),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: editable ? () => showPromotionPicker(context) : null,
+            icon: const Icon(Icons.local_offer_outlined),
+            label: const Text('Add Promotion'),
+          ),
+        ),
+      );
+    }
+
+    final warning = !promo.eligible;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: PosTokens.s8),
+      child: Container(
+        padding: const EdgeInsets.all(PosTokens.s12),
+        decoration: BoxDecoration(
+          color: warning ? theme.colorScheme.errorContainer : t.surfaceMuted,
+          borderRadius: BorderRadius.circular(PosTokens.rSmall),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.local_offer_outlined,
+                  size: 18,
+                  color: warning ? theme.colorScheme.error : t.success,
+                ),
+                const SizedBox(width: PosTokens.s8),
+                Expanded(
+                  child: Text(
+                    promo.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (editable) ...[
+                  TextButton(
+                    onPressed: () => showPromotionPicker(context),
+                    child: const Text('Change'),
+                  ),
+                  TextButton(
+                    onPressed: cart.removePromotion,
+                    child: const Text('Remove'),
+                  ),
+                ],
+              ],
+            ),
+            if (warning)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  promo.message ?? 'This promotion is no longer available.',
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Totals extends StatelessWidget {
   const _Totals({required this.sale, this.dense = false});
   final CartSale sale;
@@ -342,23 +430,11 @@ class _Totals extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // The backend has no discount endpoint yet: a disabled placeholder.
-          if (!dense)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Tooltip(
-                message: 'Discounts are coming soon',
-                child: TextButton.icon(
-                  onPressed: null,
-                  icon: const Icon(Icons.local_offer_outlined),
-                  label: const Text('Add discount'),
-                ),
-              ),
-            ),
+          if (!dense) _PromotionRow(sale: sale),
           _row(context, 'Subtotal', t.subtotal),
           _row(context, 'Tax', t.taxTotal),
-          if (t.discountTotal != null)
-            _row(context, 'Discount', t.discountTotal),
+          if (t.discountTotal != null && t.discountTotal! > 0)
+            _row(context, 'Discount', -t.discountTotal!),
           if (!dense) const Divider(height: PosTokens.s16),
           _row(context, 'Total', t.grandTotal, big: true),
           if (sale.hasUnavailableItems)

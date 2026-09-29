@@ -265,28 +265,26 @@ void main() {
     });
 
     testWidgets(
-      'Add discount is a disabled placeholder; the discount figure stays the server value',
+      'Add Promotion is enabled for a draft sale; no discount row when there is no discount',
       (tester) async {
         await pumpPanel(tester);
         final add = tester.widget<TextButton>(
-          find.widgetWithText(TextButton, 'Add discount'),
+          find.widgetWithText(TextButton, 'Add Promotion'),
         );
-        expect(add.onPressed, isNull);
-        expect(find.byTooltip('Discounts are coming soon'), findsOneWidget);
+        expect(add.onPressed, isNotNull);
         expect(
           find.text('Discount'),
-          findsOneWidget,
-          reason: 'the server discount_total row',
+          findsNothing,
+          reason: 'discount_total is 0 — nothing to show',
         );
-        expect(find.text('0.00'), findsOneWidget);
       },
     );
 
     testWidgets(
-      'on short panels the discount placeholder is dropped to keep the list visible',
+      'on short panels the promotion row is dropped to keep the list visible',
       (tester) async {
         await pumpPanel(tester, height: 560);
-        expect(find.text('Add discount'), findsNothing);
+        expect(find.text('Add Promotion'), findsNothing);
         expect(find.text('Hold sale'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },

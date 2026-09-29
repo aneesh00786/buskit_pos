@@ -208,4 +208,71 @@ void main() {
     cart.reset();
     expect(cart.sale, isNull);
   });
+
+  group('promotion', () {
+    test('cannot be chosen before a sale exists', () async {
+      expect(cart.canChoosePromotion, isFalse);
+      expect(await cart.applyPromotion(1), isFalse);
+      expect(await cart.removePromotion(), isFalse);
+      expect(service.applyPromotionCalls, isEmpty);
+    });
+
+    test('apply sends the sale id/version and replaces local state with the server result', () async {
+      await cart.addItem(1, 1);
+      service.onApplyPromotion = (c) async => CartSale.fromJson(
+        saleJson(
+          id: c.saleId,
+          version: c.expectedVersion + 1,
+          promotion: appliedPromotionJson(discountAmount: 5),
+        ),
+      )!;
+      expect(cart.canChoosePromotion, isTrue);
+      final ok = await cart.applyPromotion(1);
+      expect(ok, isTrue);
+      expect(service.applyPromotionCalls.single.saleId, 7);
+      expect(service.applyPromotionCalls.single.promotionId, 1);
+      expect(service.applyPromotionCalls.single.expectedVersion, 2);
+      expect(cart.sale!.promotion!.discountAmount, 5);
+    });
+
+    test('remove sends the sale id/version and clears the promotion', () async {
+      await cart.addItem(1, 1);
+      service.onApplyPromotion = (c) async => CartSale.fromJson(
+        saleJson(
+          id: c.saleId,
+          version: c.expectedVersion + 1,
+          promotion: appliedPromotionJson(),
+        ),
+      )!;
+      await cart.applyPromotion(1);
+      service.onRemovePromotion = (c) async => CartSale.fromJson(
+        saleJson(id: c.saleId, version: c.expectedVersion + 1),
+      )!;
+      final ok = await cart.removePromotion();
+      expect(ok, isTrue);
+      expect(service.removePromotionCalls.single.saleId, 7);
+      expect(cart.sale!.promotion, isNull);
+    });
+
+    test('a version conflict reloads the cart from the server', () async {
+      await cart.addItem(1, 1);
+      service.onApplyPromotion = (_) async => throw apiError(
+        409,
+        message: 'Sale has been modified since you last read it',
+      );
+      service.onGet = (id) async =>
+          CartSale.fromJson(saleJson(id: id, version: 9))!;
+      final ok = await cart.applyPromotion(1);
+      expect(ok, isFalse);
+      expect(cart.sale!.version, 9, reason: 'reloaded after the conflict');
+    });
+
+    test('is not possible once the sale is no longer a draft', () async {
+      service.onAdd = (c) async => CartSale.fromJson(
+        saleJson(id: c.saleId, version: c.expectedVersion + 1, status: 'held'),
+      )!;
+      await cart.addItem(1, 1);
+      expect(cart.canChoosePromotion, isFalse);
+    });
+  });
 }

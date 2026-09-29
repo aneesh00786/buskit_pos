@@ -74,6 +74,8 @@ class PosSidebar extends StatelessWidget {
     this.onOpenHistory,
     this.onOpenCustomers,
     this.onOpenPromotions,
+    this.onOpenAnalytics,
+    this.onOpenSettings,
     this.onHelp,
     this.onSignOut,
     this.active = PosSection.sales,
@@ -91,6 +93,8 @@ class PosSidebar extends StatelessWidget {
   final VoidCallback? onOpenHistory;
   final VoidCallback? onOpenCustomers;
   final VoidCallback? onOpenPromotions;
+  final VoidCallback? onOpenAnalytics;
+  final VoidCallback? onOpenSettings;
   final VoidCallback? onHelp;
   final VoidCallback? onSignOut;
   final PosSection active;
@@ -136,6 +140,8 @@ class PosSidebar extends StatelessWidget {
                           PosSection.history => onOpenHistory,
                           PosSection.customers => onOpenCustomers,
                           PosSection.promotions => onOpenPromotions,
+                          PosSection.analytics => onOpenAnalytics,
+                          PosSection.settings => onOpenSettings,
                           _ => null,
                         },
                         tooltip: _tooltip(item),

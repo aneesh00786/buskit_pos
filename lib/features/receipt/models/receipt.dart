@@ -50,6 +50,7 @@ class ReceiptData {
     required this.total,
     required this.payments,
     this.discount,
+    this.discountLabel = 'Discount',
     this.changeDue,
     this.completedAt,
     this.staffId,
@@ -67,6 +68,10 @@ class ReceiptData {
   final String subtotal;
   final String tax;
   final String? discount;
+
+  /// The line label shown next to [discount] — the applied promotion's name
+  /// when known (e.g. "10% OFF"), else the generic "Discount".
+  final String discountLabel;
   final String total;
   final List<ReceiptPayment> payments;
   final String? changeDue;

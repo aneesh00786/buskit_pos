@@ -835,8 +835,8 @@ class _SuccessView extends StatelessWidget {
           if (sale.totals.discountTotal != null &&
               sale.totals.discountTotal != 0)
             _KeyValue(
-              label: 'Discount',
-              value: formatMoney(sale.totals.discountTotal),
+              label: sale.promotion?.title ?? 'Discount',
+              value: '-${formatMoney(sale.totals.discountTotal)}',
             ),
           _KeyValue(
             label: 'Total',

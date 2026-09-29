@@ -147,19 +147,31 @@ void main() {
     );
 
     testWidgets(
-      'Promotions still explains the real backend gap instead of a generic "coming soon"',
+      'Promotions in the drawer closes it and opens the promotions browser',
       (tester) async {
-        final h = PageHarness();
+        final client = PosApiClient(
+          baseUrl: 'http://test',
+          httpClient: MockClient(
+            (_) async => http.Response(
+              '{"status":true,"data":{"items":[],"pagination":{"page":1,"limit":20,"total":0,"total_pages":1}}}',
+              200,
+            ),
+          ),
+        );
+        final h = PageHarness(client: client);
         await pumpProductsPage(tester, h, width: 400, height: 800);
         await tester.tap(find.byTooltip('Open navigation menu'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Promotions'));
         await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsOneWidget);
+        expect(find.text('Promotions'), findsWidgets);
+        expect(find.text('No promotions available'), findsOneWidget);
         expect(
-          find.textContaining('Promotions are not available from POS yet'),
-          findsOneWidget,
+          find.byType(PosSidebar),
+          findsNothing,
+          reason: 'the drawer closed',
         );
-        expect(find.textContaining('is coming soon'), findsNothing);
       },
     );
 

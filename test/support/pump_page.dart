@@ -33,13 +33,21 @@ PosApiClient emptyCustomersApiClient() => PosApiClient(
           'status': true,
           'data': {
             'items': [],
-            'pagination': {'page': 1, 'limit': 20, 'total': 0, 'total_pages': 1},
+            'pagination': {
+              'page': 1,
+              'limit': 20,
+              'total': 0,
+              'total_pages': 1,
+            },
           },
         }),
         200,
       );
     }
-    return http.Response(jsonEncode({'status': false, 'message': 'no route'}), 404);
+    return http.Response(
+      jsonEncode({'status': false, 'message': 'no route'}),
+      404,
+    );
   }),
 );
 

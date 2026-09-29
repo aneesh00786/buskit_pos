@@ -41,6 +41,15 @@ abstract class CartService {
     required String idempotencyKey,
     required List<PaymentLine> payments,
   });
+  Future<CartSale> applyPromotion({
+    required int saleId,
+    required int promotionId,
+    required int expectedVersion,
+  });
+  Future<CartSale> removePromotion({
+    required int saleId,
+    required int expectedVersion,
+  });
 }
 
 /// Verified against the backend: `POST /sales`, `GET /sales/:id`,
@@ -189,6 +198,35 @@ class ApiCartService implements CartService {
       );
     }
     return sale;
+  }
+
+  /// `POST /sales/:id/promotion {promotion_id, expected_version}` — apply or
+  /// replace the sale's one promotion. The server recalculates the discount;
+  /// nothing discount-related is ever sent here.
+  @override
+  Future<CartSale> applyPromotion({
+    required int saleId,
+    required int promotionId,
+    required int expectedVersion,
+  }) async {
+    final data = await _client.post(
+      '/sales/$saleId/promotion',
+      body: {'promotion_id': promotionId, 'expected_version': expectedVersion},
+    );
+    return _parse(data);
+  }
+
+  /// `DELETE /sales/:id/promotion {expected_version}`.
+  @override
+  Future<CartSale> removePromotion({
+    required int saleId,
+    required int expectedVersion,
+  }) async {
+    final data = await _client.delete(
+      '/sales/$saleId/promotion',
+      query: {'expected_version': '$expectedVersion'},
+    );
+    return _parse(data);
   }
 
   CartSale _parse(Object? data) {

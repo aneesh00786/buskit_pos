@@ -94,7 +94,9 @@ Map<String, dynamic> saleJson({
   List<Map<String, dynamic>> items = const [],
   double subtotal = 0,
   double tax = 0,
+  double discount = 0,
   double total = 0,
+  Map<String, dynamic>? promotion,
 }) => {
   'id': id,
   'version': version,
@@ -104,9 +106,32 @@ Map<String, dynamic> saleJson({
   'totals': {
     'subtotal': subtotal,
     'tax_total': tax,
-    'discount_total': 0,
+    'discount_total': discount,
     'grand_total': total,
   },
+  'promotion': promotion,
+};
+
+Map<String, dynamic> appliedPromotionJson({
+  int id = 1,
+  String title = 'Test 10% Off',
+  String? discountType = 'percentage',
+  double? discountValue = 10,
+  double? maxDiscount,
+  bool eligible = true,
+  String? reasonCode,
+  String? message,
+  double discountAmount = 0,
+}) => {
+  'id': id,
+  'title': title,
+  'discount_type': discountType,
+  'discount_value': discountValue,
+  'max_discount': maxDiscount,
+  'eligible': eligible,
+  'reason_code': reasonCode,
+  'message': message,
+  'discount_amount': discountAmount,
 };
 
 class SearchCall {
@@ -249,6 +274,19 @@ class HoldCall {
 
 class ResumeCall {
   ResumeCall(this.saleId, this.expectedVersion);
+  final int saleId;
+  final int expectedVersion;
+}
+
+class ApplyPromotionCall {
+  ApplyPromotionCall(this.saleId, this.promotionId, this.expectedVersion);
+  final int saleId;
+  final int promotionId;
+  final int expectedVersion;
+}
+
+class RemovePromotionCall {
+  RemovePromotionCall(this.saleId, this.expectedVersion);
   final int saleId;
   final int expectedVersion;
 }
@@ -472,6 +510,38 @@ class FakeCartService implements CartService {
   Future<CartSale> getSale(int saleId) {
     getCalls++;
     return onGet(saleId);
+  }
+
+  final List<ApplyPromotionCall> applyPromotionCalls = [];
+  final List<RemovePromotionCall> removePromotionCalls = [];
+  Future<CartSale> Function(ApplyPromotionCall call) onApplyPromotion =
+      (c) async => CartSale.fromJson(
+        saleJson(id: c.saleId, version: c.expectedVersion + 1),
+      )!;
+  Future<CartSale> Function(RemovePromotionCall call) onRemovePromotion =
+      (c) async => CartSale.fromJson(
+        saleJson(id: c.saleId, version: c.expectedVersion + 1),
+      )!;
+
+  @override
+  Future<CartSale> applyPromotion({
+    required int saleId,
+    required int promotionId,
+    required int expectedVersion,
+  }) {
+    final c = ApplyPromotionCall(saleId, promotionId, expectedVersion);
+    applyPromotionCalls.add(c);
+    return onApplyPromotion(c);
+  }
+
+  @override
+  Future<CartSale> removePromotion({
+    required int saleId,
+    required int expectedVersion,
+  }) {
+    final c = RemovePromotionCall(saleId, expectedVersion);
+    removePromotionCalls.add(c);
+    return onRemovePromotion(c);
   }
 
   @override

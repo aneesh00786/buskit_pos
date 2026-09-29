@@ -2,6 +2,7 @@ import '../../../core/utils/json_read.dart';
 import '../../../core/utils/money.dart';
 import '../../../core/utils/server_time.dart';
 import '../../cart/models/cart_sale.dart';
+import '../../promotions/models/promotion.dart';
 
 /// Tender types the backend accepts. Card and Other are RECORDED only — there
 /// is no terminal or gateway integration.
@@ -97,6 +98,7 @@ class CompletedSale {
     this.saleNumber,
     this.completedAt,
     this.customerId,
+    this.promotion,
   });
 
   final int id;
@@ -107,6 +109,10 @@ class CompletedSale {
   final List<CartLine> items;
   final CartTotals totals;
   final List<RecordedPayment> payments;
+
+  /// The promotion applied at completion, frozen forever — a later edit or
+  /// deletion of the source promotion can never change this receipt.
+  final AppliedPromotion? promotion;
 
   /// The order/invoice number: the server's sale number, else "#id".
   String get displayNumber =>
@@ -126,6 +132,7 @@ class CompletedSale {
       saleNumber: asString(m['sale_number']),
       completedAt: parseServerTime(m['completed_at']),
       customerId: asString(m['customer_id']),
+      promotion: AppliedPromotion.fromJson(m['promotion']),
       items: asList(m['items'])
           .map(CartLine.fromJson)
           .whereType<CartLine>()

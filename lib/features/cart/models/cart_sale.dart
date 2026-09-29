@@ -1,4 +1,5 @@
 import '../../../core/utils/json_read.dart';
+import '../../promotions/models/promotion.dart';
 
 class CartLine {
   const CartLine({
@@ -96,6 +97,7 @@ class CartSale {
     required this.totals,
     this.hasUnavailableItems = false,
     this.customerId,
+    this.promotion,
   });
 
   final int id;
@@ -107,6 +109,12 @@ class CartSale {
 
   /// Set when the sale was created (`POST /sales {customer_id}`); null = guest.
   final String? customerId;
+
+  /// The promotion currently attached to this sale, if any — always
+  /// recomputed live by the server (never trust an earlier apply/preview).
+  /// `promotion.eligible == false` means it's attached but no longer usable
+  /// (cart changed, it expired, ...) — shown, not silently dropped.
+  final AppliedPromotion? promotion;
 
   bool get isDraft => status == 'draft';
 
@@ -129,6 +137,7 @@ class CartSale {
       totals: CartTotals.fromJson(m['totals']),
       hasUnavailableItems: asBool(m['has_unavailable_items']) ?? false,
       customerId: asString(m['customer_id']),
+      promotion: AppliedPromotion.fromJson(m['promotion']),
     );
   }
 }

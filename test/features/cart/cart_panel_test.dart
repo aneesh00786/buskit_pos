@@ -220,7 +220,7 @@ void main() {
       expect(find.text('10003.50'), findsOneWidget);
       expect(find.text('1200.18'), findsOneWidget);
       expect(find.text('Discount'), findsOneWidget);
-      expect(find.text('2.50'), findsOneWidget);
+      expect(find.text('-2.50'), findsOneWidget);
       expect(find.text('11203.50'), findsOneWidget);
     });
 

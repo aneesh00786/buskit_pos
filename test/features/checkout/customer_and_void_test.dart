@@ -105,6 +105,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Customer'), findsOneWidget);
 
+        await tester.tap(find.text('Search'));
+        await tester.pumpAndSettle();
         expect(
           tester
               .widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
@@ -112,9 +114,6 @@ void main() {
           isNull,
           reason: 'nothing picked yet',
         );
-
-        await tester.tap(find.text('Search'));
-        await tester.pumpAndSettle();
         expect(find.text('Jane Doe'), findsOneWidget);
         await tester.tap(find.text('Jane Doe'));
         await tester.pumpAndSettle();
@@ -140,64 +139,63 @@ void main() {
       },
     );
 
-    testWidgets(
-      '+ New Customer creates and auto-selects a customer',
-      (tester) async {
-        final client = PosApiClient(
-          baseUrl: 'http://test',
-          httpClient: MockClient((r) async {
-            if (r.method == 'GET' && r.url.path.endsWith('/customers')) {
-              return http.Response(
-                jsonEncode({'status': true, 'data': pageJson(const [])}),
-                200,
-              );
-            }
-            if (r.method == 'POST' && r.url.path.endsWith('/customers')) {
-              return http.Response(
-                jsonEncode({
-                  'status': true,
-                  'data': {
-                    'id': 9,
-                    'customer_id': 'C-99',
-                    'fullname': 'New Guy',
-                    'mobileno': '0400999999',
-                    'email': null,
-                    'status': 2,
-                  },
-                }),
-                201,
-              );
-            }
+    testWidgets('+ New Customer creates and auto-selects a customer', (
+      tester,
+    ) async {
+      final client = PosApiClient(
+        baseUrl: 'http://test',
+        httpClient: MockClient((r) async {
+          if (r.method == 'GET' && r.url.path.endsWith('/customers')) {
             return http.Response(
-              jsonEncode({'status': false, 'message': 'no route'}),
-              404,
+              jsonEncode({'status': true, 'data': pageJson(const [])}),
+              200,
             );
-          }),
-        );
-        final h = await pumpPage(tester, client: client);
-        await tester.tap(find.text('Change'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Search'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('+ New Customer'));
-        await tester.pumpAndSettle();
-        await tester.enterText(
-          find.widgetWithText(TextFormField, 'Name *'),
-          'New Guy',
-        );
-        await tester.enterText(
-          find.widgetWithText(TextFormField, 'Phone *'),
-          '0400999999',
-        );
-        await tester.tap(find.widgetWithText(FilledButton, 'Save Customer'));
-        await tester.pumpAndSettle();
-        expect(find.text('Selected: New Guy'), findsOneWidget);
-        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-        await tester.pumpAndSettle();
-        expect(find.text('New Guy'), findsOneWidget);
-        expect(h.cart.pendingCustomerId, 'C-99');
-      },
-    );
+          }
+          if (r.method == 'POST' && r.url.path.endsWith('/customers')) {
+            return http.Response(
+              jsonEncode({
+                'status': true,
+                'data': {
+                  'id': 9,
+                  'customer_id': 'C-99',
+                  'fullname': 'New Guy',
+                  'mobileno': '0400999999',
+                  'email': null,
+                  'status': 2,
+                },
+              }),
+              201,
+            );
+          }
+          return http.Response(
+            jsonEncode({'status': false, 'message': 'no route'}),
+            404,
+          );
+        }),
+      );
+      final h = await pumpPage(tester, client: client);
+      await tester.tap(find.text('Change'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Search'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('+ New Customer'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Name *'),
+        'New Guy',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Phone *'),
+        '0400999999',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Save Customer'));
+      await tester.pumpAndSettle();
+      expect(find.text('Selected: New Guy'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+      expect(find.text('New Guy'), findsOneWidget);
+      expect(h.cart.pendingCustomerId, 'C-99');
+    });
 
     testWidgets(
       'once the sale exists the choice is locked with an explanation',

@@ -42,6 +42,7 @@ class ReceiptFormatter {
           (sale.totals.discountTotal != null && sale.totals.discountTotal != 0)
           ? money(sale.totals.discountTotal)
           : null,
+      discountLabel: sale.promotion?.title ?? 'Discount',
       total: money(sale.totals.grandTotal),
       payments: [
         for (final p in sale.payments)
@@ -141,7 +142,9 @@ extension ReceiptText on ReceiptData {
     out.add(rule);
     out.add(_pair('Subtotal', subtotal, columns));
     out.add(_pair('Tax', tax, columns));
-    if (discount != null) out.add(_pair('Discount', '-$discount', columns));
+    if (discount != null) {
+      out.add(_pair(_ascii(discountLabel), '-$discount', columns));
+    }
     out.add(_pair('TOTAL', total, columns));
     out.add(rule);
     for (final p in payments) {

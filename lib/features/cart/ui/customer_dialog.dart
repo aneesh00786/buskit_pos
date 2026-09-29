@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/network/error_messages.dart';
 import '../../../core/network/pos_api_client.dart';
 import '../../../core/theme/pos_tokens.dart';
-import '../../../core/ui/state_views.dart';
 import '../../customers/data/customer_service.dart';
 import '../../customers/models/customer.dart';
 import '../../customers/state/customer_list_controller.dart';
@@ -96,7 +96,8 @@ class _CustomerDialogState extends State<_CustomerDialog> {
     }
     final id = _selectedId;
     if (id == null) return;
-    Navigator.of(context).pop(CustomerChoice.customer(id, label: _selectedLabel));
+    Navigator.of(context)
+        .pop(CustomerChoice.customer(id, label: _selectedLabel));
   }
 
   @override
@@ -104,6 +105,7 @@ class _CustomerDialogState extends State<_CustomerDialog> {
     final canSave = _guest || _selectedId != null;
     return AlertDialog(
       title: const Text('Customer'),
+      scrollable: true,
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Column(
@@ -228,8 +230,8 @@ class _CustomerPickerState extends State<_CustomerPicker> {
           onSubmitted: (v) => c.submitQuery(v),
         ),
         const SizedBox(height: PosTokens.s8),
-        SizedBox(
-          height: 260,
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 260),
           child: _ResultsList(
             controller: c,
             selectedId: widget.selectedId,
@@ -265,56 +267,106 @@ class _ResultsList extends StatelessWidget {
     switch (controller.status) {
       case CustomerListStatus.idle:
       case CustomerListStatus.loading:
-        return const LoadingView(label: 'Loading customers');
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all(PosTokens.s12),
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
       case CustomerListStatus.error:
         final e = controller.error!;
-        return ErrorView(
-          message: describeApiError(e),
-          onRetry: controller.retry,
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(PosTokens.s12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(describeApiError(e), textAlign: TextAlign.center),
+                if (e.isRetryable || e.kind == ApiErrorKind.unknown)
+                  TextButton(
+                    onPressed: controller.retry,
+                    child: const Text('Retry'),
+                  ),
+              ],
+            ),
+          ),
         );
       case CustomerListStatus.empty:
-        return EmptyView(
-          title: controller.query.isEmpty
-              ? 'No customers yet'
-              : 'No customers found',
-          message: controller.query.isEmpty
-              ? 'Use + New Customer below to add one.'
-              : 'Try a different search.',
-          icon: Icons.people_outline,
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(PosTokens.s12),
+            child: Text(
+              controller.query.isEmpty
+                  ? 'No customers yet — use + New Customer below.'
+                  : 'No customers found. Try a different search.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
         );
       case CustomerListStatus.loaded:
-        return ListView.builder(
-          itemCount: controller.items.length,
-          itemBuilder: (_, i) {
-            final customer = controller.items[i];
-            final selected = customer.customerId == selectedId;
-            return ListTile(
-              dense: true,
-              selected: selected,
-              selectedTileColor: PosTokens.of(context).surfaceMuted,
-              leading: CustomerAvatar(customer: customer, size: 36, fontSize: 14),
-              title: Text(
-                customer.fullname,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                [
-                  if (customer.mobileno != null &&
-                      customer.mobileno!.isNotEmpty)
-                    customer.mobileno!,
-                  customer.customerId,
-                ].join(' · '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: selected
-                  ? Icon(Icons.check, color: PosTokens.of(context).success)
-                  : null,
-              onTap: () => onSelect(customer),
-            );
-          },
+        // A plain Column in a SingleChildScrollView, not ListView — the
+        // parent AlertDialog(scrollable: true) needs to compute this
+        // subtree's intrinsic height, which a ListView's viewport refuses to
+        // support (Flutter throws "RenderViewport does not support
+        // returning intrinsic dimensions"). A page of results is small
+        // enough that a non-virtualized list costs nothing in practice.
+        return SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final customer in controller.items)
+                _CustomerRow(
+                  customer: customer,
+                  selected: customer.customerId == selectedId,
+                  onTap: () => onSelect(customer),
+                ),
+            ],
+          ),
         );
     }
+  }
+}
+
+class _CustomerRow extends StatelessWidget {
+  const _CustomerRow({
+    required this.customer,
+    required this.selected,
+    required this.onTap,
+  });
+  final Customer customer;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      selected: selected,
+      selectedTileColor: PosTokens.of(context).surfaceMuted,
+      leading: CustomerAvatar(customer: customer, size: 36, fontSize: 14),
+      title: Text(
+        customer.fullname,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        [
+          if (customer.mobileno != null && customer.mobileno!.isNotEmpty)
+            customer.mobileno!,
+          customer.customerId,
+        ].join(' · '),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: selected
+          ? Icon(Icons.check, color: PosTokens.of(context).success)
+          : null,
+      onTap: onTap,
+    );
   }
 }

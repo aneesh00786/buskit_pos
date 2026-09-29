@@ -15,6 +15,7 @@ enum CartOperation {
   cancel,
   cancelHeld,
   complete,
+  promotion,
 }
 
 /// Holds the current draft sale and mutates it (add / update quantity /
@@ -371,6 +372,39 @@ class CartController extends ChangeNotifier {
     return true;
   }
 
+  // ---- promotion ----
+
+  /// True while an eligible promotion could meaningfully be applied — a
+  /// draft sale must already exist (a promotion is evaluated against actual
+  /// lines, and only a draft can be mutated).
+  bool get canChoosePromotion => _sale != null && _sale!.isDraft && _op == null;
+
+  /// Applies (or replaces) the sale's one promotion. The server recalculates
+  /// the discount and totals; nothing discount-related is ever sent here.
+  Future<bool> applyPromotion(int promotionId) async {
+    final sale = _sale;
+    if (sale == null || _op != null) return false;
+    return _run(CartOperation.promotion, null, () async {
+      return _service.applyPromotion(
+        saleId: sale.id,
+        promotionId: promotionId,
+        expectedVersion: sale.version,
+      );
+    });
+  }
+
+  /// Removes the sale's promotion, if any.
+  Future<bool> removePromotion() async {
+    final sale = _sale;
+    if (sale == null || _op != null) return false;
+    return _run(CartOperation.promotion, null, () async {
+      return _service.removePromotion(
+        saleId: sale.id,
+        expectedVersion: sale.version,
+      );
+    });
+  }
+
   // ---- complete (pay) ----
 
   static const String emptyCompleteMessage =
@@ -649,6 +683,7 @@ class CartController extends ChangeNotifier {
         }
       case CartOperation.complete:
       case CartOperation.add:
+      case CartOperation.promotion:
         break;
     }
     return e;

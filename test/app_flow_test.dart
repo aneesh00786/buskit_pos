@@ -137,6 +137,19 @@ class MockBackend {
         return _ok([
           {'cid': 1, 'category': 'Dairy'},
         ]);
+      case 'GET /customers':
+        return _ok(
+          pageJson([
+            {
+              'id': 1,
+              'customer_id': 'C-42',
+              'fullname': 'Jane Doe',
+              'mobileno': '0400000000',
+              'email': null,
+              'status': 2,
+            },
+          ]),
+        );
       case 'GET /products':
         if (productsUnauthorized) return _err(401, 'Token expired');
         return _ok(
@@ -1095,7 +1108,7 @@ void main() {
       },
     );
 
-    testWidgets('a chosen customer ID is sent when the sale is created', (
+    testWidgets('a customer found by search is sent when the sale is created', (
       tester,
     ) async {
       final backend = MockBackend();
@@ -1103,12 +1116,10 @@ void main() {
       await signIn(tester);
       await tester.tap(find.text('Change'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Customer ID').first);
+      await tester.tap(find.text('Search'));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Customer ID'),
-        'C-42',
-      );
+      await tester.tap(find.text('Jane Doe'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Add'));

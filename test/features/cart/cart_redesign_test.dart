@@ -325,7 +325,7 @@ void main() {
         await seed(sale: draft(discount: 2.5));
         await pumpPanel(tester);
         expect(find.text('Discount'), findsOneWidget);
-        expect(find.text('2.50'), findsOneWidget);
+        expect(find.text('-2.50'), findsOneWidget);
       },
     );
 
