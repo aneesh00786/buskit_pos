@@ -7,6 +7,19 @@ class PosErrorCodes {
   static const weightUnitNotSupported = 'POS_WEIGHT_UNIT_NOT_SUPPORTED';
   static const insufficientStock = 'POS_INSUFFICIENT_STOCK';
   static const stockConflict = 'POS_STOCK_CONFLICT';
+
+  /// The one identical code returned for every staff-login failure reason
+  /// (wrong PIN, unknown/locked/inactive staff, wrong company) — deliberately
+  /// generic to avoid account enumeration. A 401 from staff-login WITHOUT this
+  /// code means the device token itself was rejected, not the PIN.
+  static const invalidStaffCredentials = 'POS_INVALID_STAFF_CREDENTIALS';
+
+  /// A customer create/update collided with another customer's mobile/email
+  /// in the same company. `e.dataMap?['existing_customer_id']` carries the
+  /// customer that already has it, so the UI can offer to use that one
+  /// instead of just failing — see the customer form.
+  static const duplicateMobile = 'POS_DUPLICATE_MOBILE';
+  static const duplicateEmail = 'POS_DUPLICATE_EMAIL';
 }
 
 /// Turns an [ApiException] into a short, user-facing message. Codes are
@@ -14,7 +27,7 @@ class PosErrorCodes {
 String describeApiError(ApiException e) {
   switch (e.errorCode) {
     case PosErrorCodes.weightUnitNotSupported:
-      return 'This product is sold by weight (KG/GR) and cannot be sold at the POS yet. '
+      return 'This product is sold by weight or volume and cannot be sold at the POS yet. '
           'It has not been added to the cart.';
     case PosErrorCodes.insufficientStock:
       final shortages = asList(e.dataMap?['shortages']);

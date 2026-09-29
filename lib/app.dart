@@ -13,9 +13,14 @@ import 'features/cart/data/cart_service.dart';
 import 'features/cart/state/cart_controller.dart';
 import 'features/held_sales/data/held_sales_service.dart';
 import 'features/held_sales/state/held_sales_controller.dart';
+import 'features/barcode/camera_scanner.dart';
 import 'features/products/data/product_service.dart';
 import 'features/products/state/product_list_controller.dart';
 import 'features/products/ui/products_page.dart';
+import 'features/receipt/data/printer_settings.dart';
+import 'features/receipt/data/receipt_delivery.dart';
+import 'features/receipt/state/print_service.dart';
+import 'features/receipt/state/receipt_services.dart';
 
 class PosApp extends StatefulWidget {
   const PosApp({super.key, this.tokenStore, this.baseUrl, this.httpClient});
@@ -32,20 +37,25 @@ class PosApp extends StatefulWidget {
 class _PosAppState extends State<PosApp> {
   late final SessionController _session;
   late final PosApiClient _client;
+  late final ReceiptServices _receipts;
 
   @override
   void initState() {
     super.initState();
+    final store = widget.tokenStore ?? SecureTokenStore();
+    final printerSettings = PrinterSettingsStore(store);
+    _receipts = ReceiptServices(
+      print: PrintService(settings: printerSettings),
+      delivery: const UrlLauncherDelivery(),
+      settings: printerSettings,
+    );
     _client = PosApiClient(
       baseUrl: widget.baseUrl ?? AppConfig.baseUrl,
       httpClient: widget.httpClient,
       tokenProvider: () => _session.activeToken,
       onUnauthorized: (failedToken) => _session.handleUnauthorized(failedToken),
     );
-    _session = SessionController(
-      ApiAuthService(_client),
-      widget.tokenStore ?? SecureTokenStore(),
-    )..restore();
+    _session = SessionController(ApiAuthService(_client), store)..restore();
   }
 
   @override
@@ -61,6 +71,7 @@ class _PosAppState extends State<PosApp> {
       providers: [
         ChangeNotifierProvider.value(value: _session),
         Provider<PosApiClient>.value(value: _client),
+        Provider<ReceiptServices>.value(value: _receipts),
       ],
       child: MaterialApp(
         title: 'ThriveWoo POS',
@@ -97,8 +108,11 @@ class _AuthGate extends StatelessWidget {
         final client = context.read<PosApiClient>();
         // 401s are handled once, centrally: PosApiClient -> SessionController.
         // (Wiring the controllers' own callbacks as well would sign out twice.)
+        final products = ApiProductService(client);
         return MultiProvider(
           providers: [
+            Provider<ProductService>.value(value: products),
+            Provider<CameraScanner>.value(value: const MobileCameraScanner()),
             ChangeNotifierProvider(
               create: (_) => ProductListController(ApiProductService(client)),
             ),

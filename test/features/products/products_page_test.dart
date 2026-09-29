@@ -401,7 +401,7 @@ void main() {
             page([productJson(id: 6, name: 'Loose Rice', unit: 'KG')]);
         carts.onAdd = (_) async => throw apiError(
           422,
-          message: 'Weight-based products (KG/GR) cannot be sold',
+          message: 'Weight-based products cannot be sold',
           code: 'POS_WEIGHT_UNIT_NOT_SUPPORTED',
         );
         await pumpPage(tester);

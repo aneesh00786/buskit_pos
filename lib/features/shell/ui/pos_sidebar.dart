@@ -5,6 +5,7 @@ import '../../../core/theme/pos_tokens.dart';
 enum PosSection {
   sales,
   orders,
+  history,
   customers,
   inventory,
   promotions,
@@ -33,9 +34,25 @@ const _items = [
     'Orders',
     placeholder: false,
   ),
-  _NavItem(PosSection.customers, Icons.people_outline, 'Customers'),
+  _NavItem(
+    PosSection.history,
+    Icons.history,
+    'Sales history',
+    placeholder: false,
+  ),
+  _NavItem(
+    PosSection.customers,
+    Icons.people_outline,
+    'Customers',
+    placeholder: false,
+  ),
   _NavItem(PosSection.inventory, Icons.inventory_2_outlined, 'Inventory'),
-  _NavItem(PosSection.promotions, Icons.local_offer_outlined, 'Promotions'),
+  _NavItem(
+    PosSection.promotions,
+    Icons.local_offer_outlined,
+    'Promotions',
+    placeholder: false,
+  ),
   _NavItem(PosSection.analytics, Icons.insights_outlined, 'Analytics'),
   _NavItem(PosSection.settings, Icons.settings_outlined, 'Settings'),
 ];
@@ -54,6 +71,9 @@ class PosSidebar extends StatelessWidget {
     this.appVersion,
     this.heldCount,
     this.onOpenOrders,
+    this.onOpenHistory,
+    this.onOpenCustomers,
+    this.onOpenPromotions,
     this.onHelp,
     this.onSignOut,
     this.active = PosSection.sales,
@@ -68,6 +88,9 @@ class PosSidebar extends StatelessWidget {
   final String? appVersion;
   final int? heldCount;
   final VoidCallback? onOpenOrders;
+  final VoidCallback? onOpenHistory;
+  final VoidCallback? onOpenCustomers;
+  final VoidCallback? onOpenPromotions;
   final VoidCallback? onHelp;
   final VoidCallback? onSignOut;
   final PosSection active;
@@ -108,11 +131,13 @@ class PosSidebar extends StatelessWidget {
                         badge: item.section == PosSection.orders
                             ? heldCount
                             : null,
-                        onTap:
-                            item.section == PosSection.orders &&
-                                onOpenOrders != null
-                            ? onOpenOrders
-                            : null,
+                        onTap: switch (item.section) {
+                          PosSection.orders => onOpenOrders,
+                          PosSection.history => onOpenHistory,
+                          PosSection.customers => onOpenCustomers,
+                          PosSection.promotions => onOpenPromotions,
+                          _ => null,
+                        },
                         tooltip: _tooltip(item),
                       ),
                   ],

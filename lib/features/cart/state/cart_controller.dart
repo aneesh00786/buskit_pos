@@ -84,8 +84,10 @@ class CartController extends ChangeNotifier {
   int? _lastHeldSaleId;
   int? _lastCancelledSaleId;
   String? _pendingCustomerId;
+  String? _pendingCustomerLabel;
   CompletedSale? _completed;
   Map<int, String> _completedNames = const {};
+  Map<int, String> _completedVariants = const {};
   _CompletionAttempt? _attempt;
   bool _heldDuringOp = false;
   bool _disposed = false;
@@ -136,6 +138,12 @@ class CartController extends ChangeNotifier {
   /// server only accepts it when the sale is created.
   String? get pendingCustomerId => _pendingCustomerId;
 
+  /// The chosen customer's display name, if the picker had one (search result
+  /// or a customer just created) — null once a real sale exists, since the
+  /// server's sale view carries only the id, not the name.
+  String? get pendingCustomerLabel =>
+      _sale == null ? _pendingCustomerLabel : null;
+
   /// The customer attached to what is on screen: the open sale's, else the
   /// pending choice for the sale about to start.
   String? get customerId =>
@@ -157,6 +165,9 @@ class CartController extends ChangeNotifier {
 
   /// The idempotency key of the current attempt (null when none).
   String? get currentIdempotencyKey => _attempt?.key;
+
+  /// Variation/unit labels by line id, captured with [completedNames].
+  Map<int, String> get completedVariants => _completedVariants;
 
   String? labelFor(int productVariationId) => _labels[productVariationId];
   String? imageFor(int productVariationId) => _images[productVariationId];
@@ -348,12 +359,14 @@ class CartController extends ChangeNotifier {
 
   // ---- customer ----
 
-  /// Chooses the customer for the next sale ([id] null/blank = guest). Only
-  /// possible before a sale exists; returns false otherwise.
-  bool setPendingCustomer(String? id) {
+  /// Chooses the customer for the next sale ([id] null/blank = guest). [label]
+  /// is display-only (the name shown before the sale exists); only possible
+  /// before a sale exists, returns false otherwise.
+  bool setPendingCustomer(String? id, {String? label}) {
     if (!canChooseCustomer) return false;
     final t = id?.trim();
     _pendingCustomerId = (t == null || t.isEmpty) ? null : t;
+    _pendingCustomerLabel = _pendingCustomerId == null ? null : label;
     _notify();
     return true;
   }
@@ -393,6 +406,11 @@ class CartController extends ChangeNotifier {
       for (final l in sale.items)
         l.id: l.productName ?? 'Item ${l.productVariationId}',
     };
+    final variants = {
+      for (final l in sale.items)
+        if (_labels[l.productVariationId] != null)
+          l.id: _labels[l.productVariationId]!,
+    };
 
     return _run(
       CartOperation.complete,
@@ -406,8 +424,10 @@ class CartController extends ChangeNotifier {
       onSuccess: (result) {
         _completed = result as CompletedSale;
         _completedNames = names;
+        _completedVariants = variants;
         _sale = null; // the sale is done: the cart is empty again
         _pendingCustomerId = null;
+        _pendingCustomerLabel = null;
         _attempt = null;
         _labels.clear();
         _images.clear();
@@ -420,6 +440,7 @@ class CartController extends ChangeNotifier {
     if (_completed == null) return;
     _completed = null;
     _completedNames = const {};
+    _completedVariants = const {};
     _notify();
   }
 
@@ -439,6 +460,7 @@ class CartController extends ChangeNotifier {
         _lastCancelledSaleId = (result as CartSale).id;
         _sale = null;
         _pendingCustomerId = null;
+        _pendingCustomerLabel = null;
         _attempt = null;
         _labels.clear();
         _images.clear();
@@ -506,8 +528,10 @@ class CartController extends ChangeNotifier {
     _labels.clear();
     _images.clear();
     _pendingCustomerId = null;
+    _pendingCustomerLabel = null;
     _completed = null;
     _completedNames = const {};
+    _completedVariants = const {};
     _attempt = null;
     _notify();
   }
@@ -529,6 +553,7 @@ class CartController extends ChangeNotifier {
     _lastHeldSaleId = held.id;
     _sale = null;
     _pendingCustomerId = null; // the next sale starts as a guest again
+    _pendingCustomerLabel = null;
     _labels.clear();
     _images.clear();
   }

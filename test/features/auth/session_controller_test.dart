@@ -94,12 +94,53 @@ void main() {
       auth.onStaff = (_, _, _) async => throw apiError(
         401,
         message: 'Invalid staff credentials or account unavailable',
+        code: 'POS_INVALID_STAFF_CREDENTIALS',
       );
       expect(await s.loginStaff('S1', 'bad'), isFalse);
       expect(s.phase, SessionPhase.staffLogin);
       expect(await store.read(TokenKeys.deviceToken), 'device-token');
     },
   );
+
+  test('a stored device token that has actually expired bounces back to device '
+      'login with a clear message, instead of showing the raw backend error on '
+      'the PIN screen as if the PIN were wrong', () async {
+    await store.write(TokenKeys.deviceToken, 'stale');
+    await store.write(TokenKeys.deviceIdentifier, 'REG-1');
+    await s.restore();
+    expect(
+      s.phase,
+      SessionPhase.staffLogin,
+      reason: 'restore() trusts the stored token at first',
+    );
+    // The backend's posDeviceAuth rejects the token itself, before the PIN
+    // is ever checked — no POS_INVALID_STAFF_CREDENTIALS code.
+    auth.onStaff = (_, _, _) async =>
+        throw apiError(401, message: 'Invalid or expired POS token');
+    expect(await s.loginStaff('S1', '1234'), isFalse);
+    expect(s.phase, SessionPhase.deviceLogin);
+    expect(s.error!.message, 'This device needs to be signed in again.');
+    expect(
+      await store.read(TokenKeys.deviceToken),
+      isNull,
+      reason: 'the dead device token is forgotten, not retried forever',
+    );
+  });
+
+  test('other 401 reasons for the device token during staff-login are treated the same way', () async {
+    await s.restore();
+    await s.loginDevice('REG-1', 's');
+    for (final message in [
+      'Device is no longer authorized',
+      'Token is missing device binding',
+      'A valid device token is required before staff login',
+    ]) {
+      await s.loginDevice('REG-1', 's'); // re-register between cases
+      auth.onStaff = (_, _, _) async => throw apiError(401, message: message);
+      expect(await s.loginStaff('S1', '1234'), isFalse, reason: message);
+      expect(s.phase, SessionPhase.deviceLogin, reason: message);
+    }
+  });
 
   test(
     'a register that already has an open shift (409) continues normally',

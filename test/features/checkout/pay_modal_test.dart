@@ -241,7 +241,7 @@ void main() {
     );
 
     testWidgets(
-      'receipt actions are clearly placeholders; New Sale clears everything and closes',
+      'receipt actions are active; New Sale clears everything and closes',
       (tester) async {
         final h = await pumpWithCart(tester);
         await openPay(tester);
@@ -256,7 +256,7 @@ void main() {
                 find.widgetWithText(OutlinedButton, 'Print Receipt'),
               )
               .onPressed,
-          isNull,
+          isNotNull,
         );
         expect(
           tester
@@ -264,12 +264,9 @@ void main() {
                 find.widgetWithText(OutlinedButton, 'Email / SMS'),
               )
               .onPressed,
-          isNull,
+          isNotNull,
         );
-        expect(
-          find.byTooltip('Receipts are coming in the next phase'),
-          findsNWidgets(2),
-        );
+        expect(find.byTooltip('Printer setup'), findsOneWidget);
 
         await tester.tap(find.text('New Sale'));
         await tester.pumpAndSettle();
@@ -584,7 +581,7 @@ void main() {
         await tester.tap(completeBtn);
         await tester.pumpAndSettle();
         expect(
-          find.textContaining('sold by weight (KG/GR) (Salt)'),
+          find.textContaining('sold by weight or volume (Salt)'),
           findsOneWidget,
         );
         expect(find.textContaining('POS_WEIGHT'), findsNothing);

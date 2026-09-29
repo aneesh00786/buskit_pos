@@ -134,7 +134,7 @@ void main() {
         jsonEncode({
           'status_code': 422,
           'status': false,
-          'message': 'Weight-based products (KG/GR) cannot be sold',
+          'message': 'Weight-based products cannot be sold',
           'error_code': 'POS_WEIGHT_UNIT_NOT_SUPPORTED',
         }),
         422,

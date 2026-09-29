@@ -10,6 +10,15 @@ import 'package:buskit_pos/features/held_sales/models/held_sale_summary.dart';
 import 'package:buskit_pos/features/products/data/product_service.dart';
 import 'package:buskit_pos/features/products/models/category.dart';
 import 'package:buskit_pos/features/products/models/product_page.dart';
+import 'package:flutter/widgets.dart';
+import 'package:buskit_pos/core/storage/token_store.dart';
+import 'package:buskit_pos/features/barcode/camera_scanner.dart';
+import 'package:buskit_pos/features/products/models/product_item.dart';
+import 'package:buskit_pos/features/receipt/data/printer_settings.dart';
+import 'package:buskit_pos/features/receipt/data/receipt_delivery.dart';
+import 'package:buskit_pos/features/receipt/models/receipt.dart';
+import 'package:buskit_pos/features/receipt/state/print_service.dart';
+import 'package:buskit_pos/features/receipt/state/receipt_services.dart';
 
 /// JSON shaped exactly like one row of `GET /products` `data.items`.
 Map<String, dynamic> productJson({
@@ -116,6 +125,22 @@ class FakeProductService implements ProductService {
       page([]);
   Future<List<ProductCategory>> Function() onCategories = () async => [];
   int categoryCalls = 0;
+  final List<String> barcodeCalls = [];
+  Future<ProductItem?> Function(String code) onBarcode = (_) async => null;
+  final List<int> idCalls = [];
+  Future<ProductItem?> Function(int id) onFindById = (_) async => null;
+
+  @override
+  Future<ProductItem?> findByBarcode(String barcode) {
+    barcodeCalls.add(barcode);
+    return onBarcode(barcode);
+  }
+
+  @override
+  Future<ProductItem?> findById(int id) {
+    idCalls.add(id);
+    return onFindById(id);
+  }
 
   @override
   Future<ProductPage> search({
@@ -533,4 +558,64 @@ class CartSaleFactory {
       total: total,
     ),
   )!;
+}
+
+/// Records receipts sent to "print" and returns a scripted outcome.
+class FakePrintService extends PrintService {
+  FakePrintService()
+    : super(settings: PrinterSettingsStore(MemoryTokenStore()));
+  final List<ReceiptData> printed = [];
+  Future<PrintOutcome> Function(ReceiptData)? onPrint;
+
+  @override
+  Future<PrintOutcome> print(ReceiptData receipt) async {
+    printed.add(receipt);
+    if (onPrint != null) return onPrint!(receipt);
+    return const PrintOutcome(channel: PrintChannel.thermal);
+  }
+}
+
+class FakeDelivery implements ReceiptDelivery {
+  final List<Uri> opened = [];
+  bool result = true;
+  @override
+  Future<bool> open(Uri uri) async {
+    opened.add(uri);
+    return result;
+  }
+}
+
+class FakeReceipts {
+  FakeReceipts() {
+    settings = PrinterSettingsStore(MemoryTokenStore());
+    print = FakePrintService();
+    delivery = FakeDelivery();
+    services = ReceiptServices(
+      print: print,
+      delivery: delivery,
+      settings: settings,
+    );
+  }
+  late final PrinterSettingsStore settings;
+  late final FakePrintService print;
+  late final FakeDelivery delivery;
+  late final ReceiptServices services;
+}
+
+class FakeCameraScanner implements CameraScanner {
+  FakeCameraScanner({this.supported = true});
+  @override
+  bool supported;
+  int opened = 0;
+
+  /// What the "camera" reads next; null = the cashier closed it.
+  String? next;
+  Future<String?> Function()? onScan;
+
+  @override
+  Future<String?> scan(BuildContext context) async {
+    opened++;
+    if (onScan != null) return onScan!();
+    return next;
+  }
 }

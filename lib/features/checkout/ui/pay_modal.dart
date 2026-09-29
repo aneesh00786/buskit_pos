@@ -9,7 +9,11 @@ import '../../../core/utils/format.dart';
 import '../../../core/utils/json_read.dart';
 import '../../../core/utils/money.dart';
 import '../../../core/utils/server_time.dart';
+import '../../auth/state/session_controller.dart';
 import '../../cart/state/cart_controller.dart';
+import '../../receipt/models/receipt_formatter.dart';
+import '../../receipt/state/receipt_services.dart';
+import '../../receipt/ui/receipt_actions.dart';
 import '../models/payment.dart';
 import '../state/payment_plan.dart';
 
@@ -21,8 +25,14 @@ Future<void> showPay(BuildContext context) {
   cart.acknowledgeCompletion(); // a fresh checkout never re-shows an old receipt
   cart.clearError();
   final size = MediaQuery.sizeOf(context);
-  Widget content() => ChangeNotifierProvider<CartController>.value(
-    value: cart,
+  final session = context.read<SessionController>();
+  final receipts = context.read<ReceiptServices>();
+  Widget content() => MultiProvider(
+    providers: [
+      ChangeNotifierProvider<CartController>.value(value: cart),
+      ChangeNotifierProvider<SessionController>.value(value: session),
+      Provider<ReceiptServices>.value(value: receipts),
+    ],
     child: const PayModal(),
   );
 
@@ -70,7 +80,7 @@ String describeCheckoutError(ApiException e, Map<int, String> names) {
     case PosErrorCodes.weightUnitNotSupported:
       final ids = asList(e.dataMap?['weight_unit_item_ids']);
       final list = ids.isEmpty ? '' : ' (${ids.map(nameOf).join(', ')})';
-      return 'This sale has products sold by weight (KG/GR)$list, which cannot be sold at the POS yet. '
+      return 'This sale has products sold by weight or volume$list, which cannot be sold at the POS yet. '
           'Remove them from the cart and try again.';
   }
   return describeApiError(e);
@@ -146,7 +156,11 @@ class _PayModalState extends State<PayModal> {
     final cart = context.watch<CartController>();
     final done = cart.completedSale;
     if (done != null) {
-      return _SuccessView(sale: done, names: cart.completedNames);
+      return _SuccessView(
+        sale: done,
+        names: cart.completedNames,
+        variants: cart.completedVariants,
+      );
     }
 
     final sale = cart.sale;
@@ -432,22 +446,21 @@ class _AmountDue extends StatelessWidget {
           ),
           borderRadius: BorderRadius.circular(PosTokens.rCard),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        // Wraps (rather than clipping the amount) when text is very large.
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: PosTokens.s8,
           children: [
             Text(
               'Amount due',
               style: text.titleMedium?.copyWith(color: Colors.white),
             ),
-            Flexible(
-              child: Text(
-                formatMilli(totalMilli),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: text.headlineMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
+            Text(
+              formatMilli(totalMilli),
+              style: text.headlineMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
@@ -722,9 +735,14 @@ class _Failure extends StatelessWidget {
 // ---------------------------------------------------------------- success
 
 class _SuccessView extends StatelessWidget {
-  const _SuccessView({required this.sale, required this.names});
+  const _SuccessView({
+    required this.sale,
+    required this.names,
+    required this.variants,
+  });
   final CompletedSale sale;
   final Map<int, String> names;
+  final Map<int, String> variants;
 
   @override
   Widget build(BuildContext context) {
@@ -732,6 +750,7 @@ class _SuccessView extends StatelessWidget {
     final theme = Theme.of(context);
     final when = sale.completedAt;
     final change = sale.changeDue;
+    final session = context.read<SessionController>();
 
     return _Shell(
       title: 'Sale complete',
@@ -750,36 +769,14 @@ class _SuccessView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: PosTokens.s8),
-          Row(
-            children: [
-              Expanded(
-                child: Tooltip(
-                  message: 'Receipts are coming in the next phase',
-                  child: OutlinedButton.icon(
-                    onPressed: null,
-                    icon: const Icon(Icons.print_outlined),
-                    label: const Text('Print Receipt'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: PosTokens.s8),
-              Expanded(
-                child: Tooltip(
-                  message: 'Receipts are coming in the next phase',
-                  child: OutlinedButton.icon(
-                    onPressed: null,
-                    icon: const Icon(Icons.mail_outline),
-                    label: const Text('Email / SMS'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          ReceiptActions(
+            receipt: ReceiptFormatter.build(
+              sale: sale,
+              names: names,
+              variants: variants,
+              staffId: session.salesmanId,
+              deviceId: session.deviceIdentifier,
+            ),
           ),
         ],
       ),

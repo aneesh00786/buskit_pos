@@ -1,15 +1,38 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:buskit_pos/core/network/api_exception.dart';
+import 'package:buskit_pos/core/network/pos_api_client.dart';
 import 'package:buskit_pos/features/cart/models/cart_sale.dart';
 import 'package:buskit_pos/features/cart/state/cart_controller.dart';
 import 'package:buskit_pos/features/checkout/models/payment.dart';
 import 'package:buskit_pos/features/held_sales/models/held_sale_summary.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 import '../../support/fakes.dart';
 import '../../support/pump_page.dart';
+
+/// A [PosApiClient] whose customer search always returns [customers] — used
+/// by the "Change customer" dialog's search/select picker.
+PosApiClient customersApiClient(List<Map<String, dynamic>> customers) =>
+    PosApiClient(
+      baseUrl: 'http://test',
+      httpClient: MockClient((r) async {
+        if (r.method == 'GET' && r.url.path.endsWith('/customers')) {
+          return http.Response(
+            jsonEncode({'status': true, 'data': pageJson(customers)}),
+            200,
+          );
+        }
+        return http.Response(
+          jsonEncode({'status': false, 'message': 'no route'}),
+          404,
+        );
+      }),
+    );
 
 CartSale withItems({
   int version = 2,
@@ -31,8 +54,9 @@ Future<PageHarness> pumpPage(
   WidgetTester tester, {
   double width = 1400,
   double height = 900,
+  PosApiClient? client,
 }) async {
-  final h = PageHarness();
+  final h = PageHarness(client: client);
   h.carts.onAdd = (_) async => withItems();
   h.carts.onGet = (_) async => withItems();
   await pumpProductsPage(tester, h, width: width, height: height);
@@ -64,44 +88,45 @@ void main() {
     );
 
     testWidgets(
-      'choose a customer ID: validated locally, then used when the sale is created',
+      'search and select a customer: shown by name, then used when the sale is created',
       (tester) async {
-        final h = await pumpPage(tester);
+        final client = customersApiClient([
+          {
+            'id': 1,
+            'customer_id': 'C-42',
+            'fullname': 'Jane Doe',
+            'mobileno': '0400000000',
+            'email': null,
+            'status': 2,
+          },
+        ]);
+        final h = await pumpPage(tester, client: client);
         await tester.tap(find.text('Change'));
         await tester.pumpAndSettle();
         expect(find.text('Customer'), findsOneWidget);
-        await tester.tap(find.text('Customer ID').first);
+
+        expect(
+          tester
+              .widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
+              .onPressed,
+          isNull,
+          reason: 'nothing picked yet',
+        );
+
+        await tester.tap(find.text('Search'));
         await tester.pumpAndSettle();
-
-        await tester.tap(find.text('Save'));
-        await tester.pump();
-        expect(
-          find.text('Enter a customer ID (1–255 characters).'),
-          findsOneWidget,
-        );
-
-        await tester.enterText(
-          find.widgetWithText(TextField, 'Customer ID'),
-          'x' * 256,
-        );
-        await tester.tap(find.text('Save'));
-        await tester.pump();
-        expect(
-          find.text('Enter a customer ID (1–255 characters).'),
-          findsOneWidget,
-        );
-
-        await tester.enterText(
-          find.widgetWithText(TextField, 'Customer ID'),
-          'C-42',
-        );
-        expect(
-          find.textContaining('checks this ID when the first item is added'),
-          findsOneWidget,
-        );
-        await tester.tap(find.text('Save'));
+        expect(find.text('Jane Doe'), findsOneWidget);
+        await tester.tap(find.text('Jane Doe'));
         await tester.pumpAndSettle();
-        expect(find.text('Customer C-42'), findsOneWidget);
+        expect(find.text('Selected: Jane Doe'), findsOneWidget);
+
+        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Jane Doe'),
+          findsOneWidget,
+          reason: 'shown by name before the sale exists',
+        );
         expect(h.cart.pendingCustomerId, 'C-42');
 
         h.carts.onAdd = (_) async => withItems(customer: 'C-42');
@@ -110,8 +135,67 @@ void main() {
         expect(
           find.text('Customer C-42'),
           findsOneWidget,
-          reason: 'now read from the server sale',
+          reason: 'now read from the server sale (no name returned there)',
         );
+      },
+    );
+
+    testWidgets(
+      '+ New Customer creates and auto-selects a customer',
+      (tester) async {
+        final client = PosApiClient(
+          baseUrl: 'http://test',
+          httpClient: MockClient((r) async {
+            if (r.method == 'GET' && r.url.path.endsWith('/customers')) {
+              return http.Response(
+                jsonEncode({'status': true, 'data': pageJson(const [])}),
+                200,
+              );
+            }
+            if (r.method == 'POST' && r.url.path.endsWith('/customers')) {
+              return http.Response(
+                jsonEncode({
+                  'status': true,
+                  'data': {
+                    'id': 9,
+                    'customer_id': 'C-99',
+                    'fullname': 'New Guy',
+                    'mobileno': '0400999999',
+                    'email': null,
+                    'status': 2,
+                  },
+                }),
+                201,
+              );
+            }
+            return http.Response(
+              jsonEncode({'status': false, 'message': 'no route'}),
+              404,
+            );
+          }),
+        );
+        final h = await pumpPage(tester, client: client);
+        await tester.tap(find.text('Change'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Search'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('+ New Customer'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Name *'),
+          'New Guy',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Phone *'),
+          '0400999999',
+        );
+        await tester.tap(find.widgetWithText(FilledButton, 'Save Customer'));
+        await tester.pumpAndSettle();
+        expect(find.text('Selected: New Guy'), findsOneWidget);
+        await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+        await tester.pumpAndSettle();
+        expect(find.text('New Guy'), findsOneWidget);
+        expect(h.cart.pendingCustomerId, 'C-99');
       },
     );
 
@@ -225,7 +309,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Change'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Customer ID').first);
+        await tester.tap(find.text('Search'));
         await tester.pumpAndSettle();
         expect(find.byType(AlertDialog), findsOneWidget);
         expect(tester.takeException(), isNull);

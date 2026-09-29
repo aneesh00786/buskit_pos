@@ -121,7 +121,11 @@ class MockBackend {
         }
         return body()['pin'] == '1234'
             ? _ok({'token': 'staff-tok', 'expires_in_hours': 10})
-            : _err(401, 'Invalid staff credentials or account unavailable');
+            : _err(
+                401,
+                'Invalid staff credentials or account unavailable',
+                errorCode: 'POS_INVALID_STAFF_CREDENTIALS',
+              );
       case 'POST /shifts/open':
         if (auth != 'Bearer staff-tok') {
           return _err(401, 'Staff authentication required');
@@ -332,7 +336,7 @@ class MockBackend {
         if (weightRejection != null) {
           return _err(
             422,
-            'Weight-based products (KG/GR) cannot be sold through POS stock-enabled sales yet',
+            'Weight-based products cannot be sold through POS stock-enabled sales yet',
             errorCode: 'POS_WEIGHT_UNIT_NOT_SUPPORTED',
           );
         }

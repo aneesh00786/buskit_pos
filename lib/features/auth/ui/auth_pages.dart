@@ -1,8 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/network/error_messages.dart';
+import '../../../core/network/pos_api_client.dart';
+import '../../../core/storage/token_store.dart';
 import '../state/session_controller.dart';
+// TESTING ONLY (see lib/features/auth/dev/dev_credentials.dart) — delete this
+// import and every dev-gated block below before a production build.
+import '../dev/dev_credentials.dart';
+import '../dev/dev_login_helper.dart';
 
 class _AuthScaffold extends StatelessWidget {
   const _AuthScaffold({
@@ -74,6 +81,79 @@ class _DeviceLoginPageState extends State<DeviceLoginPage> {
   final _id = TextEditingController();
   final _secret = TextEditingController();
 
+  // ---- TESTING ONLY below (see lib/features/auth/dev/) ----
+  bool _devBusy = false;
+  String? _devMessage;
+  DevCredentialsStore? _devStore;
+
+  @override
+  void initState() {
+    super.initState();
+    if (kDebugMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _devAutofill());
+    }
+  }
+
+  DevLoginHelper _devHelper() {
+    _devStore ??= DevCredentialsStore(SecureTokenStore());
+    return DevLoginHelper(context.read<PosApiClient>(), _devStore!);
+  }
+
+  /// Local-storage only, deliberately — no network call, so this can never
+  /// interfere with a widget test's mock backend (kDebugMode is also true
+  /// under `flutter test`). Live validation only happens on an explicit tap
+  /// of "Dev: generate a new test device" below.
+  Future<void> _devAutofill() async {
+    if (!mounted) return;
+    final saved = await (_devStore ??= DevCredentialsStore(
+      SecureTokenStore(),
+    )).load();
+    if (!mounted || saved == null) return;
+    setState(() {
+      _id.text = saved.deviceIdentifier;
+      _secret.text = saved.deviceSecret;
+      _devMessage = 'Autofilled from the saved test device.';
+    });
+  }
+
+  Future<void> _devRegenerate() async {
+    setState(() {
+      _devBusy = true;
+      _devMessage = null;
+    });
+    final helper = _devHelper();
+    final saved = await (_devStore ??= DevCredentialsStore(
+      SecureTokenStore(),
+    )).load();
+    final fresh = saved == null ? null : await helper.regenerate(saved);
+    if (!mounted) return;
+    setState(() {
+      _devBusy = false;
+      if (fresh != null) {
+        _id.text = fresh.deviceIdentifier;
+        _secret.text = fresh.deviceSecret;
+        _devMessage = 'Generated a new test device: ${fresh.deviceIdentifier}';
+      } else {
+        _devMessage = saved == null
+            ? 'No saved test device to regenerate from — sign in manually once first.'
+            : 'The saved test device could not be refreshed (it may have been deleted) — sign in manually once to save a new one.';
+      }
+    });
+  }
+  // ---- end testing-only ----
+
+  Future<void> _submit(SessionController s) async {
+    final id = _id.text;
+    final secret = _secret.text;
+    final ok = await s.loginDevice(id, secret);
+    // TESTING ONLY — remembers a manually-entered device as the autofill seed.
+    if (ok && kDebugMode) {
+      await (_devStore ??= DevCredentialsStore(
+        SecureTokenStore(),
+      )).rememberDevice(id.trim(), secret);
+    }
+  }
+
   @override
   void dispose() {
     _id.dispose();
@@ -105,14 +185,11 @@ class _DeviceLoginPageState extends State<DeviceLoginPage> {
           enableSuggestions: false,
           autocorrect: false,
           onChanged: (_) => setState(() {}),
-          onSubmitted: (_) =>
-              canSubmit ? s.loginDevice(_id.text, _secret.text) : null,
+          onSubmitted: (_) => canSubmit ? _submit(s) : null,
         ),
         const SizedBox(height: 20),
         FilledButton(
-          onPressed: canSubmit
-              ? () => s.loginDevice(_id.text, _secret.text)
-              : null,
+          onPressed: canSubmit ? () => _submit(s) : null,
           child: s.busy
               ? const SizedBox(
                   height: 20,
@@ -121,6 +198,30 @@ class _DeviceLoginPageState extends State<DeviceLoginPage> {
                 )
               : const Text('Continue'),
         ),
+        // TESTING ONLY — remove this block before a production build.
+        if (kDebugMode) ...[
+          const SizedBox(height: 12),
+          const Divider(),
+          TextButton.icon(
+            onPressed: _devBusy ? null : _devRegenerate,
+            icon: _devBusy
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.bolt_outlined),
+            label: const Text('Dev: generate a new test device'),
+          ),
+          if (_devMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                _devMessage!,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+        ],
       ],
     );
   }
@@ -135,6 +236,37 @@ class StaffLoginPage extends StatefulWidget {
 class _StaffLoginPageState extends State<StaffLoginPage> {
   final _id = TextEditingController();
   final _pin = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // TESTING ONLY (see lib/features/auth/dev/) — read-only, no network call:
+    // DeviceLoginPage already ensured the saved staff id/PIN work by the time
+    // this screen shows.
+    if (kDebugMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _devAutofill());
+    }
+  }
+
+  Future<void> _devAutofill() async {
+    final saved = await DevCredentialsStore(SecureTokenStore()).load();
+    if (!mounted || saved == null) return;
+    setState(() {
+      _id.text = saved.staffId;
+      _pin.text = saved.pin;
+    });
+  }
+
+  Future<void> _submit(SessionController s) async {
+    final id = _id.text;
+    final pin = _pin.text;
+    final ok = await s.loginStaff(id, pin);
+    // TESTING ONLY — remembers a manually-entered staff id/PIN as the autofill seed.
+    if (ok && kDebugMode) {
+      await DevCredentialsStore(SecureTokenStore())
+          .rememberStaff(id.trim(), pin);
+    }
+  }
 
   @override
   void dispose() {
@@ -170,12 +302,11 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
           enableSuggestions: false,
           autocorrect: false,
           onChanged: (_) => setState(() {}),
-          onSubmitted: (_) =>
-              canSubmit ? s.loginStaff(_id.text, _pin.text) : null,
+          onSubmitted: (_) => canSubmit ? _submit(s) : null,
         ),
         const SizedBox(height: 20),
         FilledButton(
-          onPressed: canSubmit ? () => s.loginStaff(_id.text, _pin.text) : null,
+          onPressed: canSubmit ? () => _submit(s) : null,
           child: s.busy
               ? const SizedBox(
                   height: 20,

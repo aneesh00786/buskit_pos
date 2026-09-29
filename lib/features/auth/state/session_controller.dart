@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/network/error_messages.dart';
 import '../../../core/storage/token_store.dart';
 import '../data/auth_service.dart';
 
@@ -64,14 +65,35 @@ class SessionController extends ChangeNotifier {
     final device = _deviceToken;
     if (_busy || device == null) return false;
     return _run(() async {
-      final token = await _auth.staffLogin(
-        deviceToken: device,
-        salesmanId: salesmanId.trim(),
-        pin: pin,
-      );
-      _staffToken = token;
-      _salesmanId = salesmanId.trim();
-      _phase = SessionPhase.shiftOpen;
+      try {
+        final token = await _auth.staffLogin(
+          deviceToken: device,
+          salesmanId: salesmanId.trim(),
+          pin: pin,
+        );
+        _staffToken = token;
+        _salesmanId = salesmanId.trim();
+        _phase = SessionPhase.shiftOpen;
+      } on ApiException catch (e) {
+        // Every wrong-PIN/unknown-staff/locked/inactive failure carries this
+        // one stable code (never leaked by status/message alone — see the
+        // backend's genericStaffLoginFailure). Any OTHER 401 here means the
+        // DEVICE token itself was rejected (expired/revoked/invalid) before
+        // the PIN was ever checked — recover the same way handleUnauthorized
+        // already does for every other authenticated call, instead of
+        // showing that raw backend message on the PIN screen as if the PIN
+        // were wrong.
+        if (e.kind != ApiErrorKind.unauthorized ||
+            e.errorCode == PosErrorCodes.invalidStaffCredentials) {
+          rethrow;
+        }
+        _forgetDevice();
+        _phase = SessionPhase.deviceLogin;
+        throw const ApiException(
+          kind: ApiErrorKind.unauthorized,
+          message: 'This device needs to be signed in again.',
+        );
+      }
     });
   }
 

@@ -79,6 +79,7 @@ void main() {
         for (final label in [
           'Sales',
           'Orders',
+          'Sales history',
           'Customers',
           'Inventory',
           'Promotions',
@@ -87,6 +88,78 @@ void main() {
         ]) {
           expect(find.text(label), findsOneWidget, reason: label);
         }
+      },
+    );
+
+    testWidgets(
+      'Sales history in the drawer closes it and opens the history sheet',
+      (tester) async {
+        final client = PosApiClient(
+          baseUrl: 'http://test',
+          httpClient: MockClient(
+            (_) async => http.Response('{"status":true,"data":[]}', 200),
+          ),
+        );
+        final h = PageHarness(client: client);
+        await pumpProductsPage(tester, h, width: 400, height: 800);
+        await tester.tap(find.byTooltip('Open navigation menu'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Sales history'));
+        await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsOneWidget);
+        expect(find.text('Sales history'), findsWidgets);
+        expect(find.text('No completed sales'), findsOneWidget);
+        expect(
+          find.byType(PosSidebar),
+          findsNothing,
+          reason: 'the drawer closed',
+        );
+      },
+    );
+
+    testWidgets(
+      'Customers in the drawer closes it and opens customer management',
+      (tester) async {
+        final client = PosApiClient(
+          baseUrl: 'http://test',
+          httpClient: MockClient(
+            (_) async => http.Response(
+              '{"status":true,"data":{"items":[],"pagination":{"page":1,"limit":20,"total":0,"total_pages":1}}}',
+              200,
+            ),
+          ),
+        );
+        final h = PageHarness(client: client);
+        await pumpProductsPage(tester, h, width: 400, height: 800);
+        await tester.tap(find.byTooltip('Open navigation menu'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Customers'));
+        await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsOneWidget);
+        expect(find.text('Customers'), findsWidgets);
+        expect(find.text('No customers yet'), findsOneWidget);
+        expect(
+          find.byType(PosSidebar),
+          findsNothing,
+          reason: 'the drawer closed',
+        );
+      },
+    );
+
+    testWidgets(
+      'Promotions still explains the real backend gap instead of a generic "coming soon"',
+      (tester) async {
+        final h = PageHarness();
+        await pumpProductsPage(tester, h, width: 400, height: 800);
+        await tester.tap(find.byTooltip('Open navigation menu'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Promotions'));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Promotions are not available from POS yet'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('is coming soon'), findsNothing);
       },
     );
 
@@ -214,10 +287,13 @@ void main() {
       (tester) async {
         final h = PageHarness();
         await pumpProductsPage(tester, h, width: 1400, height: 900);
-        await tester.tap(find.text('Customers'));
+        await tester.tap(find.text('Inventory'));
         await tester.pump();
-        expect(find.text('Customers is coming soon'), findsOneWidget);
-        expect(find.text('Soon'), findsNWidgets(5));
+        expect(find.text('Inventory is coming soon'), findsOneWidget);
+        // Customers and Promotions moved off the generic "Soon" placeholder
+        // this phase (they explain the real backend gap instead); Inventory,
+        // Analytics and Settings remain generic placeholders.
+        expect(find.text('Soon'), findsNWidgets(3));
       },
     );
 
@@ -334,7 +410,7 @@ void main() {
 
   group('header', () {
     testWidgets(
-      'inline on wide screens: search, disabled barcode placeholder, quick actions, staff, status, clock',
+      'inline on wide screens: search, camera-scan button, quick actions, staff, status, clock',
       (tester) async {
         final h = PageHarness();
         await h.signIn(staff: 'SALES1');
@@ -345,9 +421,9 @@ void main() {
                 find.widgetWithIcon(IconButton, Icons.qr_code_scanner),
               )
               .onPressed,
-          isNull,
+          isNotNull,
         );
-        expect(find.byTooltip('Scan barcode (coming soon)'), findsOneWidget);
+        expect(find.byTooltip('Scan barcode with camera'), findsOneWidget);
         for (final tip in ['Alerts', 'Reports', 'Quick settings']) {
           expect(find.byTooltip(tip), findsOneWidget, reason: tip);
         }
@@ -396,7 +472,7 @@ void main() {
           findsOneWidget,
         );
         expect(find.byTooltip('Alerts'), findsNothing);
-        expect(find.byTooltip('Scan barcode (coming soon)'), findsNothing);
+        expect(find.byTooltip('Scan barcode with camera'), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );

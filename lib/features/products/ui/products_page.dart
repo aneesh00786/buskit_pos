@@ -12,14 +12,21 @@ import '../../../core/theme/pos_tokens.dart';
 import '../../../core/ui/state_views.dart';
 import '../../../core/utils/format.dart';
 import '../../auth/state/session_controller.dart';
+import '../../barcode/barcode_key_listener.dart';
+import '../../barcode/barcode_scan_handler.dart';
+import '../../barcode/camera_scanner.dart';
 import '../../cart/state/cart_controller.dart';
 import '../../cart/ui/cart_panel.dart';
 import '../../held_sales/state/held_sales_controller.dart';
 import '../../held_sales/ui/held_sales_view.dart';
+import '../../customers/ui/customers_view.dart';
+import '../../history/ui/sales_history_view.dart';
+import '../../promotions/ui/promotions_unavailable_view.dart';
 import '../../shell/ui/pos_header.dart';
 import '../../shell/ui/pos_scaffold.dart';
 import '../../shell/ui/pos_sidebar.dart';
 import '../../shell/ui/summary_panel.dart';
+import '../data/product_service.dart';
 import '../models/product_group.dart';
 import '../state/product_list_controller.dart';
 import 'product_filter_bar.dart';
@@ -102,6 +109,50 @@ class _ProductsPageState extends State<ProductsPage> {
     }
   }
 
+  BarcodeScanHandler? _scanHandler;
+  bool _cameraOpen = false;
+
+  BarcodeScanHandler get _scans => _scanHandler ??= BarcodeScanHandler(
+    products: context.read<ProductService>(),
+    cart: context.read<CartController>(),
+  );
+
+  /// A scanner-speed burst ending in Enter was typed (hardware scanner), or the
+  /// camera read a code: look it up and add it to the cart.
+  Future<void> _onBarcode(String code) async {
+    final list = context.read<ProductListController>();
+    final result = await _scans.handle(code);
+    if (!mounted) return;
+    // A scanner types into a focused search box too; don't leave the code there.
+    if (_search.text.trim() == code) {
+      _search.clear();
+      if (list.query.isNotEmpty) {
+        unawaited(list.submitQuery(''));
+      } else {
+        list.onQueryChanged('');
+      }
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      _snackBar(
+        result.message,
+        duration: Duration(seconds: result.added ? 3 : 5),
+      ),
+    );
+  }
+
+  Future<void> _scanWithCamera() async {
+    if (_cameraOpen) return;
+    _cameraOpen = true;
+    try {
+      final code = await context.read<CameraScanner>().scan(context);
+      if (code != null && mounted) await _onBarcode(code);
+    } finally {
+      _cameraOpen = false;
+    }
+  }
+
   void _showHelp(BuildContext context, String? device) {
     // Compact layouts show the sidebar in a drawer: close it first.
     if (PosLayoutClass.forWidth(MediaQuery.sizeOf(context).width).isCompact) {
@@ -156,61 +207,94 @@ class _ProductsPageState extends State<ProductsPage> {
     // Present only when the app wires held-sales support in (see app.dart).
     final held = context.watch<HeldSalesController?>();
     final client = context.read<PosApiClient?>();
+    final camera = context.read<CameraScanner?>();
+    final VoidCallback? onScan = (camera != null && camera.supported)
+        ? _scanWithCamera
+        : null;
 
-    return ResponsivePosLayout(
-      builder: (context, layout) {
-        final staff = session.salesmanId == null
-            ? null
-            : 'Staff ${session.salesmanId}';
-        return PosScaffold(
-          layout: layout,
-          compactTitle: 'Products',
-          compactActions: [
-            if (client != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: NetworkStatusChip(
-                  reachable: client.reachable,
-                  showLabel: false,
-                ),
-              ),
-            if (held != null) _HeldSalesAction(held: held),
-          ],
-          sidebarBuilder: (collapsed) => PosSidebar(
-            collapsed: collapsed,
-            brandTitle: 'ThriveWoo POS',
-            brandSubtitle: 'Point of sale',
-            deviceLabel: session.deviceIdentifier,
-            appVersion: AppConfig.appVersion,
-            onHelp: () => _showHelp(context, session.deviceIdentifier),
-            heldCount: held?.heldCount,
-            onOpenOrders: held == null
-                ? null
-                : () {
-                    // The compact layout shows the sidebar in a drawer: close it first.
-                    if (layout.isCompact) Navigator.of(context).pop();
-                    showHeldSales(context);
-                  },
-            onSignOut: session.logoutStaff,
-          ),
-          header: PosHeader(
-            search: _SearchField(controller: _search),
-            staffLabel: staff,
-            reachable: client?.reachable,
-          ),
-          body: _Catalog(
+    return BarcodeKeyListener(
+      onBarcode: (code) => unawaited(_onBarcode(code)),
+      child: ResponsivePosLayout(
+        builder: (context, layout) {
+          final staff = session.salesmanId == null
+              ? null
+              : 'Staff ${session.salesmanId}';
+          return PosScaffold(
             layout: layout,
-            search: _search,
-            scroll: _scroll,
-            view: _view,
-            onViewChanged: (v) => setState(() => _view = v),
-            onSelect: _onSelect,
-          ),
-          cart: const CartPanel(),
-          summary: const SalesSummaryPanel(),
-          bottomBar: _CartBar(cart: cart),
-        );
-      },
+            compactTitle: 'Products',
+            compactActions: [
+              if (client != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: NetworkStatusChip(
+                    reachable: client.reachable,
+                    showLabel: false,
+                  ),
+                ),
+              if (camera != null)
+                IconButton(
+                  tooltip: onScan == null
+                      ? 'Camera scanning is not available on this device'
+                      : 'Scan barcode with camera',
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  onPressed: onScan,
+                  icon: const Icon(Icons.qr_code_scanner),
+                ),
+              if (held != null) _HeldSalesAction(held: held),
+            ],
+            sidebarBuilder: (collapsed) => PosSidebar(
+              collapsed: collapsed,
+              brandTitle: 'ThriveWoo POS',
+              brandSubtitle: 'Point of sale',
+              deviceLabel: session.deviceIdentifier,
+              appVersion: AppConfig.appVersion,
+              onHelp: () => _showHelp(context, session.deviceIdentifier),
+              heldCount: held?.heldCount,
+              onOpenOrders: held == null
+                  ? null
+                  : () {
+                      // The compact layout shows the sidebar in a drawer: close it first.
+                      if (layout.isCompact) Navigator.of(context).pop();
+                      showHeldSales(context);
+                    },
+              onOpenHistory: () {
+                // The compact layout shows the sidebar in a drawer: close it first.
+                if (layout.isCompact) Navigator.of(context).pop();
+                showSalesHistory(context);
+              },
+              onOpenCustomers: () {
+                if (layout.isCompact) Navigator.of(context).pop();
+                showCustomers(context);
+              },
+              onOpenPromotions: () {
+                if (layout.isCompact) Navigator.of(context).pop();
+                showPromotionsUnavailable(context);
+              },
+              onSignOut: session.logoutStaff,
+            ),
+            header: PosHeader(
+              search: _SearchField(controller: _search),
+              staffLabel: staff,
+              reachable: client?.reachable,
+              onScanBarcode: onScan,
+            ),
+            body: _Catalog(
+              layout: layout,
+              search: _search,
+              scroll: _scroll,
+              view: _view,
+              onViewChanged: (v) => setState(() => _view = v),
+              onSelect: _onSelect,
+            ),
+            cart: const CartPanel(),
+            summary: const SalesSummaryPanel(),
+            bottomBar: _CartBar(cart: cart),
+          );
+        },
+      ),
     );
   }
 }

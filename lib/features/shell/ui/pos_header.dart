@@ -17,12 +17,19 @@ class PosHeader extends StatelessWidget {
     this.roleLabel = 'POS staff',
     this.reachable,
     this.now,
+    this.onScanBarcode,
+    this.scanUnavailableReason =
+        'Camera scanning is not available on this device',
   });
 
   final Widget search;
   final String? staffLabel;
   final String roleLabel;
   final ValueListenable<bool?>? reachable;
+
+  /// Opens the camera scanner; null when this device has no camera scanning.
+  final VoidCallback? onScanBarcode;
+  final String scanUnavailableReason;
 
   /// Injectable clock for tests.
   final DateTime Function()? now;
@@ -67,12 +74,14 @@ class PosHeader extends StatelessWidget {
               Expanded(child: search),
               if (showBarcode)
                 IconButton(
-                  tooltip: 'Scan barcode (coming soon)',
+                  tooltip: onScanBarcode == null
+                      ? scanUnavailableReason
+                      : 'Scan barcode with camera',
                   constraints: const BoxConstraints(
                     minWidth: 48,
                     minHeight: 48,
                   ),
-                  onPressed: null,
+                  onPressed: onScanBarcode,
                   icon: const Icon(Icons.qr_code_scanner),
                 ),
               if (showActions)

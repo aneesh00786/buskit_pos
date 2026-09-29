@@ -58,6 +58,8 @@ class _CartPanelState extends State<CartPanel> {
             cart.loadError == null &&
             sale.isDraft);
     final hasItems = sale != null && sale.items.isNotEmpty;
+    final serverDraftIsEmpty =
+        sale != null && sale.isDraft && sale.items.isEmpty;
     final editable = (sale?.isDraft ?? true) && !cart.isMutating;
 
     return Container(
@@ -100,14 +102,18 @@ class _CartPanelState extends State<CartPanel> {
                       : null,
                   onDismiss: cart.clearError,
                 ),
-              if (emptyDraft)
+              if (emptyDraft) ...[
                 const Expanded(
                   child: EmptyView(
                     title: 'The cart is empty',
                     icon: Icons.shopping_cart_outlined,
                   ),
-                )
-              else ...[
+                ),
+                // An empty draft still exists on the server (e.g. every item
+                // was removed): let the cashier discard it explicitly.
+                if (serverDraftIsEmpty)
+                  _DiscardOrder(disabled: cart.isMutating),
+              ] else ...[
                 Expanded(
                   child: sale.items.isEmpty
                       ? const EmptyView(
@@ -136,7 +142,9 @@ class _CartPanelState extends State<CartPanel> {
                 ),
                 _Totals(sale: sale, dense: dense),
                 if (sale.isDraft && sale.items.isNotEmpty)
-                  _Actions(disabled: cart.isMutating),
+                  _Actions(disabled: cart.isMutating)
+                else if (serverDraftIsEmpty)
+                  _DiscardOrder(disabled: cart.isMutating),
               ],
             ],
           );
@@ -258,6 +266,7 @@ class _CustomerRow extends StatelessWidget {
     final t = PosTokens.of(context);
     final theme = Theme.of(context);
     final id = cart.customerId;
+    final label = cart.pendingCustomerLabel;
     final editable = cart.canChooseCustomer;
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -282,7 +291,7 @@ class _CustomerRow extends StatelessWidget {
             const SizedBox(width: PosTokens.s8),
             Expanded(
               child: Text(
-                id == null ? 'Guest checkout' : 'Customer $id',
+                id == null ? 'Guest checkout' : (label ?? 'Customer $id'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium,
@@ -298,7 +307,10 @@ class _CustomerRow extends StatelessWidget {
                           current: cart.pendingCustomerId,
                         );
                         if (choice != null) {
-                          cart.setPendingCustomer(choice.customerId);
+                          cart.setPendingCustomer(
+                            choice.customerId,
+                            label: choice.label,
+                          );
                         }
                       }
                     : null,
@@ -500,19 +512,70 @@ class _Actions extends StatelessWidget {
   }
 }
 
+/// "Discard order" for a draft with no items (the Void sale action needs items).
+class _DiscardOrder extends StatelessWidget {
+  const _DiscardOrder({required this.disabled});
+  final bool disabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        PosTokens.s16,
+        0,
+        PosTokens.s16,
+        PosTokens.s8,
+      ),
+      child: TextButton.icon(
+        onPressed: disabled ? null : () => _discard(context),
+        icon: const Icon(Icons.delete_outline),
+        label: const Text('Discard order'),
+        style: TextButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          foregroundColor: Theme.of(context).colorScheme.error,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _discard(BuildContext context) async {
+    final cart = context.read<CartController>();
+    final messenger = ScaffoldMessenger.of(context);
+    final id = cart.sale?.id;
+    final ok = await confirmVoid(
+      context,
+      subject: 'this empty order',
+      title: 'Discard this order?',
+      keepLabel: 'Keep order',
+      confirmLabel: 'Discard order',
+    );
+    if (ok != true) return;
+    if (await cart.cancelCurrent() && id != null) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(content: Text('Order #$id discarded')));
+    }
+  }
+}
+
 /// Confirmation before voiding: cancelling cannot be undone.
-Future<bool?> confirmVoid(BuildContext context, {required String subject}) {
+Future<bool?> confirmVoid(
+  BuildContext context, {
+  required String subject,
+  String title = 'Void this sale?',
+  String keepLabel = 'Keep sale',
+  String confirmLabel = 'Void sale',
+}) {
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Void this sale?'),
+      title: Text(title),
       content: Text(
         'This cancels $subject on the server. It cannot be undone.',
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Keep sale'),
+          child: Text(keepLabel),
         ),
         FilledButton(
           onPressed: () => Navigator.of(ctx).pop(true),
@@ -520,7 +583,7 @@ Future<bool?> confirmVoid(BuildContext context, {required String subject}) {
             backgroundColor: Theme.of(ctx).colorScheme.error,
             foregroundColor: Theme.of(ctx).colorScheme.onError,
           ),
-          child: const Text('Void sale'),
+          child: Text(confirmLabel),
         ),
       ],
     ),
