@@ -53,8 +53,18 @@ const _items = [
     'Promotions',
     placeholder: false,
   ),
-  _NavItem(PosSection.analytics, Icons.insights_outlined, 'Analytics'),
-  _NavItem(PosSection.settings, Icons.settings_outlined, 'Settings'),
+  _NavItem(
+    PosSection.analytics,
+    Icons.insights_outlined,
+    'Analytics',
+    placeholder: false,
+  ),
+  _NavItem(
+    PosSection.settings,
+    Icons.settings_outlined,
+    'Settings',
+    placeholder: false,
+  ),
 ];
 
 /// Dark navigation. Sales is the active section (green highlight); Orders opens

@@ -31,6 +31,20 @@ class FakeHistoryService implements SalesHistoryService {
     if (onDetail != null) return onDetail!(id);
     return details[id];
   }
+
+  Future<CompletedSale?> Function(int saleId, String idempotencyKey)?
+  onRefund;
+  final List<String> refundKeys = [];
+
+  @override
+  Future<CompletedSale?> refundSale({
+    required int saleId,
+    required String idempotencyKey,
+  }) async {
+    refundKeys.add(idempotencyKey);
+    if (onRefund != null) return onRefund!(saleId, idempotencyKey);
+    return details[saleId];
+  }
 }
 
 const netDown = ApiException(
@@ -90,6 +104,61 @@ CompletedSale completed({int id = 1, List<int> variationIds = const [42]}) =>
         },
       ],
     })!;
+
+/// Same shape [completed] returns, but with a `refund` block — what the
+/// server returns right after `POST /sales/:id/refund` succeeds. `status`
+/// stays 'completed' (the backend never changes it for a refund).
+CompletedSale refunded({int id = 1}) {
+  final base = completed(id: id);
+  return CompletedSale.fromJson({
+    'id': base.id,
+    'status': base.status,
+    'sale_number': base.saleNumber,
+    'items': base.items
+        .map(
+          (l) => {
+            'id': l.id,
+            'product_variation_id': l.productVariationId,
+            'quantity': l.quantity,
+            'unit_price': l.unitPrice,
+            'tax_percent': 0,
+            'tax_included': false,
+            'tax_amount': 0,
+            'discount_amount': 0,
+            'line_total': l.lineTotal,
+          },
+        )
+        .toList(),
+    'totals': {
+      'subtotal': base.totals.subtotal,
+      'tax_total': base.totals.taxTotal,
+      'discount_total': base.totals.discountTotal,
+      'grand_total': base.totals.grandTotal,
+    },
+    'payments': [
+      {
+        'method': 'cash',
+        'amount': base.totals.grandTotal,
+        'tendered_amount': base.totals.grandTotal,
+        'change_due': 0,
+        'status': 'completed',
+      },
+    ],
+    'refund': {
+      'refunded_by': 'SALES1',
+      'refund_amount': base.totals.grandTotal,
+      'refunded_at': DateTime.now().toUtc().toIso8601String(),
+    },
+  })!;
+}
+
+const forbiddenRefund = ApiException(
+  kind: ApiErrorKind.forbidden,
+  statusCode: 403,
+  errorCode: 'POS_PERMISSION_DENIED',
+  message: 'Missing required permission: payments.refund',
+  data: {'permission': 'payments.refund'},
+);
 
 void main() {
   group('loading', () {
@@ -395,4 +464,138 @@ void main() {
       expect(c.error, isNull);
     },
   );
+
+  group('refund', () {
+    test('a successful refund updates the currently-open detail in place', () async {
+      final svc = FakeHistoryService()..details = {1: completed(id: 1)};
+      final c = SalesHistoryController(svc, FakeProductService());
+      await c.selectSale(1);
+      expect(c.detail!.refund, isNull);
+
+      svc.onRefund = (id, key) async => refunded(id: id);
+      final ok = await c.refundSale(1);
+
+      expect(ok, isTrue);
+      expect(c.isRefunding, isFalse);
+      expect(c.refundError, isNull);
+      expect(c.detail!.refund, isNotNull);
+      expect(c.detail!.status, 'completed', reason: 'refund must never change status locally either');
+      expect(c.detail!.refund!.refundAmount, c.detail!.totals.grandTotal);
+    });
+
+    test('a 403 permission denial leaves the detail unchanged and is exposed as refundError', () async {
+      final svc = FakeHistoryService()
+        ..details = {1: completed(id: 1)}
+        ..onRefund = (id, key) async => throw forbiddenRefund;
+      final c = SalesHistoryController(svc, FakeProductService());
+      await c.selectSale(1);
+
+      final ok = await c.refundSale(1);
+
+      expect(ok, isFalse);
+      expect(c.isRefunding, isFalse);
+      expect(c.refundError, isNotNull);
+      expect(c.refundError!.kind, ApiErrorKind.forbidden);
+      expect(c.refundError!.errorCode, 'POS_PERMISSION_DENIED');
+      expect(
+        c.detail!.refund,
+        isNull,
+        reason: 'a denied refund must not locally mark the sale as refunded',
+      );
+      expect(c.detail!.status, 'completed');
+    });
+
+    test('a generic backend error is exposed the same way as any other API failure', () async {
+      final svc = FakeHistoryService()
+        ..details = {1: completed(id: 1)}
+        ..onRefund = (id, key) async => throw netDown;
+      final c = SalesHistoryController(svc, FakeProductService());
+      await c.selectSale(1);
+
+      final ok = await c.refundSale(1);
+      expect(ok, isFalse);
+      expect(c.refundError, netDown);
+    });
+
+    test('clearRefundError only touches the refund error', () async {
+      final svc = FakeHistoryService()
+        ..details = {1: completed(id: 1)}
+        ..onRefund = (id, key) async => throw netDown;
+      final c = SalesHistoryController(svc, FakeProductService());
+      await c.selectSale(1);
+      await c.refundSale(1);
+      expect(c.refundError, isNotNull);
+      c.clearRefundError();
+      expect(c.refundError, isNull);
+    });
+
+    test('a retry on the SAME sale after a failure reuses the same idempotency key (safe replay)', () async {
+      final svc = FakeHistoryService()
+        ..details = {1: completed(id: 1)}
+        ..onRefund = (id, key) async => throw netDown;
+      final c = SalesHistoryController(svc, FakeProductService());
+      await c.selectSale(1);
+      await c.refundSale(1);
+      await c.refundSale(1);
+      expect(svc.refundKeys.length, 2);
+      expect(svc.refundKeys[0], svc.refundKeys[1]);
+    });
+
+    test('a successful refund followed by another attempt on the same (now already-refunded) sale uses a NEW key', () async {
+      final svc = FakeHistoryService()..details = {1: completed(id: 1)};
+      final c = SalesHistoryController(svc, FakeProductService());
+      await c.selectSale(1);
+
+      svc.onRefund = (id, key) async => refunded(id: id);
+      await c.refundSale(1);
+      final firstKey = svc.refundKeys.single;
+
+      svc.onRefund = (id, key) async =>
+          throw const ApiException(kind: ApiErrorKind.conflict, message: 'Sale has already been refunded.');
+      await c.refundSale(1);
+
+      expect(svc.refundKeys.last, isNot(firstKey), reason: 'a closed attempt must not be replayed for a new one');
+    });
+
+    test('a different sale always gets its own idempotency key', () async {
+      final svc = FakeHistoryService()
+        ..details = {1: completed(id: 1), 2: completed(id: 2)}
+        ..onRefund = (id, key) async => throw netDown;
+      final c = SalesHistoryController(svc, FakeProductService());
+      await c.selectSale(1);
+      await c.refundSale(1);
+      await c.selectSale(2);
+      await c.refundSale(2);
+      expect(svc.refundKeys[0], isNot(svc.refundKeys[1]));
+    });
+
+    test('isRefunding is true only while the request is in flight', () async {
+      final svc = FakeHistoryService()..details = {1: completed(id: 1)};
+      final c = SalesHistoryController(svc, FakeProductService());
+      await c.selectSale(1);
+
+      final gate = Completer<CompletedSale?>();
+      svc.onRefund = (id, key) => gate.future;
+      final future = c.refundSale(1);
+      expect(c.isRefunding, isTrue);
+      gate.complete(refunded(id: 1));
+      await future;
+      expect(c.isRefunding, isFalse);
+    });
+
+    test('a concurrent second call while one is in flight is a no-op', () async {
+      final svc = FakeHistoryService()..details = {1: completed(id: 1)};
+      final c = SalesHistoryController(svc, FakeProductService());
+      await c.selectSale(1);
+
+      final gate = Completer<CompletedSale?>();
+      svc.onRefund = (id, key) => gate.future;
+      final first = c.refundSale(1);
+      final second = await c.refundSale(1);
+      expect(second, isFalse);
+      gate.complete(refunded(id: 1));
+      expect(await first, isTrue);
+      expect(svc.refundKeys.length, 1);
+    });
+  });
 }

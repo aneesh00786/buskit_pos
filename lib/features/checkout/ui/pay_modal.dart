@@ -110,8 +110,15 @@ class _PayModalState extends State<PayModal> {
     super.dispose();
   }
 
+  /// Wallet redemption doesn't change the sale total — it's a payment-tender
+  /// substitute, not a discount (see CartSale.loyalty) — so it reduces what
+  /// cash/card/other must cover here, while the receipt/success view still
+  /// shows the full sale total.
+  int _walletMilli(CartController cart) =>
+      milliFromDouble(cart.sale?.loyalty?.walletRedeemed ?? 0);
+
   int _totalMilli(CartController cart) =>
-      milliFromDouble(cart.sale?.totals.grandTotal ?? 0);
+      milliFromDouble(cart.sale?.totals.grandTotal ?? 0) - _walletMilli(cart);
 
   PaymentPlan _plan(CartController cart) {
     final total = _totalMilli(cart);
@@ -246,6 +253,14 @@ class _PayModalState extends State<PayModal> {
         padding: const EdgeInsets.all(PosTokens.s16),
         children: [
           _AmountDue(totalMilli: total),
+          if (_walletMilli(cart) > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: PosTokens.s8),
+              child: _KeyValue(
+                label: 'Wallet applied',
+                value: '-${formatMilli(_walletMilli(cart))}',
+              ),
+            ),
           const SizedBox(height: PosTokens.s12),
           if (failure != null) ...[
             _Failure(
@@ -843,6 +858,26 @@ class _SuccessView extends StatelessWidget {
             value: formatMoney(sale.totals.grandTotal),
             bold: true,
           ),
+          if (sale.loyalty != null) ...[
+            const Divider(height: PosTokens.s24),
+            Text('Loyalty', style: theme.textTheme.titleSmall),
+            const SizedBox(height: PosTokens.s4),
+            if (sale.loyalty!.walletRedeemed > 0)
+              _KeyValue(
+                label: 'Wallet redeemed',
+                value: '-${formatMoney(sale.loyalty!.walletRedeemed)}',
+              ),
+            if (sale.loyalty!.pointsEarned > 0)
+              _KeyValue(
+                label: 'Points earned',
+                value: '+${formatQty(sale.loyalty!.pointsEarned)}',
+              ),
+            if (sale.loyalty!.cashbackEarned > 0)
+              _KeyValue(
+                label: 'Cashback earned',
+                value: '+${formatMoney(sale.loyalty!.cashbackEarned)}',
+              ),
+          ],
           const Divider(height: PosTokens.s24),
           Text('Payment', style: theme.textTheme.titleSmall),
           const SizedBox(height: PosTokens.s4),

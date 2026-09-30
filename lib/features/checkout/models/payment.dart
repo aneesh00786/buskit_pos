@@ -2,6 +2,7 @@ import '../../../core/utils/json_read.dart';
 import '../../../core/utils/money.dart';
 import '../../../core/utils/server_time.dart';
 import '../../cart/models/cart_sale.dart';
+import '../../loyalty/models/loyalty_sale_info.dart';
 import '../../promotions/models/promotion.dart';
 
 /// Tender types the backend accepts. Card and Other are RECORDED only — there
@@ -86,6 +87,36 @@ class RecordedPayment {
   }
 }
 
+/// A FULL-SALE refund, present once `POST /sales/:id/refund` has succeeded.
+/// The backend never changes `pos_sales.status` for a refund (it stays
+/// 'completed') — this being non-null is the only signal a sale was
+/// refunded. Partial/quantity refund does not exist; there is no refunded
+/// amount other than the whole sale's total.
+class RefundInfo {
+  const RefundInfo({
+    required this.refundedBy,
+    required this.refundAmount,
+    this.refundedAt,
+  });
+
+  final String refundedBy;
+  final double refundAmount;
+  final DateTime? refundedAt;
+
+  static RefundInfo? fromJson(Object? json) {
+    final m = asMap(json);
+    if (m == null) return null;
+    final refundedBy = asString(m['refunded_by']);
+    final amount = asDouble(m['refund_amount']);
+    if (refundedBy == null || amount == null) return null;
+    return RefundInfo(
+      refundedBy: refundedBy,
+      refundAmount: amount,
+      refundedAt: parseServerTime(m['refunded_at']),
+    );
+  }
+}
+
 /// The immutable completed sale returned by `POST /sales/:id/complete`.
 /// Items carry the server's snapshot figures but NO product names.
 class CompletedSale {
@@ -99,6 +130,8 @@ class CompletedSale {
     this.completedAt,
     this.customerId,
     this.promotion,
+    this.loyalty,
+    this.refund,
   });
 
   final int id;
@@ -113,6 +146,14 @@ class CompletedSale {
   /// The promotion applied at completion, frozen forever — a later edit or
   /// deletion of the source promotion can never change this receipt.
   final AppliedPromotion? promotion;
+
+  /// Points/cashback earned, any tier discount/points/wallet redeemed —
+  /// frozen forever at completion, same rule as [promotion].
+  final LoyaltySaleInfo? loyalty;
+
+  /// Non-null once this sale has been refunded (full-sale only). See
+  /// [RefundInfo] — `status` itself never changes to reflect this.
+  final RefundInfo? refund;
 
   /// The order/invoice number: the server's sale number, else "#id".
   String get displayNumber =>
@@ -133,6 +174,8 @@ class CompletedSale {
       completedAt: parseServerTime(m['completed_at']),
       customerId: asString(m['customer_id']),
       promotion: AppliedPromotion.fromJson(m['promotion']),
+      loyalty: LoyaltySaleInfo.fromJson(m['loyalty']),
+      refund: RefundInfo.fromJson(m['refund']),
       items: asList(m['items'])
           .map(CartLine.fromJson)
           .whereType<CartLine>()

@@ -20,11 +20,12 @@ import 'package:provider/provider.dart';
 import 'fakes.dart';
 
 /// A [PosApiClient] that answers every `GET .../customers` search with an
-/// empty page and 404s anything else — enough for the customer picker inside
-/// the "Change customer" dialog to load without error when a test doesn't
-/// care about its contents. Tests that do care pass their own `client` to
+/// empty page, `GET .../analytics/summary` with an all-zero summary, and
+/// 404s anything else — enough for the customer picker and the summary
+/// panel/analytics screen to load without error when a test doesn't care
+/// about their contents. Tests that do care pass their own `client` to
 /// [PageHarness].
-PosApiClient emptyCustomersApiClient() => PosApiClient(
+PosApiClient defaultTestApiClient() => PosApiClient(
   baseUrl: 'http://test',
   httpClient: MockClient((r) async {
     if (r.method == 'GET' && r.url.path.endsWith('/customers')) {
@@ -44,6 +45,20 @@ PosApiClient emptyCustomersApiClient() => PosApiClient(
         200,
       );
     }
+    if (r.method == 'GET' && r.url.path.endsWith('/analytics/summary')) {
+      return http.Response(
+        jsonEncode({
+          'status': true,
+          'data': {
+            'today': {'transaction_count': 0, 'sales_total': 0},
+            'payment_breakdown': [],
+            'top_products': [],
+            'staff_performance': [],
+          },
+        }),
+        200,
+      );
+    }
     return http.Response(
       jsonEncode({'status': false, 'message': 'no route'}),
       404,
@@ -54,7 +69,7 @@ PosApiClient emptyCustomersApiClient() => PosApiClient(
 /// Everything a test needs to drive the real [ProductsPage] with fakes.
 class PageHarness {
   PageHarness({bool withHeld = true, PosApiClient? client})
-    : client = client ?? emptyCustomersApiClient() {
+    : client = client ?? defaultTestApiClient() {
     products = FakeProductService();
     carts = FakeCartService();
     heldService = FakeHeldSalesService();

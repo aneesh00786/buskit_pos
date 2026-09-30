@@ -10,6 +10,8 @@ import '../../../core/theme/pos_tokens.dart';
 import '../../../core/ui/state_views.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/server_time.dart';
+import '../../loyalty/data/loyalty_service.dart';
+import '../../loyalty/models/loyalty_profile.dart';
 import '../data/customer_service.dart';
 import '../models/customer.dart';
 import '../state/customer_list_controller.dart';
@@ -21,7 +23,10 @@ import 'customer_form.dart';
 /// shell, so only a fresh controller needs providing here.
 Future<void> showCustomers(BuildContext context) {
   final client = context.read<PosApiClient>();
-  final controller = CustomerListController(ApiCustomerService(client));
+  final controller = CustomerListController(
+    ApiCustomerService(client),
+    loyaltyService: ApiLoyaltyService(client),
+  );
   final size = MediaQuery.sizeOf(context);
   Widget content() => ChangeNotifierProvider<CustomerListController>.value(
     value: controller,
@@ -573,6 +578,7 @@ class _DetailBody extends StatelessWidget {
             ],
           ),
         ),
+        _LoyaltySection(controller: c),
         const SizedBox(height: PosTokens.s24),
         Row(
           children: [
@@ -591,6 +597,113 @@ class _DetailBody extends StatelessWidget {
           decoration: t.card(outlined: false),
           child: _PurchaseSection(controller: c),
         ),
+      ],
+    );
+  }
+}
+
+/// Points/wallet/tier for the open customer. Hidden entirely (not a "no
+/// loyalty" card) when the company has no active program — most companies
+/// won't have one configured, and an empty card for every customer would be
+/// noise, not information.
+class _LoyaltySection extends StatelessWidget {
+  const _LoyaltySection({required this.controller});
+  final CustomerListController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final loading = controller.loyaltyLoading && controller.loyalty == null;
+    final error = controller.loyaltyError;
+    final loyalty = controller.loyalty;
+
+    if (!loading && error == null && (loyalty == null || !loyalty.enabled)) {
+      return const SizedBox.shrink();
+    }
+
+    final t = PosTokens.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: PosTokens.s16),
+        Row(
+          children: [
+            Icon(
+              Icons.stars_outlined,
+              size: 18,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+            const SizedBox(width: PosTokens.s8),
+            Text('Loyalty', style: Theme.of(context).textTheme.titleSmall),
+          ],
+        ),
+        const SizedBox(height: PosTokens.s8),
+        Container(
+          padding: const EdgeInsets.all(PosTokens.s12),
+          decoration: t.card(outlined: false),
+          child: loading
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(),
+                )
+              : error != null
+              ? _InlineError(
+                  message: describeApiError(error),
+                  onRetry: controller.retryLoyalty,
+                )
+              : _LoyaltyStats(profile: loyalty!),
+        ),
+      ],
+    );
+  }
+}
+
+class _LoyaltyStats extends StatelessWidget {
+  const _LoyaltyStats({required this.profile});
+  final LoyaltyProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (profile.tier != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: PosTokens.s8),
+            child: Text(
+              '${profile.tier!.name} member',
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: _SummaryStat(
+                icon: Icons.stars_outlined,
+                label: 'Points',
+                value: formatQty(profile.pointsBalance),
+                style: Theme.of(context).textTheme,
+              ),
+            ),
+            const SizedBox(width: PosTokens.s8),
+            Expanded(
+              child: _SummaryStat(
+                icon: Icons.account_balance_wallet_outlined,
+                label: 'Wallet',
+                value: formatMoney(profile.walletBalance),
+                style: Theme.of(context).textTheme,
+              ),
+            ),
+          ],
+        ),
+        if (profile.nextTier != null)
+          Padding(
+            padding: const EdgeInsets.only(top: PosTokens.s8),
+            child: Text(
+              'Spend ${formatMoney(profile.nextTier!.remainingSpend)} more to reach ${profile.nextTier!.name}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
       ],
     );
   }

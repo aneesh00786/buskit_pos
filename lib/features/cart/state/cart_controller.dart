@@ -16,6 +16,7 @@ enum CartOperation {
   cancelHeld,
   complete,
   promotion,
+  loyalty,
 }
 
 /// Holds the current draft sale and mutates it (add / update quantity /
@@ -405,6 +406,62 @@ class CartController extends ChangeNotifier {
     });
   }
 
+  // ---- loyalty ----
+
+  /// True while points/wallet redemption could meaningfully be requested —
+  /// same precondition as [canChoosePromotion] (a draft sale must already
+  /// exist) plus a customer must be on the sale (loyalty has no meaning for
+  /// a guest checkout).
+  bool get canChooseLoyalty =>
+      _sale != null &&
+      _sale!.isDraft &&
+      _sale!.customerId != null &&
+      _op == null;
+
+  /// Redeems (or replaces) the sale's pending points redemption. `points: 0`
+  /// clears it. The server recalculates the discount; nothing is sent here
+  /// beyond the requested point count.
+  Future<bool> redeemLoyaltyPoints(int points) async {
+    final sale = _sale;
+    if (sale == null || _op != null) return false;
+    return _run(CartOperation.loyalty, null, () async {
+      return _service.redeemLoyaltyPoints(
+        saleId: sale.id,
+        points: points,
+        expectedVersion: sale.version,
+      );
+    });
+  }
+
+  /// Redeems (or replaces) the sale's pending wallet redemption. `amount: 0`
+  /// clears it. Wallet does not change the sale total — it reduces what
+  /// cash/card/other must cover at pay time (see [CartSale.loyalty]).
+  Future<bool> redeemLoyaltyWallet(double amount) async {
+    final sale = _sale;
+    if (sale == null || _op != null) return false;
+    return _run(CartOperation.loyalty, null, () async {
+      return _service.redeemLoyaltyWallet(
+        saleId: sale.id,
+        amount: amount,
+        expectedVersion: sale.version,
+      );
+    });
+  }
+
+  /// Clears any pending points/wallet redemption (the automatic tier
+  /// discount, if any, is unaffected — it isn't something a cashier opts
+  /// out of).
+  Future<bool> removeLoyaltyRedemption() async {
+    final sale = _sale;
+    if (sale == null || _op != null) return false;
+    return _run(CartOperation.loyalty, null, () async {
+      return _service.removeLoyaltyRedemption(
+        saleId: sale.id,
+        expectedVersion: sale.version,
+      );
+    });
+  }
+
   // ---- complete (pay) ----
 
   static const String emptyCompleteMessage =
@@ -684,6 +741,7 @@ class CartController extends ChangeNotifier {
       case CartOperation.complete:
       case CartOperation.add:
       case CartOperation.promotion:
+      case CartOperation.loyalty:
         break;
     }
     return e;

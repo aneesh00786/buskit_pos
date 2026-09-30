@@ -1,54 +1,129 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../core/network/pos_api_client.dart';
 import '../../../core/theme/pos_tokens.dart';
+import '../../../core/utils/format.dart';
+import '../../analytics/data/analytics_service.dart';
+import '../../analytics/state/analytics_controller.dart';
 
-/// Right-hand sales summary for very wide screens. The backend has no
-/// reporting endpoints yet, so every card is a clearly labelled placeholder —
-/// no figures are invented and nothing calls an API.
-class SalesSummaryPanel extends StatelessWidget {
+/// Right-hand sales summary for very wide screens. Three cards (today's
+/// sales, top items, staff performance) show real figures from
+/// `GET /analytics/summary` — the same endpoint and controller shape the
+/// full Analytics screen uses. "Sales trend" (a day-by-day series) and
+/// "Inventory alerts" (stock levels) are NOT part of that summary — POS's
+/// own sales tables have neither — so those two stay honest placeholders
+/// rather than fabricated figures.
+class SalesSummaryPanel extends StatefulWidget {
   const SalesSummaryPanel({super.key});
 
   @override
+  State<SalesSummaryPanel> createState() => _SalesSummaryPanelState();
+}
+
+class _SalesSummaryPanelState extends State<SalesSummaryPanel> {
+  late final AnalyticsController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnalyticsController(
+      ApiAnalyticsService(context.read<PosApiClient>()),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _controller.load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: const [
-        SummaryCard(
-          title: "Today's sales",
-          icon: Icons.payments_outlined,
-          gradient: true,
-          message: 'Sales reporting is not available yet.',
-        ),
-        SizedBox(height: PosTokens.s12),
-        SummaryCard(
-          title: 'Top items',
-          icon: Icons.emoji_events_outlined,
-          message: 'Not available yet.',
-        ),
-        SizedBox(height: PosTokens.s12),
-        SummaryCard(
-          title: 'Staff performance',
-          icon: Icons.groups_outlined,
-          message: 'Not available yet.',
-        ),
-        SizedBox(height: PosTokens.s12),
-        SummaryCard(
-          title: 'Sales trend',
-          icon: Icons.show_chart,
-          message: 'Not available yet.',
-        ),
-        SizedBox(height: PosTokens.s12),
-        SummaryCard(
-          title: 'Inventory alerts',
-          icon: Icons.warning_amber_outlined,
-          message: 'Not available yet.',
-        ),
-      ],
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final loading =
+            _controller.status == AnalyticsStatus.idle ||
+            _controller.status == AnalyticsStatus.loading;
+        final failed = _controller.status == AnalyticsStatus.error;
+        final s = _controller.summary;
+        final available = !loading && !failed && s != null;
+
+        final topItem = available && s.topProducts.isNotEmpty
+            ? s.topProducts.first
+            : null;
+        final topStaff = available && s.staffPerformance.isNotEmpty
+            ? s.staffPerformance.first
+            : null;
+
+        return ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            SummaryCard(
+              title: "Today's sales",
+              icon: Icons.payments_outlined,
+              gradient: true,
+              figure: available ? formatMoney(s.todaySalesTotal) : null,
+              message: failed
+                  ? 'Sales reporting is temporarily unavailable.'
+                  : loading
+                  ? 'Loading…'
+                  : '${s!.todayTransactionCount} transaction${s.todayTransactionCount == 1 ? '' : 's'} today',
+              showPill: loading || failed,
+            ),
+            const SizedBox(height: PosTokens.s12),
+            SummaryCard(
+              title: 'Top items',
+              icon: Icons.emoji_events_outlined,
+              message: failed
+                  ? 'Not available yet.'
+                  : loading
+                  ? 'Loading…'
+                  : topItem == null
+                  ? 'No sales in the last 7 days yet.'
+                  : '${topItem.productName ?? 'Item ${topItem.productVariationId}'} — ${formatQty(topItem.quantitySold)} sold',
+              showPill: loading || failed,
+            ),
+            const SizedBox(height: PosTokens.s12),
+            SummaryCard(
+              title: 'Staff performance',
+              icon: Icons.groups_outlined,
+              message: failed
+                  ? 'Not available yet.'
+                  : loading
+                  ? 'Loading…'
+                  : topStaff == null
+                  ? 'No sales today yet.'
+                  : '${topStaff.fullname ?? topStaff.salesmanId} — ${formatMoney(topStaff.salesTotal)}',
+              showPill: loading || failed,
+            ),
+            const SizedBox(height: PosTokens.s12),
+            const SummaryCard(
+              title: 'Sales trend',
+              icon: Icons.show_chart,
+              message: 'Not available yet.',
+            ),
+            const SizedBox(height: PosTokens.s12),
+            const SummaryCard(
+              title: 'Inventory alerts',
+              icon: Icons.warning_amber_outlined,
+              message: 'Not available yet.',
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
-/// A summary tile. With [gradient] it uses the brand gradient (the "hero" card).
+/// A summary tile. With [gradient] it uses the brand gradient (the "hero"
+/// card). [figure] is an optional bold headline (e.g. a money amount);
+/// [showPill] (default true) shows a small "Coming soon" pill — set false
+/// once real data backs the card.
 class SummaryCard extends StatelessWidget {
   const SummaryCard({
     super.key,
@@ -56,12 +131,16 @@ class SummaryCard extends StatelessWidget {
     required this.icon,
     required this.message,
     this.gradient = false,
+    this.figure,
+    this.showPill = true,
   });
 
   final String title;
   final IconData icon;
   final String message;
   final bool gradient;
+  final String? figure;
+  final bool showPill;
 
   @override
   Widget build(BuildContext context) {
@@ -103,26 +182,27 @@ class SummaryCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
+                if (showPill)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: pillBg,
+                      borderRadius: BorderRadius.circular(PosTokens.rPill),
+                    ),
+                    child: Text(
+                      'Coming soon',
+                      style: text.labelSmall?.copyWith(color: fg),
+                    ),
                   ),
-                  decoration: BoxDecoration(
-                    color: pillBg,
-                    borderRadius: BorderRadius.circular(PosTokens.rPill),
-                  ),
-                  child: Text(
-                    'Coming soon',
-                    style: text.labelSmall?.copyWith(color: fg),
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: PosTokens.s12),
             if (gradient)
               Text(
-                '—',
+                figure ?? '—',
                 style: text.headlineMedium?.copyWith(
                   color: fg,
                   fontWeight: FontWeight.w800,
@@ -130,6 +210,8 @@ class SummaryCard extends StatelessWidget {
               ),
             Text(
               message,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: text.bodySmall?.copyWith(
                 color: fg.withValues(alpha: 0.85),
               ),

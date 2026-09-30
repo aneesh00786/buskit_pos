@@ -13,6 +13,15 @@ abstract class SalesHistoryService {
   /// `GET /sales/:id` — items, payments and totals for one completed sale
   /// (no product names; the completed view never carries them).
   Future<CompletedSale?> getDetail(int id);
+
+  /// `POST /sales/:id/refund {idempotency_key}` — FULL-SALE REFUND ONLY.
+  /// Requires the `payments.refund` permission server-side; the backend
+  /// never changes `status` (stays 'completed'). Returns the same shape as
+  /// [getDetail], now carrying a non-null `refund`.
+  Future<CompletedSale?> refundSale({
+    required int saleId,
+    required String idempotencyKey,
+  });
 }
 
 class ApiSalesHistoryService implements SalesHistoryService {
@@ -31,6 +40,18 @@ class ApiSalesHistoryService implements SalesHistoryService {
   @override
   Future<CompletedSale?> getDetail(int id) async {
     final data = await _client.get('/sales/$id');
+    return CompletedSale.fromJson(data);
+  }
+
+  @override
+  Future<CompletedSale?> refundSale({
+    required int saleId,
+    required String idempotencyKey,
+  }) async {
+    final data = await _client.post(
+      '/sales/$saleId/refund',
+      body: {'idempotency_key': idempotencyKey},
+    );
     return CompletedSale.fromJson(data);
   }
 }

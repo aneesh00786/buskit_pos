@@ -50,6 +50,33 @@ abstract class CartService {
     required int saleId,
     required int expectedVersion,
   });
+
+  /// `POST /sales/:id/loyalty/redeem-points {points, expected_version}` —
+  /// `points: 0` clears any pending points redemption. The discount is
+  /// recalculated server-side; nothing discount-related is ever sent here.
+  Future<CartSale> redeemLoyaltyPoints({
+    required int saleId,
+    required int points,
+    required int expectedVersion,
+  });
+
+  /// `POST /sales/:id/loyalty/redeem-wallet {amount, expected_version}` —
+  /// `amount: 0` clears any pending wallet redemption. Wallet does not
+  /// change the sale total (it's a payment-tender substitute, not a
+  /// discount) — it just reduces what cash/card/other must cover at pay time.
+  Future<CartSale> redeemLoyaltyWallet({
+    required int saleId,
+    required double amount,
+    required int expectedVersion,
+  });
+
+  /// `DELETE /sales/:id/loyalty/redemption {expected_version}` — clears any
+  /// pending points/wallet redemption (the automatic tier discount, if any,
+  /// is unaffected).
+  Future<CartSale> removeLoyaltyRedemption({
+    required int saleId,
+    required int expectedVersion,
+  });
 }
 
 /// Verified against the backend: `POST /sales`, `GET /sales/:id`,
@@ -224,6 +251,47 @@ class ApiCartService implements CartService {
   }) async {
     final data = await _client.delete(
       '/sales/$saleId/promotion',
+      query: {'expected_version': '$expectedVersion'},
+    );
+    return _parse(data);
+  }
+
+  /// `POST /sales/:id/loyalty/redeem-points {points, expected_version}`.
+  @override
+  Future<CartSale> redeemLoyaltyPoints({
+    required int saleId,
+    required int points,
+    required int expectedVersion,
+  }) async {
+    final data = await _client.post(
+      '/sales/$saleId/loyalty/redeem-points',
+      body: {'points': points, 'expected_version': expectedVersion},
+    );
+    return _parse(data);
+  }
+
+  /// `POST /sales/:id/loyalty/redeem-wallet {amount, expected_version}`.
+  @override
+  Future<CartSale> redeemLoyaltyWallet({
+    required int saleId,
+    required double amount,
+    required int expectedVersion,
+  }) async {
+    final data = await _client.post(
+      '/sales/$saleId/loyalty/redeem-wallet',
+      body: {'amount': amount, 'expected_version': expectedVersion},
+    );
+    return _parse(data);
+  }
+
+  /// `DELETE /sales/:id/loyalty/redemption {expected_version}`.
+  @override
+  Future<CartSale> removeLoyaltyRedemption({
+    required int saleId,
+    required int expectedVersion,
+  }) async {
+    final data = await _client.delete(
+      '/sales/$saleId/loyalty/redemption',
       query: {'expected_version': '$expectedVersion'},
     );
     return _parse(data);

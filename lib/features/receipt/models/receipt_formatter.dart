@@ -43,6 +43,15 @@ class ReceiptFormatter {
           ? money(sale.totals.discountTotal)
           : null,
       discountLabel: sale.promotion?.title ?? 'Discount',
+      pointsEarned: (sale.loyalty?.pointsEarned ?? 0) > 0
+          ? '+${formatQty(sale.loyalty!.pointsEarned)}'
+          : null,
+      cashbackEarned: (sale.loyalty?.cashbackEarned ?? 0) > 0
+          ? '+${money(sale.loyalty!.cashbackEarned)}'
+          : null,
+      walletRedeemed: (sale.loyalty?.walletRedeemed ?? 0) > 0
+          ? '-${money(sale.loyalty!.walletRedeemed)}'
+          : null,
       total: money(sale.totals.grandTotal),
       payments: [
         for (final p in sale.payments)
@@ -146,6 +155,9 @@ extension ReceiptText on ReceiptData {
       out.add(_pair(_ascii(discountLabel), '-$discount', columns));
     }
     out.add(_pair('TOTAL', total, columns));
+    if (walletRedeemed != null) {
+      out.add(_pair('Wallet redeemed', walletRedeemed!, columns));
+    }
     out.add(rule);
     for (final p in payments) {
       out.add(_pair(_ascii(p.method), p.amount, columns));
@@ -155,6 +167,15 @@ extension ReceiptText on ReceiptData {
       if (p.change != null) out.add(_pair('  Change', p.change!, columns));
     }
     if (changeDue != null) out.add(_pair('CHANGE DUE', changeDue!, columns));
+    if (pointsEarned != null || cashbackEarned != null) {
+      out.add(rule);
+      if (pointsEarned != null) {
+        out.add(_pair('Points earned', pointsEarned!, columns));
+      }
+      if (cashbackEarned != null) {
+        out.add(_pair('Cashback earned', cashbackEarned!, columns));
+      }
+    }
     out.add(rule);
     out.add(_center(_ascii(footer), columns));
     return out;

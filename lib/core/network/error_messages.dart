@@ -20,6 +20,12 @@ class PosErrorCodes {
   /// instead of just failing — see the customer form.
   static const duplicateMobile = 'POS_DUPLICATE_MOBILE';
   static const duplicateEmail = 'POS_DUPLICATE_EMAIL';
+
+  /// A staff member's role does not grant the permission the action needs
+  /// (e.g. `payments.refund`). Server-authoritative and dynamic — a role
+  /// change on the admin portal takes effect on this exact same signed-in
+  /// session's very next request, no re-login or app rebuild needed.
+  static const permissionDenied = 'POS_PERMISSION_DENIED';
 }
 
 /// Turns an [ApiException] into a short, user-facing message. Codes are
@@ -42,6 +48,11 @@ String describeApiError(ApiException e) {
       return 'Not enough stock to complete this sale.';
     case PosErrorCodes.stockConflict:
       return 'Stock changed while the sale was being processed. Please try again.';
+    case PosErrorCodes.permissionDenied:
+      final permission = asString(e.dataMap?['permission']);
+      return permission == 'payments.refund'
+          ? 'You do not have permission to refund sales. Ask a manager or administrator.'
+          : 'You do not have permission to do that.';
   }
   switch (e.kind) {
     case ApiErrorKind.network:

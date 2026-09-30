@@ -15,6 +15,7 @@ Map<String, dynamic> promotionJson({
 }) => {
   'id': id,
   'title': title,
+
   'description': description,
   'discount_type': discountType,
   'discount_value': discountValue,

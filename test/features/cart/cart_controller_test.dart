@@ -275,4 +275,133 @@ void main() {
       expect(cart.canChoosePromotion, isFalse);
     });
   });
+
+  group('loyalty', () {
+    test('cannot be chosen before a sale exists', () async {
+      expect(cart.canChooseLoyalty, isFalse);
+      expect(await cart.redeemLoyaltyPoints(500), isFalse);
+      expect(await cart.redeemLoyaltyWallet(10), isFalse);
+      expect(await cart.removeLoyaltyRedemption(), isFalse);
+      expect(service.redeemPointsCalls, isEmpty);
+    });
+
+    test(
+      'cannot be chosen for a guest checkout (no customer on the sale)',
+      () async {
+        await cart.addItem(1, 1);
+        expect(cart.sale!.customerId, isNull);
+        expect(cart.canChooseLoyalty, isFalse);
+      },
+    );
+
+    test('redeemLoyaltyPoints sends the sale id/version and points, replacing local state', () async {
+      service.onAdd = (c) async => CartSale.fromJson(
+        saleJson(
+          id: c.saleId,
+          version: c.expectedVersion + 1,
+          customerId: 'CUST-1',
+        ),
+      )!;
+      await cart.addItem(1, 1);
+      expect(cart.canChooseLoyalty, isTrue);
+
+      service.onRedeemPoints = (c) async => CartSale.fromJson(
+        saleJson(
+          id: c.saleId,
+          version: c.expectedVersion + 1,
+          customerId: 'CUST-1',
+          discount: 50,
+          loyalty: loyaltySaleInfoJson(
+            pointsRedeemed: 500,
+            pointsRedeemedValue: 50,
+          ),
+        ),
+      )!;
+      final ok = await cart.redeemLoyaltyPoints(500);
+      expect(ok, isTrue);
+      expect(service.redeemPointsCalls.single.saleId, 7);
+      expect(service.redeemPointsCalls.single.points, 500);
+      expect(service.redeemPointsCalls.single.expectedVersion, 2);
+      expect(cart.sale!.loyalty!.pointsRedeemed, 500);
+      expect(cart.sale!.loyalty!.pointsRedeemedValue, 50);
+    });
+
+    test('redeemLoyaltyWallet sends the sale id/version and amount', () async {
+      service.onAdd = (c) async => CartSale.fromJson(
+        saleJson(
+          id: c.saleId,
+          version: c.expectedVersion + 1,
+          customerId: 'CUST-1',
+        ),
+      )!;
+      await cart.addItem(1, 1);
+      service.onRedeemWallet = (c) async => CartSale.fromJson(
+        saleJson(
+          id: c.saleId,
+          version: c.expectedVersion + 1,
+          customerId: 'CUST-1',
+          loyalty: loyaltySaleInfoJson(walletRedeemed: 10),
+        ),
+      )!;
+      final ok = await cart.redeemLoyaltyWallet(10);
+      expect(ok, isTrue);
+      expect(service.redeemWalletCalls.single.amount, 10);
+      // Wallet is a tender substitute, not a discount: the sale total is
+      // unaffected — only cart.sale!.loyalty!.walletRedeemed reflects it.
+      expect(cart.sale!.loyalty!.walletRedeemed, 10);
+    });
+
+    test('removeLoyaltyRedemption clears the pending redemption', () async {
+      service.onAdd = (c) async => CartSale.fromJson(
+        saleJson(
+          id: c.saleId,
+          version: c.expectedVersion + 1,
+          customerId: 'CUST-1',
+        ),
+      )!;
+      await cart.addItem(1, 1);
+      service.onRedeemPoints = (c) async => CartSale.fromJson(
+        saleJson(
+          id: c.saleId,
+          version: c.expectedVersion + 1,
+          customerId: 'CUST-1',
+          loyalty: loyaltySaleInfoJson(pointsRedeemed: 500),
+        ),
+      )!;
+      await cart.redeemLoyaltyPoints(500);
+      service.onRemoveLoyalty = (c) async => CartSale.fromJson(
+        saleJson(
+          id: c.saleId,
+          version: c.expectedVersion + 1,
+          customerId: 'CUST-1',
+          loyalty: loyaltySaleInfoJson(),
+        ),
+      )!;
+      final ok = await cart.removeLoyaltyRedemption();
+      expect(ok, isTrue);
+      expect(service.removeLoyaltyCalls.single.saleId, 7);
+      expect(cart.sale!.loyalty!.pointsRedeemed, 0);
+    });
+
+    test('a rejected redemption reports the server reason and keeps the prior state', () async {
+      service.onAdd = (c) async => CartSale.fromJson(
+        saleJson(
+          id: c.saleId,
+          version: c.expectedVersion + 1,
+          customerId: 'CUST-1',
+        ),
+      )!;
+      await cart.addItem(1, 1);
+      service.onRedeemPoints = (_) async => throw apiError(
+        422,
+        code: 'LOYALTY_INSUFFICIENT_POINTS',
+        message: 'Insufficient points balance.',
+      );
+      final ok = await cart.redeemLoyaltyPoints(500);
+      expect(ok, isFalse);
+      expect(cart.error?.errorCode, 'LOYALTY_INSUFFICIENT_POINTS');
+      expect(cart.errorOperation, CartOperation.loyalty);
+      expect(cart.sale!.loyalty, isNull);
+    });
+  });
 }

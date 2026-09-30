@@ -1,5 +1,6 @@
 import 'package:buskit_pos/core/network/api_exception.dart';
 import 'package:buskit_pos/core/storage/token_store.dart';
+import 'package:buskit_pos/features/auth/models/pos_auth_context.dart';
 import 'package:buskit_pos/features/auth/state/session_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -53,7 +54,12 @@ void main() {
     expect(staffSawDeviceToken, 'device-token');
     expect(shiftSawStaffToken, 'staff-token');
     expect(s.activeToken, 'staff-token');
-    expect(auth.log, ['device:REG-1', 'staff:S1', 'shift:100.0']);
+    expect(auth.log, [
+      'device:REG-1',
+      'staff:S1',
+      'authContext',
+      'shift:100.0',
+    ]);
   });
 
   test('only the device token and identifier are persisted — never the staff token, PIN or secret', () async {
@@ -251,5 +257,111 @@ void main() {
     await s.changeDevice();
     expect(s.phase, SessionPhase.deviceLogin);
     expect(await store.read(TokenKeys.deviceToken), isNull);
+  });
+
+  group('auth context (Phase 17.1)', () {
+    PosAuthContext ctx(List<String> permissions) => PosAuthContext(
+      staff: const StaffInfo(
+        salesmanId: 'S1',
+        name: 'Test Staff',
+        role: StaffRole(id: 5, name: 'Cashier'),
+      ),
+      permissions: permissions,
+    );
+
+    test(
+      'a successful staff login fetches and stores the auth context in memory',
+      () async {
+        auth.onAuthContext = (t) async => ctx(['sales.view', 'sales.create']);
+        await s.restore();
+        await s.loginDevice('REG-1', 's');
+        await s.loginStaff('S1', '1');
+
+        expect(s.authContext, isNotNull);
+        expect(s.authContext!.staff.role!.name, 'Cashier');
+        expect(s.permissions.hasPermission('sales.view'), isTrue);
+        expect(s.authContextError, isNull);
+      },
+    );
+
+    test(
+      'a failed auth-context fetch never blocks a successful staff login (best-effort only)',
+      () async {
+        auth.onAuthContext = (t) async =>
+            throw const ApiException(kind: ApiErrorKind.network, message: 'down');
+        await s.restore();
+        await s.loginDevice('REG-1', 's');
+        final ok = await s.loginStaff('S1', '1');
+
+        expect(ok, isTrue, reason: 'the PIN was correct — login must still succeed');
+        expect(s.phase, SessionPhase.shiftOpen);
+        expect(s.authContext, isNull);
+        expect(s.authContextError, isNotNull);
+      },
+    );
+
+    test('refreshAuthContext replaces the in-memory context', () async {
+      auth.onAuthContext = (t) async => ctx(['sales.view']);
+      await s.restore();
+      await s.loginDevice('REG-1', 's');
+      await s.loginStaff('S1', '1');
+      expect(s.permissions.hasPermission('payments.refund'), isFalse);
+
+      auth.onAuthContext = (t) async => ctx(['sales.view', 'payments.refund']);
+      await s.refreshAuthContext();
+      expect(s.permissions.hasPermission('payments.refund'), isTrue);
+    });
+
+    test(
+      'refreshAuthContext keeps the previous context if the refresh itself fails (does not silently revoke)',
+      () async {
+        auth.onAuthContext = (t) async => ctx(['payments.refund']);
+        await s.restore();
+        await s.loginDevice('REG-1', 's');
+        await s.loginStaff('S1', '1');
+
+        auth.onAuthContext = (t) async =>
+            throw const ApiException(kind: ApiErrorKind.network, message: 'down');
+        await s.refreshAuthContext();
+
+        expect(
+          s.permissions.hasPermission('payments.refund'),
+          isTrue,
+          reason: 'a transient refresh failure must not revoke an already-loaded context',
+        );
+        expect(s.authContextError, isNotNull);
+      },
+    );
+
+    test('refreshAuthContext is a no-op with no staff token', () async {
+      await s.restore();
+      await s.refreshAuthContext();
+      expect(s.authContext, isNull);
+      expect(auth.log, isEmpty);
+    });
+
+    test('logoutStaff clears the auth context', () async {
+      auth.onAuthContext = (t) async => ctx(['sales.view']);
+      await s.restore();
+      await s.loginDevice('REG-1', 's');
+      await s.loginStaff('S1', '1');
+      expect(s.authContext, isNotNull);
+
+      s.logoutStaff();
+      expect(s.authContext, isNull);
+      expect(s.permissions.hasPermission('sales.view'), isFalse);
+    });
+
+    test('a 401 from an authenticated call clears the auth context along with the staff token', () async {
+      auth.onAuthContext = (t) async => ctx(['sales.view']);
+      await s.restore();
+      await s.loginDevice('REG-1', 's');
+      await s.loginStaff('S1', '1');
+      final staffToken = s.activeToken;
+
+      s.handleUnauthorized(staffToken);
+      expect(s.authContext, isNull);
+      expect(s.phase, SessionPhase.staffLogin);
+    });
   });
 }

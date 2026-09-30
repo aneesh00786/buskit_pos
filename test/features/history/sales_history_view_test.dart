@@ -11,17 +11,25 @@ import 'package:provider/provider.dart';
 
 import '../../support/fakes.dart';
 import 'sales_history_controller_test.dart'
-    show FakeHistoryService, completed, entry;
+    show FakeHistoryService, completed, entry, forbiddenRefund, refunded;
 
 const netDown = ApiException(
   kind: ApiErrorKind.network,
   message: 'Cannot reach the server. Check your connection and try again.',
 );
 
+Future<SessionController> defaultSession() async {
+  final session = SessionController(FakeAuthService(), MemoryTokenStore());
+  await session.loginDevice('REG-1', 'secret');
+  await session.loginStaff('S1', '1234');
+  return session;
+}
+
 Future<SalesHistoryController> pumpHistory(
   WidgetTester tester, {
   FakeHistoryService? service,
   FakeProductService? products,
+  SessionController? session,
   double width = 1000,
   double height = 700,
   double textScale = 1,
@@ -29,21 +37,19 @@ Future<SalesHistoryController> pumpHistory(
   final svc = service ?? FakeHistoryService();
   final prod = products ?? FakeProductService();
   final controller = SalesHistoryController(svc, prod);
-  final session = SessionController(FakeAuthService(), MemoryTokenStore());
-  await session.loginDevice('REG-1', 'secret');
-  await session.loginStaff('S1', '1234');
+  final sess = session ?? await defaultSession();
   final receipts = FakeReceipts();
   tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   addTearDown(controller.dispose);
-  addTearDown(session.dispose);
+  if (session == null) addTearDown(sess.dispose);
 
   await tester.pumpWidget(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<SalesHistoryController>.value(value: controller),
-        ChangeNotifierProvider<SessionController>.value(value: session),
+        ChangeNotifierProvider<SessionController>.value(value: sess),
         Provider<ReceiptServices>.value(value: receipts.services),
       ],
       child: MaterialApp(
@@ -275,5 +281,128 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+  });
+
+  group('refund UI', () {
+    testWidgets(
+      'a completed, not-yet-refunded sale shows a Refund Sale button',
+      (tester) async {
+        final svc = FakeHistoryService()
+          ..rows = [entry(id: 1, saleNumber: 'POS-1')]
+          ..details[1] = completed(id: 1);
+        await pumpHistory(tester, service: svc, width: 400);
+        await tester.tap(find.text('POS-1'));
+        await tester.pumpAndSettle();
+        expect(find.text('Refund Sale'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'an already-refunded sale hides the button and shows a Refunded badge instead',
+      (tester) async {
+        final svc = FakeHistoryService()
+          ..rows = [entry(id: 1, saleNumber: 'POS-1')]
+          ..details[1] = refunded(id: 1);
+        await pumpHistory(tester, service: svc, width: 400);
+        await tester.tap(find.text('POS-1'));
+        await tester.pumpAndSettle();
+        expect(find.text('Refund Sale'), findsNothing);
+        expect(find.textContaining('Refunded'), findsOneWidget);
+      },
+    );
+
+    testWidgets('tapping Refund Sale shows a confirmation dialog; Cancel does nothing', (
+      tester,
+    ) async {
+      final svc = FakeHistoryService()
+        ..rows = [entry(id: 1, saleNumber: 'POS-1')]
+        ..details[1] = completed(id: 1);
+      await pumpHistory(tester, service: svc, width: 400);
+      await tester.tap(find.text('POS-1'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Refund Sale'));
+      await tester.pumpAndSettle();
+      expect(find.text('Refund this entire sale?'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.text('Refund this entire sale?'), findsNothing);
+      expect(svc.refundKeys, isEmpty, reason: 'cancelling must never call the API');
+    });
+
+    testWidgets(
+      'confirming a refund calls the API, shows a result dialog, and the badge appears after dismissing it',
+      (tester) async {
+        final svc = FakeHistoryService()
+          ..rows = [entry(id: 1, saleNumber: 'POS-1')]
+          ..details[1] = completed(id: 1)
+          ..onRefund = (id, key) async => refunded(id: id);
+        await pumpHistory(tester, service: svc, width: 400);
+        await tester.tap(find.text('POS-1'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Refund Sale'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Refund Sale'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Refund successful'), findsOneWidget);
+        expect(svc.refundKeys, hasLength(1));
+
+        await tester.tap(find.text('Done'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Refunded'), findsOneWidget);
+        expect(find.text('Refund Sale'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'a 403 permission denial shows the specific message and leaves the sale refundable',
+      (tester) async {
+        final svc = FakeHistoryService()
+          ..rows = [entry(id: 1, saleNumber: 'POS-1')]
+          ..details[1] = completed(id: 1)
+          ..onRefund = (id, key) async => throw forbiddenRefund;
+        await pumpHistory(tester, service: svc, width: 400);
+        await tester.tap(find.text('POS-1'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Refund Sale'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Refund Sale'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.textContaining('do not have permission to refund'),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Refund Sale'),
+          findsOneWidget,
+          reason: 'a denied sale must remain visibly refundable, not silently locked',
+        );
+      },
+    );
+
+    testWidgets('a network failure during refund shows a generic error message', (
+      tester,
+    ) async {
+      final svc = FakeHistoryService()
+        ..rows = [entry(id: 1, saleNumber: 'POS-1')]
+        ..details[1] = completed(id: 1)
+        ..onRefund = (id, key) async => throw netDown;
+      await pumpHistory(tester, service: svc, width: 400);
+      await tester.tap(find.text('POS-1'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Refund Sale'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Refund Sale'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Cannot reach the server'), findsOneWidget);
+      expect(find.text('Refund Sale'), findsOneWidget);
+    });
   });
 }

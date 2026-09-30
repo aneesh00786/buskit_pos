@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../loyalty/data/loyalty_service.dart';
+import '../../loyalty/models/loyalty_profile.dart';
 import '../data/customer_service.dart';
 import '../models/customer.dart';
 import '../models/customer_purchase.dart';
@@ -24,11 +26,17 @@ enum CustomerListStatus { idle, loading, loaded, empty, error }
 class CustomerListController extends ChangeNotifier {
   CustomerListController(
     this._service, {
+    LoyaltyService? loyaltyService,
     this.debounce = const Duration(milliseconds: 350),
     this.pageSize = 20,
-  });
+  }) : _loyaltyService = loyaltyService;
 
   final CustomerService _service;
+
+  /// Null when the caller doesn't wire loyalty in (e.g. existing tests that
+  /// predate this feature) — the loyalty section is then simply not shown,
+  /// same as when the company has no active program.
+  final LoyaltyService? _loyaltyService;
   final Duration debounce;
   final int pageSize;
 
@@ -54,6 +62,9 @@ class CustomerListController extends ChangeNotifier {
   CustomerPurchasePage? _purchases;
   bool _purchasesLoading = false;
   ApiException? _purchasesError;
+  LoyaltyProfile? _loyalty;
+  bool _loyaltyLoading = false;
+  ApiException? _loyaltyError;
   int _detailGen = 0;
 
   bool _mutating = false;
@@ -75,6 +86,9 @@ class CustomerListController extends ChangeNotifier {
   CustomerPurchasePage? get purchases => _purchases;
   bool get purchasesLoading => _purchasesLoading;
   ApiException? get purchasesError => _purchasesError;
+  LoyaltyProfile? get loyalty => _loyalty;
+  bool get loyaltyLoading => _loyaltyLoading;
+  ApiException? get loyaltyError => _loyaltyError;
 
   bool get isMutating => _mutating;
   ApiException? get mutationError => _mutationError;
@@ -179,8 +193,11 @@ class CustomerListController extends ChangeNotifier {
     _detailError = null;
     _purchases = null;
     _purchasesError = null;
+    _loyalty = null;
+    _loyaltyError = null;
     _detailLoading = true;
     _purchasesLoading = true;
+    _loyaltyLoading = _loyaltyService != null;
     final gen = ++_detailGen;
     _notify();
 
@@ -194,6 +211,7 @@ class CustomerListController extends ChangeNotifier {
         );
         _detailLoading = false;
         _purchasesLoading = false;
+        _loyaltyLoading = false;
         _notify();
         return;
       }
@@ -205,10 +223,42 @@ class CustomerListController extends ChangeNotifier {
       _detailError = e;
       _detailLoading = false;
       _purchasesLoading = false;
+      _loyaltyLoading = false;
       _notify();
       return;
     }
     unawaited(_loadPurchases(customerId, gen));
+    unawaited(_loadLoyalty(customerId, gen));
+  }
+
+  Future<void> _loadLoyalty(String customerId, int gen) async {
+    final service = _loyaltyService;
+    if (service == null) return;
+    if (gen != _detailGen || _disposed) return;
+    _loyaltyLoading = true;
+    _loyaltyError = null;
+    _notify();
+    try {
+      final p = await service.getProfile(customerId);
+      if (gen != _detailGen || _disposed) return;
+      _loyalty = p;
+    } on ApiException catch (e) {
+      if (gen != _detailGen || _disposed) return;
+      _loyaltyError = e;
+    } finally {
+      if (gen == _detailGen && !_disposed) {
+        _loyaltyLoading = false;
+        _notify();
+      }
+    }
+  }
+
+  /// Re-fetches just the loyalty profile for the currently open customer —
+  /// the "Retry" action for a loyalty-section-only failure.
+  Future<void> retryLoyalty() async {
+    final id = _detailId;
+    if (id == null) return;
+    await _loadLoyalty(id, _detailGen);
   }
 
   Future<void> _loadPurchases(
@@ -257,6 +307,8 @@ class CustomerListController extends ChangeNotifier {
     _detailError = null;
     _purchases = null;
     _purchasesError = null;
+    _loyalty = null;
+    _loyaltyError = null;
     _detailGen++;
     _notify();
   }

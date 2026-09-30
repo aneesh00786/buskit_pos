@@ -3,12 +3,15 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/utils/uuid.dart';
 import '../../checkout/models/payment.dart';
 import '../../products/data/product_service.dart';
 import '../data/sales_history_service.dart';
 import '../models/sale_history_entry.dart';
 
 enum HistoryListStatus { idle, loading, loaded, empty, error }
+
+enum RefundStatus { idle, refunding }
 
 enum HistoryDateFilter { today, all }
 
@@ -52,6 +55,15 @@ class SalesHistoryController extends ChangeNotifier {
   ApiException? _detailError;
   int _detailGen = 0;
 
+  RefundStatus _refundStatus = RefundStatus.idle;
+  ApiException? _refundError;
+  // Same "same attempt keeps its key across a retry" rule as
+  // CartController.completeSale — a refund has no varying request body, so
+  // the sale id alone is the fingerprint. Attempting a DIFFERENT sale always
+  // gets a fresh key.
+  int? _refundAttemptSaleId;
+  String? _refundAttemptKey;
+
   HistoryListStatus get status => _status;
   ApiException? get error => _error;
   bool get isLoading => _loading;
@@ -65,6 +77,9 @@ class SalesHistoryController extends ChangeNotifier {
   Map<int, String> get detailNames => _detailNames;
   bool get detailLoading => _detailLoading;
   ApiException? get detailError => _detailError;
+
+  bool get isRefunding => _refundStatus == RefundStatus.refunding;
+  ApiException? get refundError => _refundError;
 
   /// Every cashier (`salesman_id`) seen in the currently loaded list, sorted —
   /// the filter dropdown's options. Only as complete as the loaded list.
@@ -248,6 +263,59 @@ class SalesHistoryController extends ChangeNotifier {
     _detailError = null;
     _detailGen++;
     _notify();
+  }
+
+  void clearRefundError() {
+    if (_refundError == null) return;
+    _refundError = null;
+    _notify();
+  }
+
+  /// FULL-SALE REFUND ONLY (`POST /sales/:id/refund`). Requires
+  /// `payments.refund` — enforced entirely server-side; a denial surfaces as
+  /// an [ApiException] with `kind == ApiErrorKind.forbidden` and
+  /// `errorCode == PosErrorCodes.permissionDenied`, same as every other
+  /// permission-gated POS action. The sale itself is left exactly as the
+  /// server returns it (still 'completed'; `refund` now non-null on
+  /// success) — this never guesses at the outcome locally.
+  ///
+  /// Same idempotency-key-per-attempt rule as
+  /// `CartController.completeSale`: retrying the SAME sale (e.g. after a
+  /// network error where the outcome is unknown) reuses the same key so the
+  /// server can safely replay; a different sale always gets a fresh one.
+  Future<bool> refundSale(int saleId) async {
+    if (_refundStatus == RefundStatus.refunding) return false;
+    if (_refundAttemptSaleId != saleId) {
+      _refundAttemptSaleId = saleId;
+      _refundAttemptKey = generateUuidV4();
+    }
+    final key = _refundAttemptKey!;
+
+    _refundStatus = RefundStatus.refunding;
+    _refundError = null;
+    _notify();
+    try {
+      final result = await _history.refundSale(
+        saleId: saleId,
+        idempotencyKey: key,
+      );
+      _refundStatus = RefundStatus.idle;
+      if (result != null && _detailId == saleId) {
+        _detail = result;
+      }
+      // A successful refund closes this attempt — a later refund on the
+      // SAME sale id (which the backend will reject as already-refunded)
+      // must not replay this key.
+      _refundAttemptSaleId = null;
+      _refundAttemptKey = null;
+      _notify();
+      return true;
+    } on ApiException catch (e) {
+      _refundStatus = RefundStatus.idle;
+      _refundError = e;
+      _notify();
+      return false;
+    }
   }
 
   void _notify() {

@@ -51,6 +51,9 @@ class ReceiptData {
     required this.payments,
     this.discount,
     this.discountLabel = 'Discount',
+    this.pointsEarned,
+    this.cashbackEarned,
+    this.walletRedeemed,
     this.changeDue,
     this.completedAt,
     this.staffId,
@@ -72,6 +75,14 @@ class ReceiptData {
   /// The line label shown next to [discount] — the applied promotion's name
   /// when known (e.g. "10% OFF"), else the generic "Discount".
   final String discountLabel;
+
+  /// Loyalty figures from this sale, already formatted — `null` when not
+  /// applicable. There is no "new balance" here (the completed-sale snapshot
+  /// only carries what happened on THIS sale, not the account's live
+  /// balance — see LoyaltySaleInfo).
+  final String? pointsEarned;
+  final String? cashbackEarned;
+  final String? walletRedeemed;
   final String total;
   final List<ReceiptPayment> payments;
   final String? changeDue;

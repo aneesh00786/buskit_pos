@@ -1,4 +1,5 @@
 import '../../../core/utils/json_read.dart';
+import '../../loyalty/models/loyalty_sale_info.dart';
 import '../../promotions/models/promotion.dart';
 
 class CartLine {
@@ -98,6 +99,7 @@ class CartSale {
     this.hasUnavailableItems = false,
     this.customerId,
     this.promotion,
+    this.loyalty,
   });
 
   final int id;
@@ -115,6 +117,11 @@ class CartSale {
   /// `promotion.eligible == false` means it's attached but no longer usable
   /// (cart changed, it expired, ...) — shown, not silently dropped.
   final AppliedPromotion? promotion;
+
+  /// Loyalty state (tier discount, any pending points/wallet redemption,
+  /// points/cashback to be earned) — null when there's no customer on the
+  /// sale or the company has no active loyalty program at all.
+  final LoyaltySaleInfo? loyalty;
 
   bool get isDraft => status == 'draft';
 
@@ -138,6 +145,7 @@ class CartSale {
       hasUnavailableItems: asBool(m['has_unavailable_items']) ?? false,
       customerId: asString(m['customer_id']),
       promotion: AppliedPromotion.fromJson(m['promotion']),
+      loyalty: LoyaltySaleInfo.fromJson(m['loyalty']),
     );
   }
 }

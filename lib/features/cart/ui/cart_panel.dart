@@ -10,6 +10,8 @@ import '../../../core/utils/format.dart';
 import '../models/cart_sale.dart';
 import '../state/cart_controller.dart';
 import '../../checkout/ui/pay_modal.dart';
+import '../../loyalty/models/loyalty_sale_info.dart';
+import '../../loyalty/ui/loyalty_picker.dart';
 import 'cart_item_tile.dart';
 import 'customer_dialog.dart';
 import 'promotion_picker.dart';
@@ -412,6 +414,113 @@ class _PromotionRow extends StatelessWidget {
   }
 }
 
+class _LoyaltyRow extends StatelessWidget {
+  const _LoyaltyRow({required this.sale});
+  final CartSale sale;
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.watch<CartController>();
+    final t = PosTokens.of(context);
+    final theme = Theme.of(context);
+    final loyalty = sale.loyalty;
+    final editable = cart.canChooseLoyalty;
+
+    if (loyalty == null) return const SizedBox.shrink();
+
+    final hasRedemption =
+        loyalty.pointsRedeemed > 0 || loyalty.walletRedeemed > 0;
+    final hasTierDiscount = loyalty.tierDiscountAmount > 0;
+    final warning = !loyalty.eligible;
+
+    if (!hasRedemption && !hasTierDiscount && !warning) {
+      if (!editable) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(bottom: PosTokens.s8),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => showLoyaltyPicker(context),
+            icon: const Icon(Icons.stars_outlined),
+            label: const Text('Redeem Loyalty'),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: PosTokens.s8),
+      child: Container(
+        padding: const EdgeInsets.all(PosTokens.s12),
+        decoration: BoxDecoration(
+          color: warning ? theme.colorScheme.errorContainer : t.surfaceMuted,
+          borderRadius: BorderRadius.circular(PosTokens.rSmall),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.stars_outlined,
+                  size: 18,
+                  color: warning ? theme.colorScheme.error : t.success,
+                ),
+                const SizedBox(width: PosTokens.s8),
+                Expanded(
+                  child: Text(
+                    _summaryLabel(loyalty),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (editable) ...[
+                  TextButton(
+                    onPressed: () => showLoyaltyPicker(context),
+                    child: const Text('Change'),
+                  ),
+                  if (hasRedemption)
+                    TextButton(
+                      onPressed: cart.removeLoyaltyRedemption,
+                      child: const Text('Remove'),
+                    ),
+                ],
+              ],
+            ),
+            if (warning)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  loyalty.message ?? 'This redemption is no longer available.',
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _summaryLabel(LoyaltySaleInfo l) {
+    final parts = <String>[];
+    if (l.tierDiscountAmount > 0 && l.tier != null) {
+      parts.add('${l.tier!.name} tier: -${formatMoney(l.tierDiscountAmount)}');
+    }
+    if (l.pointsRedeemed > 0) {
+      parts.add(
+        '${l.pointsRedeemed} pts: -${formatMoney(l.pointsRedeemedValue)}',
+      );
+    }
+    if (l.walletRedeemed > 0) {
+      parts.add('Wallet: -${formatMoney(l.walletRedeemed)}');
+    }
+    return parts.isEmpty ? 'Loyalty' : parts.join(' · ');
+  }
+}
+
 class _Totals extends StatelessWidget {
   const _Totals({required this.sale, this.dense = false});
   final CartSale sale;
@@ -431,6 +540,7 @@ class _Totals extends StatelessWidget {
       child: Column(
         children: [
           if (!dense) _PromotionRow(sale: sale),
+          if (!dense) _LoyaltyRow(sale: sale),
           _row(context, 'Subtotal', t.subtotal),
           _row(context, 'Tax', t.taxTotal),
           if (t.discountTotal != null && t.discountTotal! > 0)

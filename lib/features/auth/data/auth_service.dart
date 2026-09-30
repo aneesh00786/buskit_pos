@@ -1,6 +1,7 @@
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/pos_api_client.dart';
 import '../../../core/utils/json_read.dart';
+import '../models/pos_auth_context.dart';
 
 abstract class AuthService {
   Future<String> deviceLogin({
@@ -16,6 +17,12 @@ abstract class AuthService {
     required String staffToken,
     required double openingAmount,
   });
+
+  /// `GET /auth/me` — the authenticated staff member's identity, role, and
+  /// permissions, resolved by the backend fresh from the database. Phase
+  /// 17.1: fetched once after staff login and on an explicit refresh only —
+  /// no polling, no background refresh.
+  Future<PosAuthContext?> getAuthContext({required String staffToken});
 }
 
 /// Verified against the backend:
@@ -69,6 +76,12 @@ class ApiAuthService implements AuthService {
       token: staffToken,
     );
     return asInt(asMap(data)?['id']);
+  }
+
+  @override
+  Future<PosAuthContext?> getAuthContext({required String staffToken}) async {
+    final data = await _client.get('/auth/me', token: staffToken);
+    return PosAuthContext.fromJson(data);
   }
 
   String _token(Object? data) {

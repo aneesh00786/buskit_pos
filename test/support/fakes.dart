@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:buskit_pos/core/network/api_exception.dart';
 import 'package:buskit_pos/features/auth/data/auth_service.dart';
+import 'package:buskit_pos/features/auth/models/pos_auth_context.dart';
 import 'package:buskit_pos/features/cart/data/cart_service.dart';
 import 'package:buskit_pos/features/cart/models/cart_sale.dart';
 import 'package:buskit_pos/features/checkout/models/payment.dart';
@@ -97,10 +98,13 @@ Map<String, dynamic> saleJson({
   double discount = 0,
   double total = 0,
   Map<String, dynamic>? promotion,
+  String? customerId,
+  Map<String, dynamic>? loyalty,
 }) => {
   'id': id,
   'version': version,
   'status': status,
+  'customer_id': customerId,
   'has_unavailable_items': false,
   'items': items,
   'totals': {
@@ -110,6 +114,39 @@ Map<String, dynamic> saleJson({
     'grand_total': total,
   },
   'promotion': promotion,
+  'loyalty': loyalty,
+};
+
+Map<String, dynamic> loyaltySaleInfoJson({
+  Map<String, dynamic>? tier,
+  double? pointsBalance,
+  double? walletBalance,
+  double tierDiscountAmount = 0,
+  int pointsRedeemed = 0,
+  double pointsRedeemedValue = 0,
+  int? pointsEarned,
+  int? pointsToEarn,
+  double walletRedeemed = 0,
+  double? cashbackEarned,
+  double? cashbackToEarn,
+  bool eligible = true,
+  String? reasonCode,
+  String? message,
+}) => {
+  'tier': tier,
+  'points_balance': pointsBalance,
+  'wallet_balance': walletBalance,
+  'tier_discount_amount': tierDiscountAmount,
+  'points_redeemed': pointsRedeemed,
+  'points_redeemed_value': pointsRedeemedValue,
+  if (pointsEarned != null) 'points_earned': pointsEarned,
+  if (pointsToEarn != null) 'points_to_earn': pointsToEarn,
+  'wallet_redeemed': walletRedeemed,
+  if (cashbackEarned != null) 'cashback_earned': cashbackEarned,
+  if (cashbackToEarn != null) 'cashback_to_earn': cashbackToEarn,
+  'eligible': eligible,
+  'reason_code': reasonCode,
+  'message': message,
 };
 
 Map<String, dynamic> appliedPromotionJson({
@@ -221,11 +258,13 @@ Map<String, dynamic> completedJson({
   String completedAt = '2026-09-21 15:23:52',
   String? customerId,
   List<Map<String, dynamic>>? items,
+  Map<String, dynamic>? loyalty,
 }) => {
   'id': id,
   'status': 'completed',
   'sale_number': number,
   'customer_id': customerId,
+  'loyalty': loyalty,
   'version': 5,
   'stock_deducted': false,
   'items':
@@ -555,6 +594,74 @@ class FakeCartService implements CartService {
     addCalls.add(c);
     return onAdd(c);
   }
+
+  final List<RedeemPointsCall> redeemPointsCalls = [];
+  final List<RedeemWalletCall> redeemWalletCalls = [];
+  final List<RemoveLoyaltyCall> removeLoyaltyCalls = [];
+  Future<CartSale> Function(RedeemPointsCall call) onRedeemPoints = (c) async =>
+      CartSale.fromJson(
+        saleJson(id: c.saleId, version: c.expectedVersion + 1),
+      )!;
+  Future<CartSale> Function(RedeemWalletCall call) onRedeemWallet = (c) async =>
+      CartSale.fromJson(
+        saleJson(id: c.saleId, version: c.expectedVersion + 1),
+      )!;
+  Future<CartSale> Function(RemoveLoyaltyCall call) onRemoveLoyalty =
+      (c) async => CartSale.fromJson(
+        saleJson(id: c.saleId, version: c.expectedVersion + 1),
+      )!;
+
+  @override
+  Future<CartSale> redeemLoyaltyPoints({
+    required int saleId,
+    required int points,
+    required int expectedVersion,
+  }) {
+    final c = RedeemPointsCall(saleId, points, expectedVersion);
+    redeemPointsCalls.add(c);
+    return onRedeemPoints(c);
+  }
+
+  @override
+  Future<CartSale> redeemLoyaltyWallet({
+    required int saleId,
+    required double amount,
+    required int expectedVersion,
+  }) {
+    final c = RedeemWalletCall(saleId, amount, expectedVersion);
+    redeemWalletCalls.add(c);
+    return onRedeemWallet(c);
+  }
+
+  @override
+  Future<CartSale> removeLoyaltyRedemption({
+    required int saleId,
+    required int expectedVersion,
+  }) {
+    final c = RemoveLoyaltyCall(saleId, expectedVersion);
+    removeLoyaltyCalls.add(c);
+    return onRemoveLoyalty(c);
+  }
+}
+
+class RedeemPointsCall {
+  RedeemPointsCall(this.saleId, this.points, this.expectedVersion);
+  final int saleId;
+  final int points;
+  final int expectedVersion;
+}
+
+class RedeemWalletCall {
+  RedeemWalletCall(this.saleId, this.amount, this.expectedVersion);
+  final int saleId;
+  final double amount;
+  final int expectedVersion;
+}
+
+class RemoveLoyaltyCall {
+  RemoveLoyaltyCall(this.saleId, this.expectedVersion);
+  final int saleId;
+  final int expectedVersion;
 }
 
 class FakeAuthService implements AuthService {
@@ -567,6 +674,8 @@ class FakeAuthService implements AuthService {
   ) async => 'staff-token';
   Future<int?> Function(String staff, double amount) onShift = (s, a) async =>
       1;
+  Future<PosAuthContext?> Function(String staffToken) onAuthContext =
+      (t) async => null;
   final List<String> log = [];
 
   @override
@@ -596,6 +705,12 @@ class FakeAuthService implements AuthService {
     log.add('shift:$openingAmount');
     return onShift(staffToken, openingAmount);
   }
+
+  @override
+  Future<PosAuthContext?> getAuthContext({required String staffToken}) {
+    log.add('authContext');
+    return onAuthContext(staffToken);
+  }
 }
 
 ApiException apiError(
@@ -618,6 +733,8 @@ class CartSaleFactory {
     List<Map<String, dynamic>> items = const [],
     double total = 0,
     String status = 'draft',
+    String? customerId,
+    Map<String, dynamic>? loyalty,
   }) => CartSale.fromJson(
     saleJson(
       id: id,
@@ -626,6 +743,8 @@ class CartSaleFactory {
       items: items,
       subtotal: total,
       total: total,
+      customerId: customerId,
+      loyalty: loyalty,
     ),
   )!;
 }

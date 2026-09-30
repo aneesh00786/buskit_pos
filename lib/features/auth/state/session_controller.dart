@@ -4,6 +4,8 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/network/error_messages.dart';
 import '../../../core/storage/token_store.dart';
 import '../data/auth_service.dart';
+import '../models/pos_auth_context.dart';
+import 'permission_service.dart';
 
 /// Where the cashier is in the sign-in sequence.
 enum SessionPhase { restoring, deviceLogin, staffLogin, shiftOpen, ready }
@@ -27,12 +29,24 @@ class SessionController extends ChangeNotifier {
   String? _notice;
   bool _disposed = false;
 
+  // Phase 17.1 — POS auth context (role + permissions), fetched once right
+  // after staff login and on an explicit refreshAuthContext() call only.
+  // In-memory only: never persisted, never derived from the JWT. UI/UX
+  // convenience only — see PermissionService's own header comment for why
+  // this never substitutes for the backend's own enforcement.
+  PosAuthContext? _authContext;
+  ApiException? _authContextError;
+
   SessionPhase get phase => _phase;
   bool get busy => _busy;
   ApiException? get error => _error;
   String? get notice => _notice;
   String? get deviceIdentifier => _deviceIdentifier;
   String? get salesmanId => _salesmanId;
+
+  PosAuthContext? get authContext => _authContext;
+  ApiException? get authContextError => _authContextError;
+  PermissionService get permissions => PermissionService(_authContext);
 
   /// Token used for browsing and cart calls: the staff token once signed in.
   String? get activeToken => _staffToken ?? _deviceToken;
@@ -74,6 +88,12 @@ class SessionController extends ChangeNotifier {
         _staffToken = token;
         _salesmanId = salesmanId.trim();
         _phase = SessionPhase.shiftOpen;
+        // Best-effort: this is a UI/UX convenience fetch, not part of the
+        // authentication flow itself — a failure here must never block a
+        // cashier who successfully entered a correct PIN from getting into
+        // the POS. The error is kept (authContextError) only so the UI/tests
+        // can see it happened; it is never rethrown.
+        await _loadAuthContext(token);
       } on ApiException catch (e) {
         // Every wrong-PIN/unknown-staff/locked/inactive failure carries this
         // one stable code (never leaked by status/message alone — see the
@@ -128,6 +148,8 @@ class SessionController extends ChangeNotifier {
     }
     if (_staffToken != null) {
       _staffToken = null;
+      _authContext = null;
+      _authContextError = null;
       _phase = SessionPhase.staffLogin;
       _error = const ApiException(
         kind: ApiErrorKind.unauthorized,
@@ -150,8 +172,35 @@ class SessionController extends ChangeNotifier {
     _salesmanId = null;
     _error = null;
     _notice = null;
+    _authContext = null;
+    _authContextError = null;
     _phase = SessionPhase.staffLogin;
     _notify();
+  }
+
+  Future<void> _loadAuthContext(String staffToken) async {
+    try {
+      _authContext = await _auth.getAuthContext(staffToken: staffToken);
+      _authContextError = null;
+    } on ApiException catch (e) {
+      _authContextError = e;
+      // Deliberately NOT cleared to null on failure: a transient error
+      // fetching a REFRESH must not silently revoke a context the UI is
+      // already correctly showing. A first-ever fetch failure (no prior
+      // context) simply leaves it null, which PermissionService already
+      // treats as "no permissions" — never as "allowed".
+    }
+    _notify();
+  }
+
+  /// Re-fetches `GET /auth/me` and replaces the in-memory context — e.g.
+  /// after an admin changes this staff member's role/permissions and the
+  /// cashier wants to try again without signing out. No polling, no
+  /// automatic background refresh (Phase 17.1 scope).
+  Future<void> refreshAuthContext() async {
+    final staff = _staffToken;
+    if (staff == null) return;
+    await _loadAuthContext(staff);
   }
 
   /// Forget this device entirely (e.g. wrong device selected).

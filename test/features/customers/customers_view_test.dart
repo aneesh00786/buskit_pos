@@ -4,12 +4,14 @@ import 'package:buskit_pos/features/customers/models/customer.dart';
 import 'package:buskit_pos/features/customers/models/customer_purchase.dart';
 import 'package:buskit_pos/features/customers/state/customer_list_controller.dart';
 import 'package:buskit_pos/features/customers/ui/customers_view.dart';
+import 'package:buskit_pos/features/loyalty/models/loyalty_profile.dart';
 import 'package:buskit_pos/features/products/models/product_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import '../../support/fake_customer_service.dart';
+import '../../support/fake_loyalty_service.dart';
 
 const netDown = ApiException(
   kind: ApiErrorKind.network,
@@ -40,11 +42,15 @@ CustomerPage page(
 Future<CustomerListController> pumpCustomers(
   WidgetTester tester, {
   FakeCustomerService? service,
+  FakeLoyaltyService? loyaltyService,
   double width = 1000,
   double height = 700,
 }) async {
   final svc = service ?? FakeCustomerService();
-  final controller = CustomerListController(svc);
+  final controller = CustomerListController(
+    svc,
+    loyaltyService: loyaltyService,
+  );
   tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -297,6 +303,89 @@ void main() {
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
       expect(find.text('Customer details'), findsOneWidget);
+    });
+  });
+
+  group('loyalty', () {
+    testWidgets(
+      'an enabled program shows tier/points/wallet; no section at all when disabled',
+      (tester) async {
+        final svc = FakeCustomerService();
+        svc.onSearch = (_) async =>
+            page([customerJson(customerId: 'CUSTO1', fullname: 'Jane Doe')]);
+        svc.onFindByCustomerId = (id) async => Customer.fromJson(
+          customerJson(customerId: id, fullname: 'Jane Doe'),
+        );
+        final loyaltySvc = FakeLoyaltyService();
+        loyaltySvc.onGetProfile = (_) async => LoyaltyProfile.fromJson(
+          loyaltyProfileJson(
+            tier: {'id': 2, 'name': 'Gold', 'discount_percentage': 5},
+            pointsBalance: 1280,
+            walletBalance: 245.5,
+          ),
+        );
+        await pumpCustomers(
+          tester,
+          service: svc,
+          loyaltyService: loyaltySvc,
+          width: 400,
+        );
+        await tester.tap(find.text('Jane Doe'));
+        await tester.pumpAndSettle();
+        expect(find.text('Gold member'), findsOneWidget);
+        expect(find.text('1280'), findsOneWidget);
+        expect(find.text('245.50'), findsOneWidget);
+        expect(loyaltySvc.getProfileCalls, ['CUSTO1']);
+      },
+    );
+
+    testWidgets('no active program means no loyalty section is shown at all', (
+      tester,
+    ) async {
+      final svc = FakeCustomerService();
+      svc.onSearch = (_) async =>
+          page([customerJson(customerId: 'CUSTO1', fullname: 'Jane Doe')]);
+      svc.onFindByCustomerId = (id) async =>
+          Customer.fromJson(customerJson(customerId: id, fullname: 'Jane Doe'));
+      final loyaltySvc = FakeLoyaltyService();
+      loyaltySvc.onGetProfile = (_) async =>
+          LoyaltyProfile.fromJson(loyaltyProfileJson(enabled: false));
+      await pumpCustomers(
+        tester,
+        service: svc,
+        loyaltyService: loyaltySvc,
+        width: 400,
+      );
+      await tester.tap(find.text('Jane Doe'));
+      await tester.pumpAndSettle();
+      expect(find.text('Loyalty'), findsNothing);
+    });
+
+    testWidgets('a loyalty load failure shows an inline error with retry', (
+      tester,
+    ) async {
+      final svc = FakeCustomerService();
+      svc.onSearch = (_) async =>
+          page([customerJson(customerId: 'CUSTO1', fullname: 'Jane Doe')]);
+      svc.onFindByCustomerId = (id) async =>
+          Customer.fromJson(customerJson(customerId: id, fullname: 'Jane Doe'));
+      final loyaltySvc = FakeLoyaltyService();
+      loyaltySvc.onGetProfile = (_) async => throw netDown;
+      await pumpCustomers(
+        tester,
+        service: svc,
+        loyaltyService: loyaltySvc,
+        width: 400,
+      );
+      await tester.tap(find.text('Jane Doe'));
+      await tester.pumpAndSettle();
+      expect(find.text('Loyalty'), findsOneWidget);
+      expect(find.textContaining('Cannot reach'), findsOneWidget);
+      loyaltySvc.onGetProfile = (_) async =>
+          LoyaltyProfile.fromJson(loyaltyProfileJson(pointsBalance: 10));
+      await tester.tap(find.widgetWithText(TextButton, 'Retry'));
+      await tester.pumpAndSettle();
+      expect(find.text('10'), findsOneWidget);
     });
   });
 

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:buskit_pos/core/layout/responsive.dart';
@@ -302,10 +303,9 @@ void main() {
         await tester.tap(find.text('Inventory'));
         await tester.pump();
         expect(find.text('Inventory is coming soon'), findsOneWidget);
-        // Customers and Promotions moved off the generic "Soon" placeholder
-        // this phase (they explain the real backend gap instead); Inventory,
-        // Analytics and Settings remain generic placeholders.
-        expect(find.text('Soon'), findsNWidgets(3));
+        // Customers, Promotions, Analytics and Settings all moved off the
+        // generic "Soon" placeholder; only Inventory remains one.
+        expect(find.text('Soon'), findsOneWidget);
       },
     );
 
@@ -363,7 +363,7 @@ void main() {
 
   group('wide (summary column)', () {
     testWidgets(
-      'shows the summary cards, every one clearly labelled as not available',
+      'shows the summary cards: three backed by real (zero) data, two honest placeholders',
       (tester) async {
         final h = PageHarness();
         await pumpProductsPage(tester, h, width: 1800, height: 900);
@@ -377,34 +377,103 @@ void main() {
         ]) {
           expect(find.text(title), findsOneWidget, reason: title);
         }
-        expect(find.text('Coming soon'), findsNWidgets(5));
-        expect(
-          find.text('Sales reporting is not available yet.'),
-          findsOneWidget,
-        );
-        expect(find.text('Not available yet.'), findsNWidgets(4));
+        // Only the two cards with no backing data at all keep the pill.
+        expect(find.text('Coming soon'), findsNWidgets(2));
+        expect(find.text('Not available yet.'), findsNWidgets(2));
+        expect(find.text('0 transactions today'), findsOneWidget);
+        expect(find.text('No sales in the last 7 days yet.'), findsOneWidget);
+        expect(find.text('No sales today yet.'), findsOneWidget);
       },
     );
 
     testWidgets(
-      'no statistic is invented: the summary panel contains only labels, never figures',
+      'the real cards show the server\'s own figures; the remaining placeholders show none',
       (tester) async {
-        final h = PageHarness();
+        final client = PosApiClient(
+          baseUrl: 'http://test',
+          httpClient: MockClient((r) async {
+            if (r.method == 'GET' &&
+                r.url.path.endsWith('/analytics/summary')) {
+              return http.Response(
+                jsonEncode({
+                  'status': true,
+                  'data': {
+                    'today': {'transaction_count': 3, 'sales_total': 450.5},
+                    'payment_breakdown': [],
+                    'top_products': [
+                      {
+                        'product_variation_id': 1,
+                        'product_name': 'Tea',
+                        'quantity_sold': 7,
+                        'revenue': 350,
+                      },
+                    ],
+                    'staff_performance': [
+                      {
+                        'salesman_id': 'S1',
+                        'fullname': 'Jane',
+                        'transaction_count': 3,
+                        'sales_total': 450.5,
+                      },
+                    ],
+                  },
+                }),
+                200,
+              );
+            }
+            return http.Response(
+              jsonEncode({'status': false, 'message': 'no route'}),
+              404,
+            );
+          }),
+        );
+        final h = PageHarness(client: client);
         await pumpProductsPage(tester, h, width: 1800, height: 900);
-        final texts = tester
-            .widgetList<Text>(
-              find.descendant(
-                of: find.byType(SalesSummaryPanel),
-                matching: find.byType(Text),
-              ),
-            )
-            .map((t) => t.data ?? t.textSpan?.toPlainText() ?? '');
-        for (final s in texts) {
-          expect(
-            RegExp(r'\d').hasMatch(s),
-            isFalse,
-            reason: 'unexpected number in "$s"',
-          );
+
+        // The three real cards show exactly what the server sent — nothing
+        // invented on the client. Scoped to the panel: "Tea" is also a
+        // fixture product name shown elsewhere on the page.
+        final panel = find.byType(SalesSummaryPanel);
+        expect(
+          find.descendant(of: panel, matching: find.text('450.50')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: panel,
+            matching: find.text('3 transactions today'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: panel, matching: find.textContaining('Tea')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: panel, matching: find.textContaining('Jane')),
+          findsOneWidget,
+        );
+
+        // The two cards with genuinely no backing data never show a number.
+        for (final title in ['Sales trend', 'Inventory alerts']) {
+          final texts = tester
+              .widgetList<Text>(
+                find.descendant(
+                  of: find.ancestor(
+                    of: find.text(title),
+                    matching: find.byType(SummaryCard),
+                  ),
+                  matching: find.byType(Text),
+                ),
+              )
+              .map((t) => t.data ?? t.textSpan?.toPlainText() ?? '');
+          for (final s in texts) {
+            expect(
+              RegExp(r'\d').hasMatch(s),
+              isFalse,
+              reason: 'unexpected number in "$s" ($title)',
+            );
+          }
         }
       },
     );

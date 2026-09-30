@@ -22,6 +22,8 @@ import '../../held_sales/ui/held_sales_view.dart';
 import '../../customers/ui/customers_view.dart';
 import '../../history/ui/sales_history_view.dart';
 import '../../promotions/ui/promotions_view.dart';
+import '../../analytics/ui/analytics_view.dart';
+import '../../settings/ui/settings_view.dart';
 import '../../shell/ui/pos_header.dart';
 import '../../shell/ui/pos_scaffold.dart';
 import '../../shell/ui/pos_sidebar.dart';
@@ -272,6 +274,14 @@ class _ProductsPageState extends State<ProductsPage> {
               onOpenPromotions: () {
                 if (layout.isCompact) Navigator.of(context).pop();
                 showPromotions(context);
+              },
+              onOpenAnalytics: () {
+                if (layout.isCompact) Navigator.of(context).pop();
+                showAnalytics(context);
+              },
+              onOpenSettings: () {
+                if (layout.isCompact) Navigator.of(context).pop();
+                showSettings(context);
               },
               onSignOut: session.logoutStaff,
             ),
