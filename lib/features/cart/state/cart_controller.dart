@@ -17,6 +17,7 @@ enum CartOperation {
   complete,
   promotion,
   loyalty,
+  discountOverride,
 }
 
 /// Holds the current draft sale and mutates it (add / update quantity /
@@ -406,6 +407,50 @@ class CartController extends ChangeNotifier {
     });
   }
 
+  // ---- discount override ----
+  //
+  // EVERY manual discount is an override (discounts.override permission) —
+  // there is no "normal discount" tier anywhere in this system. Whether the
+  // action is shown at all is a UI-layer decision (SessionController.isDenied),
+  // not this controller's — the backend remains the sole authority regardless.
+
+  /// Same precondition as [canChoosePromotion] — a draft sale must already
+  /// exist and no other mutation is in flight.
+  bool get canChooseDiscount => _sale != null && _sale!.isDraft && _op == null;
+
+  /// Applies (or replaces) the sale's manual discount override. The server
+  /// recalculates the discount amount and totals; nothing beyond the
+  /// cashier's typed type/value/reason is ever sent here.
+  Future<bool> applyDiscountOverride({
+    required String discountType,
+    required String discountValue,
+    String? reason,
+  }) async {
+    final sale = _sale;
+    if (sale == null || _op != null) return false;
+    return _run(CartOperation.discountOverride, null, () async {
+      return _service.applyDiscountOverride(
+        saleId: sale.id,
+        discountType: discountType,
+        discountValue: discountValue,
+        reason: reason,
+        expectedVersion: sale.version,
+      );
+    });
+  }
+
+  /// Removes the sale's discount override, if any.
+  Future<bool> removeDiscountOverride() async {
+    final sale = _sale;
+    if (sale == null || _op != null) return false;
+    return _run(CartOperation.discountOverride, null, () async {
+      return _service.removeDiscountOverride(
+        saleId: sale.id,
+        expectedVersion: sale.version,
+      );
+    });
+  }
+
   // ---- loyalty ----
 
   /// True while points/wallet redemption could meaningfully be requested —
@@ -742,6 +787,7 @@ class CartController extends ChangeNotifier {
       case CartOperation.add:
       case CartOperation.promotion:
       case CartOperation.loyalty:
+      case CartOperation.discountOverride:
         break;
     }
     return e;

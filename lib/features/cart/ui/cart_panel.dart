@@ -15,6 +15,7 @@ import '../../loyalty/models/loyalty_sale_info.dart';
 import '../../loyalty/ui/loyalty_picker.dart';
 import 'cart_item_tile.dart';
 import 'customer_dialog.dart';
+import 'discount_override_dialog.dart';
 import 'promotion_picker.dart';
 
 /// "Current Sale": the draft sale exactly as the server computed it, with
@@ -415,6 +416,84 @@ class _PromotionRow extends StatelessWidget {
   }
 }
 
+/// "Discount": the manual override, if any. EVERY manual discount is an
+/// override (`discounts.override`) — there is no "normal discount" tier in
+/// this system, so the Add/Change/Remove actions are hidden entirely for a
+/// staff member who lacks that permission. The discount itself (if one is
+/// already applied) stays visible to everyone — it already affects the
+/// total shown either way, same as promotion/loyalty above. Backend remains
+/// authoritative; a missing/failed permission context never hides this
+/// (SessionController.isDenied — see Refund/Cancel for the same rule).
+class _DiscountOverrideRow extends StatelessWidget {
+  const _DiscountOverrideRow({required this.sale});
+  final CartSale sale;
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = context.watch<CartController>();
+    final session = context.watch<SessionController>();
+    final t = PosTokens.of(context);
+    final theme = Theme.of(context);
+    final discount = sale.discountOverride;
+    final editable = cart.canChooseDiscount && !session.isDenied('discounts.override');
+
+    if (discount == null) {
+      if (!editable) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(bottom: PosTokens.s8),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => showDiscountOverrideDialog(context),
+            icon: const Icon(Icons.percent),
+            label: const Text('Add Discount'),
+          ),
+        ),
+      );
+    }
+
+    final label = discount.discountType == 'percentage'
+        ? '${formatMoney(discount.discountValue)}% off'
+        : '${formatMoney(discount.discountValue)} off';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: PosTokens.s8),
+      child: Container(
+        padding: const EdgeInsets.all(PosTokens.s12),
+        decoration: BoxDecoration(
+          color: t.surfaceMuted,
+          borderRadius: BorderRadius.circular(PosTokens.rSmall),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.percent, size: 18, color: t.success),
+            const SizedBox(width: PosTokens.s8),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (editable) ...[
+              TextButton(
+                onPressed: () => showDiscountOverrideDialog(context, current: discount),
+                child: const Text('Change'),
+              ),
+              TextButton(
+                onPressed: cart.removeDiscountOverride,
+                child: const Text('Remove'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _LoyaltyRow extends StatelessWidget {
   const _LoyaltyRow({required this.sale});
   final CartSale sale;
@@ -542,6 +621,7 @@ class _Totals extends StatelessWidget {
         children: [
           if (!dense) _PromotionRow(sale: sale),
           if (!dense) _LoyaltyRow(sale: sale),
+          if (!dense) _DiscountOverrideRow(sale: sale),
           _row(context, 'Subtotal', t.subtotal),
           _row(context, 'Tax', t.taxTotal),
           if (t.discountTotal != null && t.discountTotal! > 0)

@@ -56,6 +56,9 @@ String describeApiError(ApiException e) {
       if (permission == 'payments.cash_withdrawal') {
         return 'You do not have permission to withdraw cash. Ask a manager or administrator.';
       }
+      if (permission == 'discounts.override') {
+        return 'You do not have permission to apply a discount. Ask a manager or administrator.';
+      }
       return 'You do not have permission to do that.';
   }
   switch (e.kind) {

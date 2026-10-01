@@ -2,6 +2,7 @@ import '../../../core/utils/json_read.dart';
 import '../../../core/utils/money.dart';
 import '../../../core/utils/server_time.dart';
 import '../../cart/models/cart_sale.dart';
+import '../../cart/models/discount_override.dart';
 import '../../loyalty/models/loyalty_sale_info.dart';
 import '../../promotions/models/promotion.dart';
 
@@ -132,6 +133,7 @@ class CompletedSale {
     this.promotion,
     this.loyalty,
     this.refund,
+    this.discountOverride,
   });
 
   final int id;
@@ -155,6 +157,10 @@ class CompletedSale {
   /// [RefundInfo] — `status` itself never changes to reflect this.
   final RefundInfo? refund;
 
+  /// The manual discount override in effect when this sale was completed,
+  /// frozen forever — same rule as [promotion]/[loyalty].
+  final DiscountOverride? discountOverride;
+
   /// The order/invoice number: the server's sale number, else "#id".
   String get displayNumber =>
       (saleNumber != null && saleNumber!.isNotEmpty) ? saleNumber! : '#$id';
@@ -176,6 +182,7 @@ class CompletedSale {
       promotion: AppliedPromotion.fromJson(m['promotion']),
       loyalty: LoyaltySaleInfo.fromJson(m['loyalty']),
       refund: RefundInfo.fromJson(m['refund']),
+      discountOverride: DiscountOverride.fromJson(m['discount_override']),
       items: asList(m['items'])
           .map(CartLine.fromJson)
           .whereType<CartLine>()

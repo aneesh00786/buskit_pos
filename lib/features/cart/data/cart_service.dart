@@ -51,6 +51,25 @@ abstract class CartService {
     required int expectedVersion,
   });
 
+  /// `PATCH /sales/:id/discount {discount_type, discount_value, reason?, expected_version}`
+  /// — apply or replace the sale's manual discount override
+  /// (`discounts.override` permission; backend-enforced). The server
+  /// recalculates the discount amount; nothing discount-related beyond the
+  /// cashier's typed type/value/reason is ever sent here.
+  Future<CartSale> applyDiscountOverride({
+    required int saleId,
+    required String discountType,
+    required String discountValue,
+    String? reason,
+    required int expectedVersion,
+  });
+
+  /// `DELETE /sales/:id/discount {expected_version}`.
+  Future<CartSale> removeDiscountOverride({
+    required int saleId,
+    required int expectedVersion,
+  });
+
   /// `POST /sales/:id/loyalty/redeem-points {points, expected_version}` —
   /// `points: 0` clears any pending points redemption. The discount is
   /// recalculated server-side; nothing discount-related is ever sent here.
@@ -251,6 +270,40 @@ class ApiCartService implements CartService {
   }) async {
     final data = await _client.delete(
       '/sales/$saleId/promotion',
+      query: {'expected_version': '$expectedVersion'},
+    );
+    return _parse(data);
+  }
+
+  /// `PATCH /sales/:id/discount {discount_type, discount_value, reason?, expected_version}`.
+  @override
+  Future<CartSale> applyDiscountOverride({
+    required int saleId,
+    required String discountType,
+    required String discountValue,
+    String? reason,
+    required int expectedVersion,
+  }) async {
+    final data = await _client.patch(
+      '/sales/$saleId/discount',
+      body: {
+        'discount_type': discountType,
+        'discount_value': discountValue,
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+        'expected_version': expectedVersion,
+      },
+    );
+    return _parse(data);
+  }
+
+  /// `DELETE /sales/:id/discount {expected_version}`.
+  @override
+  Future<CartSale> removeDiscountOverride({
+    required int saleId,
+    required int expectedVersion,
+  }) async {
+    final data = await _client.delete(
+      '/sales/$saleId/discount',
       query: {'expected_version': '$expectedVersion'},
     );
     return _parse(data);

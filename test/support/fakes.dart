@@ -102,6 +102,7 @@ Map<String, dynamic> saleJson({
   Map<String, dynamic>? promotion,
   String? customerId,
   Map<String, dynamic>? loyalty,
+  Map<String, dynamic>? discountOverride,
 }) => {
   'id': id,
   'version': version,
@@ -117,6 +118,21 @@ Map<String, dynamic> saleJson({
   },
   'promotion': promotion,
   'loyalty': loyalty,
+  'discount_override': discountOverride,
+};
+
+Map<String, dynamic> discountOverrideJson({
+  String discountType = 'percentage',
+  double discountValue = 10,
+  double? discountAmount,
+  String? reason,
+  String? appliedBy,
+}) => {
+  'discount_type': discountType,
+  'discount_value': discountValue,
+  'discount_amount': discountAmount,
+  'reason': reason,
+  'applied_by': appliedBy,
 };
 
 Map<String, dynamic> loyaltySaleInfoJson({
@@ -328,6 +344,21 @@ class ApplyPromotionCall {
 
 class RemovePromotionCall {
   RemovePromotionCall(this.saleId, this.expectedVersion);
+  final int saleId;
+  final int expectedVersion;
+}
+
+class ApplyDiscountCall {
+  ApplyDiscountCall(this.saleId, this.discountType, this.discountValue, this.reason, this.expectedVersion);
+  final int saleId;
+  final String discountType;
+  final String discountValue;
+  final String? reason;
+  final int expectedVersion;
+}
+
+class RemoveDiscountCall {
+  RemoveDiscountCall(this.saleId, this.expectedVersion);
   final int saleId;
   final int expectedVersion;
 }
@@ -585,6 +616,40 @@ class FakeCartService implements CartService {
     return onRemovePromotion(c);
   }
 
+  final List<ApplyDiscountCall> applyDiscountCalls = [];
+  final List<RemoveDiscountCall> removeDiscountCalls = [];
+  Future<CartSale> Function(ApplyDiscountCall call) onApplyDiscount =
+      (c) async => CartSale.fromJson(
+        saleJson(id: c.saleId, version: c.expectedVersion + 1),
+      )!;
+  Future<CartSale> Function(RemoveDiscountCall call) onRemoveDiscount =
+      (c) async => CartSale.fromJson(
+        saleJson(id: c.saleId, version: c.expectedVersion + 1),
+      )!;
+
+  @override
+  Future<CartSale> applyDiscountOverride({
+    required int saleId,
+    required String discountType,
+    required String discountValue,
+    String? reason,
+    required int expectedVersion,
+  }) {
+    final c = ApplyDiscountCall(saleId, discountType, discountValue, reason, expectedVersion);
+    applyDiscountCalls.add(c);
+    return onApplyDiscount(c);
+  }
+
+  @override
+  Future<CartSale> removeDiscountOverride({
+    required int saleId,
+    required int expectedVersion,
+  }) {
+    final c = RemoveDiscountCall(saleId, expectedVersion);
+    removeDiscountCalls.add(c);
+    return onRemoveDiscount(c);
+  }
+
   @override
   Future<CartSale> addItem({
     required int saleId,
@@ -737,6 +802,7 @@ class CartSaleFactory {
     String status = 'draft',
     String? customerId,
     Map<String, dynamic>? loyalty,
+    Map<String, dynamic>? discountOverride,
   }) => CartSale.fromJson(
     saleJson(
       id: id,
@@ -747,6 +813,7 @@ class CartSaleFactory {
       total: total,
       customerId: customerId,
       loyalty: loyalty,
+      discountOverride: discountOverride,
     ),
   )!;
 }

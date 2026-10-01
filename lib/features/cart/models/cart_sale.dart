@@ -1,6 +1,7 @@
 import '../../../core/utils/json_read.dart';
 import '../../loyalty/models/loyalty_sale_info.dart';
 import '../../promotions/models/promotion.dart';
+import 'discount_override.dart';
 
 class CartLine {
   const CartLine({
@@ -100,6 +101,7 @@ class CartSale {
     this.customerId,
     this.promotion,
     this.loyalty,
+    this.discountOverride,
   });
 
   final int id;
@@ -122,6 +124,11 @@ class CartSale {
   /// points/cashback to be earned) — null when there's no customer on the
   /// sale or the company has no active loyalty program at all.
   final LoyaltySaleInfo? loyalty;
+
+  /// The manual discount override currently applied, if any — applies LAST,
+  /// on top of whatever promotion/loyalty already left. Always recomputed
+  /// live by the server.
+  final DiscountOverride? discountOverride;
 
   bool get isDraft => status == 'draft';
 
@@ -146,6 +153,7 @@ class CartSale {
       customerId: asString(m['customer_id']),
       promotion: AppliedPromotion.fromJson(m['promotion']),
       loyalty: LoyaltySaleInfo.fromJson(m['loyalty']),
+      discountOverride: DiscountOverride.fromJson(m['discount_override']),
     );
   }
 }
