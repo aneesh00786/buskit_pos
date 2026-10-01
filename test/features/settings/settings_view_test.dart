@@ -1,4 +1,7 @@
 import 'package:buskit_pos/core/network/api_exception.dart';
+import 'package:buskit_pos/core/storage/token_store.dart';
+import 'package:buskit_pos/features/auth/state/session_controller.dart';
+import 'package:buskit_pos/features/cash_movements/state/cash_movement_controller.dart';
 import 'package:buskit_pos/features/receipt/state/receipt_services.dart';
 import 'package:buskit_pos/features/settings/models/pos_device.dart';
 import 'package:buskit_pos/features/settings/models/pos_store.dart';
@@ -19,19 +22,31 @@ const netDown = ApiException(
 Future<SettingsController> pumpSettings(
   WidgetTester tester, {
   FakeSettingsService? service,
+  FakeCashMovementService? cashService,
+  SessionController? session,
   double width = 800,
   double height = 900,
 }) async {
   final controller = SettingsController(service ?? FakeSettingsService());
+  final cashController = CashMovementController(
+    cashService ?? FakeCashMovementService(),
+  );
+  final sess = session ?? SessionController(FakeAuthService(), MemoryTokenStore());
   final receipts = FakeReceipts();
   tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   addTearDown(controller.dispose);
+  addTearDown(cashController.dispose);
+  if (session == null) addTearDown(sess.dispose);
   await tester.pumpWidget(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<SettingsController>.value(value: controller),
+        ChangeNotifierProvider<CashMovementController>.value(
+          value: cashController,
+        ),
+        ChangeNotifierProvider<SessionController>.value(value: sess),
         Provider<ReceiptServices>.value(value: receipts.services),
       ],
       child: const MaterialApp(
@@ -183,7 +198,10 @@ void main() {
   });
 
   testWidgets('the About section shows the app version', (tester) async {
-    await pumpSettings(tester);
+    // Cash Management (Phase 17.3) added a section above About, pushing it
+    // below the default viewport's build/cache extent — a taller viewport
+    // keeps this test about About, not about scrolling.
+    await pumpSettings(tester, height: 1400);
     expect(find.text('About'), findsOneWidget);
     expect(find.text('App version'), findsOneWidget);
   });
@@ -191,7 +209,7 @@ void main() {
   testWidgets(
     'the Printer & Receipt tile opens the existing printer setup dialog',
     (tester) async {
-      await pumpSettings(tester);
+      await pumpSettings(tester, height: 1400);
       await tester.tap(find.text('Printer setup'));
       await tester.pumpAndSettle();
       expect(find.text('Printer setup'), findsWidgets);

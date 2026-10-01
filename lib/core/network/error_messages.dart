@@ -50,9 +50,13 @@ String describeApiError(ApiException e) {
       return 'Stock changed while the sale was being processed. Please try again.';
     case PosErrorCodes.permissionDenied:
       final permission = asString(e.dataMap?['permission']);
-      return permission == 'payments.refund'
-          ? 'You do not have permission to refund sales. Ask a manager or administrator.'
-          : 'You do not have permission to do that.';
+      if (permission == 'payments.refund') {
+        return 'You do not have permission to refund sales. Ask a manager or administrator.';
+      }
+      if (permission == 'payments.cash_withdrawal') {
+        return 'You do not have permission to withdraw cash. Ask a manager or administrator.';
+      }
+      return 'You do not have permission to do that.';
   }
   switch (e.kind) {
     case ApiErrorKind.network:

@@ -14,6 +14,8 @@ import 'package:buskit_pos/features/products/models/product_page.dart';
 import 'package:flutter/widgets.dart';
 import 'package:buskit_pos/core/storage/token_store.dart';
 import 'package:buskit_pos/features/barcode/camera_scanner.dart';
+import 'package:buskit_pos/features/cash_movements/data/cash_movement_service.dart';
+import 'package:buskit_pos/features/cash_movements/models/cash_movement.dart';
 import 'package:buskit_pos/features/products/models/product_item.dart';
 import 'package:buskit_pos/features/receipt/data/printer_settings.dart';
 import 'package:buskit_pos/features/receipt/data/receipt_delivery.dart';
@@ -806,5 +808,43 @@ class FakeCameraScanner implements CameraScanner {
     opened++;
     if (onScan != null) return onScan!();
     return next;
+  }
+}
+
+class FakeCashMovementService implements CashMovementService {
+  CurrentShiftCashMovements listResult = const CurrentShiftCashMovements(
+    shift: CurrentShiftSummary(id: 1, status: 'open', openingAmount: 0),
+    movements: [],
+  );
+  Future<CurrentShiftCashMovements> Function()? onList;
+  int listCalls = 0;
+
+  Future<CashMovement?> Function(String amount, String? reason, String key)?
+  onWithdraw;
+  final List<String> withdrawKeys = [];
+
+  @override
+  Future<CurrentShiftCashMovements> listCurrentShift() async {
+    listCalls++;
+    if (onList != null) return onList!();
+    return listResult;
+  }
+
+  @override
+  Future<CashMovement?> withdraw({
+    required String amount,
+    String? reason,
+    required String idempotencyKey,
+  }) async {
+    withdrawKeys.add(idempotencyKey);
+    if (onWithdraw != null) return onWithdraw!(amount, reason, idempotencyKey);
+    return CashMovement(
+      id: withdrawKeys.length,
+      amount: double.parse(amount),
+      reason: reason,
+      status: 'completed',
+      shiftId: 1,
+      createdAt: DateTime(2026, 1, 1),
+    );
   }
 }

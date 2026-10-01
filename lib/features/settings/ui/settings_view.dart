@@ -7,6 +7,9 @@ import '../../../core/network/error_messages.dart';
 import '../../../core/network/pos_api_client.dart';
 import '../../../core/theme/pos_tokens.dart';
 import '../../../core/ui/state_views.dart';
+import '../../cash_movements/data/cash_movement_service.dart';
+import '../../cash_movements/state/cash_movement_controller.dart';
+import '../../cash_movements/ui/cash_withdrawal_view.dart';
 import '../../receipt/models/receipt.dart';
 import '../../receipt/ui/receipt_actions.dart' show PrinterSetupDialog;
 import '../data/settings_service.dart';
@@ -21,11 +24,19 @@ import '../state/settings_controller.dart';
 Future<void> showSettings(BuildContext context) {
   final client = context.read<PosApiClient>();
   final controller = SettingsController(ApiSettingsService(client));
+  final cashController = CashMovementController(ApiCashMovementService(client));
   final size = MediaQuery.sizeOf(context);
-  Widget content() => ChangeNotifierProvider<SettingsController>.value(
-    value: controller,
+  Widget content() => MultiProvider(
+    providers: [
+      ChangeNotifierProvider<SettingsController>.value(value: controller),
+      ChangeNotifierProvider<CashMovementController>.value(value: cashController),
+    ],
     child: const SettingsView(),
   );
+  void disposeAll() {
+    controller.dispose();
+    cashController.dispose();
+  }
 
   if (size.width >= 900) {
     return showDialog<void>(
@@ -39,7 +50,7 @@ Future<void> showSettings(BuildContext context) {
           child: content(),
         ),
       ),
-    ).whenComplete(controller.dispose);
+    ).whenComplete(disposeAll);
   }
   return showModalBottomSheet<void>(
     context: context,
@@ -47,7 +58,7 @@ Future<void> showSettings(BuildContext context) {
     useSafeArea: true,
     showDragHandle: true,
     builder: (_) => SizedBox(height: size.height * 0.92, child: content()),
-  ).whenComplete(controller.dispose);
+  ).whenComplete(disposeAll);
 }
 
 const _samplePrintReceipt = ReceiptData(
@@ -154,6 +165,8 @@ class _Body extends StatelessWidget {
             _RegistersSection(controller: controller),
             const SizedBox(height: PosTokens.s16),
             _DevicesSection(controller: controller),
+            const SizedBox(height: PosTokens.s16),
+            const CashManagementGate(),
             const SizedBox(height: PosTokens.s16),
             _SectionCard(
               title: 'Printer & Receipt',
