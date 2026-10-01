@@ -7,6 +7,7 @@ import '../../../core/network/error_messages.dart';
 import '../../../core/theme/pos_tokens.dart';
 import '../../../core/ui/state_views.dart';
 import '../../../core/utils/format.dart';
+import '../../auth/state/session_controller.dart';
 import '../models/cart_sale.dart';
 import '../state/cart_controller.dart';
 import '../../checkout/ui/pay_modal.dart';
@@ -609,6 +610,7 @@ class _Actions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = PosTokens.of(context);
+    final session = context.watch<SessionController>();
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         PosTokens.s16,
@@ -655,15 +657,20 @@ class _Actions extends StatelessWidget {
               ),
             ],
           ),
-          TextButton.icon(
-            onPressed: disabled ? null : () => _void(context),
-            icon: const Icon(Icons.block),
-            label: const Text('Void sale'),
-            style: TextButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              foregroundColor: Theme.of(context).colorScheme.error,
+          // Hidden (not just disabled) once the loaded permission context
+          // positively lacks sales.cancel — a missing/failed context leaves
+          // it visible, deferring to the backend's own 403. See
+          // SessionController.isDenied.
+          if (!session.isDenied('sales.cancel'))
+            TextButton.icon(
+              onPressed: disabled ? null : () => _void(context),
+              icon: const Icon(Icons.block),
+              label: const Text('Void sale'),
+              style: TextButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -705,6 +712,8 @@ class _DiscardOrder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final session = context.watch<SessionController>();
+    if (session.isDenied('sales.cancel')) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         PosTokens.s16,

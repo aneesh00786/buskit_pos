@@ -364,4 +364,96 @@ void main() {
       expect(s.phase, SessionPhase.staffLogin);
     });
   });
+
+  group('isDenied (Phase 17.2)', () {
+    PosAuthContext ctx(List<String> permissions) => PosAuthContext(
+      staff: const StaffInfo(
+        salesmanId: 'S1',
+        name: 'Test Staff',
+        role: StaffRole(id: 5, name: 'Cashier'),
+      ),
+      permissions: permissions,
+    );
+
+    test('false before any staff login (no context loaded yet)', () async {
+      await s.restore();
+      expect(s.isDenied('sales.cancel'), isFalse);
+    });
+
+    test(
+      'false when the auth-context fetch itself failed (defer to the backend, never hide on missing data)',
+      () async {
+        auth.onAuthContext = (t) async =>
+            throw const ApiException(kind: ApiErrorKind.network, message: 'down');
+        await s.restore();
+        await s.loginDevice('REG-1', 's');
+        await s.loginStaff('S1', '1');
+        expect(s.isDenied('sales.cancel'), isFalse);
+      },
+    );
+
+    test('true only once a loaded context positively lacks the permission', () async {
+      auth.onAuthContext = (t) async => ctx(['sales.view']);
+      await s.restore();
+      await s.loginDevice('REG-1', 's');
+      await s.loginStaff('S1', '1');
+      expect(s.isDenied('sales.cancel'), isTrue);
+      expect(s.isDenied('sales.view'), isFalse);
+    });
+
+    test('refreshAuthContext updates isDenied after a permission is granted', () async {
+      auth.onAuthContext = (t) async => ctx(['sales.view']);
+      await s.restore();
+      await s.loginDevice('REG-1', 's');
+      await s.loginStaff('S1', '1');
+      expect(s.isDenied('sales.cancel'), isTrue);
+
+      auth.onAuthContext = (t) async => ctx(['sales.view', 'sales.cancel']);
+      await s.refreshAuthContext();
+      expect(s.isDenied('sales.cancel'), isFalse);
+    });
+
+    test('refreshAuthContext updates isDenied after a permission is revoked', () async {
+      auth.onAuthContext = (t) async => ctx(['sales.view', 'sales.cancel']);
+      await s.restore();
+      await s.loginDevice('REG-1', 's');
+      await s.loginStaff('S1', '1');
+      expect(s.isDenied('sales.cancel'), isFalse);
+
+      auth.onAuthContext = (t) async => ctx(['sales.view']);
+      await s.refreshAuthContext();
+      expect(s.isDenied('sales.cancel'), isTrue);
+    });
+
+    test('logoutStaff resets isDenied to false (defers to the next login)', () async {
+      auth.onAuthContext = (t) async => ctx(['sales.view']);
+      await s.restore();
+      await s.loginDevice('REG-1', 's');
+      await s.loginStaff('S1', '1');
+      expect(s.isDenied('sales.cancel'), isTrue);
+
+      s.logoutStaff();
+      expect(s.isDenied('sales.cancel'), isFalse);
+    });
+
+    test(
+      'a second staff member never inherits the first staff member\'s permissions',
+      () async {
+        auth.onAuthContext = (t) async => ctx(['sales.cancel']);
+        await s.restore();
+        await s.loginDevice('REG-1', 's');
+        await s.loginStaff('S1', '1');
+        expect(s.isDenied('sales.cancel'), isFalse);
+
+        s.logoutStaff();
+        auth.onAuthContext = (t) async => ctx(['sales.view']);
+        await s.loginStaff('S2', '2');
+        expect(
+          s.isDenied('sales.cancel'),
+          isTrue,
+          reason: "staff S2's own (lacking) permissions must apply, not S1's",
+        );
+      },
+    );
+  });
 }

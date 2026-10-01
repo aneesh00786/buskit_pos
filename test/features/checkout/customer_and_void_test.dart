@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:buskit_pos/core/network/api_exception.dart';
 import 'package:buskit_pos/core/network/pos_api_client.dart';
+import 'package:buskit_pos/features/auth/models/pos_auth_context.dart';
 import 'package:buskit_pos/features/cart/models/cart_sale.dart';
 import 'package:buskit_pos/features/cart/state/cart_controller.dart';
 import 'package:buskit_pos/features/checkout/models/payment.dart';
@@ -445,6 +446,46 @@ void main() {
     );
   });
 
+  group('Void sale — permission-aware (Phase 17.2)', () {
+    testWidgets(
+      'hidden when the loaded auth context does NOT grant sales.cancel',
+      (tester) async {
+        final h = PageHarness();
+        h.fakeAuth.onAuthContext = (t) async => const PosAuthContext(
+          staff: StaffInfo(salesmanId: 'S1', role: StaffRole(id: 1, name: 'Cashier')),
+          permissions: ['sales.view'],
+        );
+        h.carts.onAdd = (_) async => withItems();
+        h.carts.onGet = (_) async => withItems();
+        await h.signIn();
+        await pumpProductsPage(tester, h);
+        await addItem(tester);
+        expect(
+          find.text('Void sale'),
+          findsNothing,
+          reason: 'a positively-known missing permission must hide the button',
+        );
+      },
+    );
+
+    testWidgets(
+      'stays visible when the loaded auth context grants sales.cancel',
+      (tester) async {
+        final h = PageHarness();
+        h.fakeAuth.onAuthContext = (t) async => const PosAuthContext(
+          staff: StaffInfo(salesmanId: 'S1', role: StaffRole(id: 1, name: 'Manager')),
+          permissions: ['sales.cancel'],
+        );
+        h.carts.onAdd = (_) async => withItems();
+        h.carts.onGet = (_) async => withItems();
+        await h.signIn();
+        await pumpProductsPage(tester, h);
+        await addItem(tester);
+        expect(find.text('Void sale'), findsOneWidget);
+      },
+    );
+  });
+
   group('Void a held sale (held-sales list)', () {
     Future<PageHarness> openHeldDetail(WidgetTester tester) async {
       final h = PageHarness();
@@ -566,5 +607,71 @@ void main() {
       expect(h.cart.sale, isNull);
       expect(h.carts.createCalls, 0);
     });
+  });
+
+  group('Void a held sale — permission-aware (Phase 17.2)', () {
+    testWidgets(
+      'hidden when the loaded auth context does NOT grant sales.cancel',
+      (tester) async {
+        final h = PageHarness();
+        h.fakeAuth.onAuthContext = (t) async => const PosAuthContext(
+          staff: StaffInfo(salesmanId: 'S1', role: StaffRole(id: 1, name: 'Cashier')),
+          permissions: ['sales.view'],
+        );
+        h.heldService.onList = () async => [
+          HeldSaleSummary.fromJson(heldRowJson(id: 12, version: 3))!,
+        ];
+        h.carts.onGet = (id) async => CartSale.fromJson(
+          saleJson(
+            id: id,
+            version: 5,
+            status: 'held',
+            items: [lineJson(id: 1, name: 'Tea')],
+            total: 20,
+          ),
+        )!;
+        await h.signIn();
+        await pumpProductsPage(tester, h, width: 1400, height: 900);
+        await tester.tap(find.byTooltip('Held sales'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Sale #12'));
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Void sale'),
+          findsNothing,
+          reason: 'a positively-known missing permission must hide the button',
+        );
+      },
+    );
+
+    testWidgets(
+      'stays visible when the loaded auth context grants sales.cancel',
+      (tester) async {
+        final h = PageHarness();
+        h.fakeAuth.onAuthContext = (t) async => const PosAuthContext(
+          staff: StaffInfo(salesmanId: 'S1', role: StaffRole(id: 1, name: 'Manager')),
+          permissions: ['sales.cancel'],
+        );
+        h.heldService.onList = () async => [
+          HeldSaleSummary.fromJson(heldRowJson(id: 12, version: 3))!,
+        ];
+        h.carts.onGet = (id) async => CartSale.fromJson(
+          saleJson(
+            id: id,
+            version: 5,
+            status: 'held',
+            items: [lineJson(id: 1, name: 'Tea')],
+            total: 20,
+          ),
+        )!;
+        await h.signIn();
+        await pumpProductsPage(tester, h, width: 1400, height: 900);
+        await tester.tap(find.byTooltip('Held sales'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Sale #12'));
+        await tester.pumpAndSettle();
+        expect(find.text('Void sale'), findsOneWidget);
+      },
+    );
   });
 }

@@ -590,14 +590,13 @@ class _RefundSection extends StatelessWidget {
 
     if (sale.status != 'completed') return const SizedBox.shrink();
 
-    // UI convenience only, per PermissionService's own contract: hide the
-    // button only when we POSITIVELY know payments.refund is absent (a
-    // loaded context that doesn't grant it). If the context hasn't loaded
-    // yet or its fetch failed, the button stays visible and the backend's
-    // own 403 is what actually decides — never hide on missing data alone.
+    // UI convenience only — SessionController.isDenied hides the button
+    // only when we POSITIVELY know payments.refund is absent (a loaded
+    // context that doesn't grant it). If the context hasn't loaded yet or
+    // its fetch failed, the button stays visible and the backend's own 403
+    // is what actually decides — never hide on missing data alone.
     final session = context.watch<SessionController>();
-    if (session.authContext != null &&
-        !session.permissions.hasPermission('payments.refund')) {
+    if (session.isDenied('payments.refund')) {
       return const SizedBox.shrink();
     }
 

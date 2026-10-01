@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:buskit_pos/core/network/api_exception.dart';
+import 'package:buskit_pos/core/storage/token_store.dart';
+import 'package:buskit_pos/features/auth/state/session_controller.dart';
 import 'package:buskit_pos/features/cart/models/cart_sale.dart';
 import 'package:buskit_pos/features/cart/state/cart_controller.dart';
 import 'package:buskit_pos/features/held_sales/models/held_sale_summary.dart';
@@ -16,6 +18,7 @@ late FakeHeldSalesService list;
 late FakeCartService service;
 late HeldSalesController held;
 late CartController cart;
+late SessionController session;
 
 HeldSaleSummary row(
   int id, {
@@ -65,6 +68,7 @@ Widget host({required Widget child}) => MultiProvider(
   providers: [
     ChangeNotifierProvider<HeldSalesController>.value(value: held),
     ChangeNotifierProvider<CartController>.value(value: cart),
+    ChangeNotifierProvider<SessionController>.value(value: session),
   ],
   child: MaterialApp(home: Scaffold(body: child)),
 );
@@ -112,10 +116,12 @@ void main() {
     service = FakeCartService();
     held = HeldSalesController(list, service);
     cart = CartController(service, onHeldSalesChanged: () => held.refresh());
+    session = SessionController(FakeAuthService(), MemoryTokenStore());
   });
   tearDown(() {
     held.dispose();
     cart.dispose();
+    session.dispose();
   });
 
   group('list states', () {

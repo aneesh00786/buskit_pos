@@ -1,6 +1,8 @@
 import 'package:buskit_pos/core/config/app_config.dart';
+import 'package:buskit_pos/core/storage/token_store.dart';
 import 'package:buskit_pos/core/theme/app_theme.dart';
 import 'package:buskit_pos/core/theme/pos_tokens.dart';
+import 'package:buskit_pos/features/auth/state/session_controller.dart';
 import 'package:buskit_pos/features/cart/models/cart_sale.dart';
 import 'package:buskit_pos/features/cart/state/cart_controller.dart';
 import 'package:buskit_pos/features/cart/ui/cart_panel.dart';
@@ -227,12 +229,17 @@ void main() {
       service.onAdd = (_) async => s;
       service.onGet = (_) async => s;
       await cart.addItem(1, 2);
+      final session = SessionController(FakeAuthService(), MemoryTokenStore());
+      addTearDown(session.dispose);
       tester.view.physicalSize = Size(380, height);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(
-        ChangeNotifierProvider.value(
-          value: cart,
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<CartController>.value(value: cart),
+            ChangeNotifierProvider<SessionController>.value(value: session),
+          ],
           child: MaterialApp(
             theme: theme ?? AppTheme.light(),
             home: const Scaffold(body: CartPanel()),

@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:buskit_pos/core/network/api_exception.dart';
+import 'package:buskit_pos/core/storage/token_store.dart';
+import 'package:buskit_pos/features/auth/state/session_controller.dart';
 import 'package:buskit_pos/features/cart/models/cart_sale.dart';
 import 'package:buskit_pos/features/cart/state/cart_controller.dart';
 import 'package:buskit_pos/features/cart/ui/cart_panel.dart';
@@ -70,12 +72,17 @@ Future<void> pump(
   double width = 380,
   double height = 800,
 }) async {
+  final session = SessionController(FakeAuthService(), MemoryTokenStore());
+  addTearDown(session.dispose);
   tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
-    ChangeNotifierProvider.value(
-      value: cart,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<CartController>.value(value: cart),
+        ChangeNotifierProvider<SessionController>.value(value: session),
+      ],
       child: MaterialApp(
         home: Scaffold(
           body: SizedBox(

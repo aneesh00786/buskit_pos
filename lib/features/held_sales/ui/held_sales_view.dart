@@ -8,6 +8,7 @@ import '../../../core/network/error_messages.dart';
 import '../../../core/ui/state_views.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/server_time.dart';
+import '../../auth/state/session_controller.dart';
 import '../../cart/models/cart_sale.dart';
 import '../../cart/state/cart_controller.dart';
 import '../../cart/ui/cart_panel.dart' show confirmVoid;
@@ -265,6 +266,7 @@ class _DetailBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final held = context.watch<HeldSalesController>();
     final cart = context.watch<CartController>();
+    final session = context.watch<SessionController>();
     final id = held.detailSaleId!;
 
     if (held.detailLoading && held.detail == null) {
@@ -351,17 +353,21 @@ class _DetailBody extends StatelessWidget {
                   minimumSize: const Size.fromHeight(48),
                 ),
               ),
-              TextButton.icon(
-                onPressed: (resumable && !cart.isMutating)
-                    ? () => _void(context, sale)
-                    : null,
-                icon: const Icon(Icons.block),
-                label: const Text('Void sale'),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  foregroundColor: theme.colorScheme.error,
+              // Hidden (not just disabled) once the loaded permission context
+              // positively lacks sales.cancel — see
+              // SessionController.isDenied.
+              if (!session.isDenied('sales.cancel'))
+                TextButton.icon(
+                  onPressed: (resumable && !cart.isMutating)
+                      ? () => _void(context, sale)
+                      : null,
+                  icon: const Icon(Icons.block),
+                  label: const Text('Void sale'),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    foregroundColor: theme.colorScheme.error,
+                  ),
                 ),
-              ),
               if (resumable && cart.hasActiveDraftWithItems)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),

@@ -1,5 +1,6 @@
 import 'package:buskit_pos/core/network/api_exception.dart';
 import 'package:buskit_pos/core/storage/token_store.dart';
+import 'package:buskit_pos/features/auth/models/pos_auth_context.dart';
 import 'package:buskit_pos/features/auth/state/session_controller.dart';
 import 'package:buskit_pos/features/products/models/product_item.dart';
 import 'package:buskit_pos/features/history/state/sales_history_controller.dart';
@@ -284,6 +285,57 @@ void main() {
   });
 
   group('refund UI', () {
+    testWidgets(
+      'the button is hidden when the loaded auth context does NOT grant payments.refund',
+      (tester) async {
+        final auth = FakeAuthService()
+          ..onAuthContext = (t) async => const PosAuthContext(
+            staff: StaffInfo(salesmanId: 'S1', role: StaffRole(id: 1, name: 'Cashier')),
+            permissions: ['sales.view'],
+          );
+        final session = SessionController(auth, MemoryTokenStore());
+        await session.loginDevice('REG-1', 'secret');
+        await session.loginStaff('S1', '1234');
+        addTearDown(session.dispose);
+
+        final svc = FakeHistoryService()
+          ..rows = [entry(id: 1, saleNumber: 'POS-1')]
+          ..details[1] = completed(id: 1);
+        await pumpHistory(tester, service: svc, session: session, width: 400);
+        await tester.tap(find.text('POS-1'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('Refund Sale'),
+          findsNothing,
+          reason: 'a positively-known missing permission must hide the button',
+        );
+      },
+    );
+
+    testWidgets(
+      'the button stays visible when the auth context grants payments.refund, and when it has not loaded at all',
+      (tester) async {
+        final auth = FakeAuthService()
+          ..onAuthContext = (t) async => const PosAuthContext(
+            staff: StaffInfo(salesmanId: 'S1', role: StaffRole(id: 1, name: 'Manager')),
+            permissions: ['payments.refund'],
+          );
+        final session = SessionController(auth, MemoryTokenStore());
+        await session.loginDevice('REG-1', 'secret');
+        await session.loginStaff('S1', '1234');
+        addTearDown(session.dispose);
+
+        final svc = FakeHistoryService()
+          ..rows = [entry(id: 1, saleNumber: 'POS-1')]
+          ..details[1] = completed(id: 1);
+        await pumpHistory(tester, service: svc, session: session, width: 400);
+        await tester.tap(find.text('POS-1'));
+        await tester.pumpAndSettle();
+        expect(find.text('Refund Sale'), findsOneWidget);
+      },
+    );
+
     testWidgets(
       'a completed, not-yet-refunded sale shows a Refund Sale button',
       (tester) async {

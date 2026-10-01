@@ -48,6 +48,18 @@ class SessionController extends ChangeNotifier {
   ApiException? get authContextError => _authContextError;
   PermissionService get permissions => PermissionService(_authContext);
 
+  /// The single, centralized "should a UI action be hidden?" rule (Phase
+  /// 17.2) — true only when the context has POSITIVELY loaded and does NOT
+  /// grant [permission]. Never true just because the context hasn't loaded
+  /// yet or a fetch failed: [PermissionService.hasPermission] already
+  /// denies in that case for any actual authorization decision, but a
+  /// button should stay visible (letting the backend's own 403 decide)
+  /// rather than disappearing on missing data. Every permission-gated
+  /// widget in the app should call this instead of re-deriving the same
+  /// `authContext != null && !hasPermission(...)` check inline.
+  bool isDenied(String permission) =>
+      _authContext != null && !permissions.hasPermission(permission);
+
   /// Token used for browsing and cart calls: the staff token once signed in.
   String? get activeToken => _staffToken ?? _deviceToken;
 

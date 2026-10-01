@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buskit_pos/core/network/api_exception.dart';
+import 'package:buskit_pos/features/auth/models/pos_auth_context.dart';
 import 'package:buskit_pos/features/cart/models/cart_sale.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -168,6 +169,48 @@ void main() {
         await tester.pumpAndSettle();
         expect(h.carts.cancelCalls, isEmpty);
         expect(tester.takeException(), isNull);
+      },
+    );
+  });
+
+  group('Discard order — permission-aware (Phase 17.2)', () {
+    testWidgets(
+      'hidden when the loaded auth context does NOT grant sales.cancel',
+      (tester) async {
+        final h = PageHarness();
+        h.fakeAuth.onAuthContext = (t) async => const PosAuthContext(
+          staff: StaffInfo(salesmanId: 'S1', role: StaffRole(id: 1, name: 'Cashier')),
+          permissions: ['sales.view'],
+        );
+        h.carts.onAdd = (_) async => CartSaleFactory.sale();
+        h.carts.onGet = (_) async => CartSaleFactory.sale();
+        await h.signIn();
+        await pumpProductsPage(tester, h);
+        await tester.tap(find.text('Add').first);
+        await tester.pumpAndSettle();
+        expect(
+          discard,
+          findsNothing,
+          reason: 'a positively-known missing permission must hide the button',
+        );
+      },
+    );
+
+    testWidgets(
+      'stays visible when the loaded auth context grants sales.cancel',
+      (tester) async {
+        final h = PageHarness();
+        h.fakeAuth.onAuthContext = (t) async => const PosAuthContext(
+          staff: StaffInfo(salesmanId: 'S1', role: StaffRole(id: 1, name: 'Manager')),
+          permissions: ['sales.cancel'],
+        );
+        h.carts.onAdd = (_) async => CartSaleFactory.sale();
+        h.carts.onGet = (_) async => CartSaleFactory.sale();
+        await h.signIn();
+        await pumpProductsPage(tester, h);
+        await tester.tap(find.text('Add').first);
+        await tester.pumpAndSettle();
+        expect(discard, findsOneWidget);
       },
     );
   });
