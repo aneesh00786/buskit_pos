@@ -46,7 +46,12 @@ const _items = [
     'Customers',
     placeholder: false,
   ),
-  _NavItem(PosSection.inventory, Icons.inventory_2_outlined, 'Inventory'),
+  _NavItem(
+    PosSection.inventory,
+    Icons.inventory_2_outlined,
+    'Inventory',
+    placeholder: false,
+  ),
   _NavItem(
     PosSection.promotions,
     Icons.local_offer_outlined,
@@ -83,6 +88,7 @@ class PosSidebar extends StatelessWidget {
     this.onOpenOrders,
     this.onOpenHistory,
     this.onOpenCustomers,
+    this.onOpenInventory,
     this.onOpenPromotions,
     this.onOpenAnalytics,
     this.onOpenSettings,
@@ -102,6 +108,7 @@ class PosSidebar extends StatelessWidget {
   final VoidCallback? onOpenOrders;
   final VoidCallback? onOpenHistory;
   final VoidCallback? onOpenCustomers;
+  final VoidCallback? onOpenInventory;
   final VoidCallback? onOpenPromotions;
   final VoidCallback? onOpenAnalytics;
   final VoidCallback? onOpenSettings;
@@ -149,6 +156,7 @@ class PosSidebar extends StatelessWidget {
                           PosSection.orders => onOpenOrders,
                           PosSection.history => onOpenHistory,
                           PosSection.customers => onOpenCustomers,
+                          PosSection.inventory => onOpenInventory,
                           PosSection.promotions => onOpenPromotions,
                           PosSection.analytics => onOpenAnalytics,
                           PosSection.settings => onOpenSettings,

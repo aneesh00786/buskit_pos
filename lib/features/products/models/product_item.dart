@@ -24,9 +24,26 @@ class ProductPricing {
     this.taxIncluded,
     this.taxAmount,
     this.pricingStatus,
+    this.cataloguePrice,
+    this.priceSource,
+    this.priceVersion = 0,
   });
 
+  /// The price POS charges: the POS-only override when one is set,
+  /// otherwise the shared catalogue price.
   final double? sellPrice;
+
+  /// The shared catalogue price (web store, Van Sales, B2B). POS never
+  /// changes it.
+  final double? cataloguePrice;
+
+  /// 'pos' when a POS-only price override is active, else 'catalogue'.
+  final String? priceSource;
+
+  /// Optimistic-concurrency token sent back with a price change.
+  final int priceVersion;
+
+  bool get hasPosOverride => priceSource == 'pos';
   final double? taxPercent;
 
   /// 'inclusive' | 'exclusive' | 'none' as sent by the backend.
@@ -44,6 +61,9 @@ class ProductPricing {
       taxIncluded: asBool(m['tax_included']),
       taxAmount: asDouble(m['tax_amount']),
       pricingStatus: asString(m['pricing_status']),
+      cataloguePrice: asDouble(m['catalogue_price']),
+      priceSource: asString(m['price_source']),
+      priceVersion: asInt(m['price_version']) ?? 0,
     );
   }
 }

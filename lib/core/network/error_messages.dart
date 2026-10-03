@@ -45,6 +45,12 @@ String describeApiError(ApiException e) {
           return 'Not enough stock: ${formatQty(requested)} requested, ${formatQty(available)} available.';
         }
       }
+      // Inventory adjustment's shape: {current_stock, requested}.
+      final current = asDouble(e.dataMap?['current_stock']);
+      final requested = asDouble(e.dataMap?['requested']);
+      if (current != null && requested != null) {
+        return 'Not enough stock: tried to remove ${formatQty(requested)}, only ${formatQty(current)} available.';
+      }
       return 'Not enough stock to complete this sale.';
     case PosErrorCodes.stockConflict:
       return 'Stock changed while the sale was being processed. Please try again.';
@@ -58,6 +64,15 @@ String describeApiError(ApiException e) {
       }
       if (permission == 'discounts.override') {
         return 'You do not have permission to apply a discount. Ask a manager or administrator.';
+      }
+      if (permission == 'inventory.adjust') {
+        return 'You do not have permission to adjust inventory. Ask a manager or administrator.';
+      }
+      if (permission == 'products.price_change') {
+        return 'You do not have permission to change prices. Ask a manager or administrator.';
+      }
+      if (permission == 'inventory.view') {
+        return 'You do not have permission to view inventory history.';
       }
       return 'You do not have permission to do that.';
   }

@@ -296,16 +296,14 @@ void main() {
     });
 
     testWidgets(
-      'placeholder sections say they are coming soon instead of pretending to work',
+      'no sidebar section is a placeholder any more — Inventory (Phase 17.5) was the last one',
       (tester) async {
         final h = PageHarness();
         await pumpProductsPage(tester, h, width: 1400, height: 900);
+        expect(find.text('Soon'), findsNothing);
         await tester.tap(find.text('Inventory'));
         await tester.pump();
-        expect(find.text('Inventory is coming soon'), findsOneWidget);
-        // Customers, Promotions, Analytics and Settings all moved off the
-        // generic "Soon" placeholder; only Inventory remains one.
-        expect(find.text('Soon'), findsOneWidget);
+        expect(find.text('Inventory is coming soon'), findsNothing);
       },
     );
 

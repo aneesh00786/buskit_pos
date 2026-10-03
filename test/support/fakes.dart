@@ -16,6 +16,10 @@ import 'package:buskit_pos/core/storage/token_store.dart';
 import 'package:buskit_pos/features/barcode/camera_scanner.dart';
 import 'package:buskit_pos/features/cash_movements/data/cash_movement_service.dart';
 import 'package:buskit_pos/features/cash_movements/models/cash_movement.dart';
+import 'package:buskit_pos/features/inventory/data/inventory_service.dart';
+import 'package:buskit_pos/features/inventory/models/inventory_adjustment.dart';
+import 'package:buskit_pos/features/product_price/data/product_price_service.dart';
+import 'package:buskit_pos/features/product_price/models/price_change.dart';
 import 'package:buskit_pos/features/products/models/product_item.dart';
 import 'package:buskit_pos/features/receipt/data/printer_settings.dart';
 import 'package:buskit_pos/features/receipt/data/receipt_delivery.dart';
@@ -913,5 +917,134 @@ class FakeCashMovementService implements CashMovementService {
       shiftId: 1,
       createdAt: DateTime(2026, 1, 1),
     );
+  }
+}
+
+class AdjustCall {
+  AdjustCall(this.productVariationId, this.direction, this.quantity, this.reason, this.key);
+  final int productVariationId;
+  final AdjustmentDirection direction;
+  final String quantity;
+  final String reason;
+  final String key;
+}
+
+class FakeInventoryService implements InventoryService {
+  final List<AdjustCall> adjustCalls = [];
+  int historyCalls = 0;
+  List<InventoryAdjustment> history = const [];
+  Future<List<InventoryAdjustment>> Function(int? id)? onHistory;
+
+  /// Default: a successful adjustment computed from [stock].
+  int stock = 10;
+  Future<InventoryAdjustment?> Function(AdjustCall c)? onAdjust;
+
+  @override
+  Future<InventoryAdjustment?> adjust({
+    required int productVariationId,
+    required AdjustmentDirection direction,
+    required String quantity,
+    required String reason,
+    required String idempotencyKey,
+  }) async {
+    final c = AdjustCall(productVariationId, direction, quantity, reason, idempotencyKey);
+    adjustCalls.add(c);
+    if (onAdjust != null) return onAdjust!(c);
+    final q = int.parse(quantity);
+    final prev = stock;
+    stock = direction == AdjustmentDirection.increase ? prev + q : prev - q;
+    return InventoryAdjustment(
+      id: adjustCalls.length,
+      productVariationId: productVariationId,
+      direction: direction,
+      quantity: q,
+      previousQuantity: prev,
+      resultingQuantity: stock,
+      reason: reason,
+      createdAt: DateTime(2026, 1, 1),
+    );
+  }
+
+  @override
+  Future<List<InventoryAdjustment>> listHistory({int? productVariationId}) async {
+    historyCalls++;
+    if (onHistory != null) return onHistory!(productVariationId);
+    return history;
+  }
+}
+
+class PriceCall {
+  PriceCall(this.action, this.productId, this.price, this.expectedVersion, this.key, this.reason);
+  final String action; // 'set' | 'reset'
+  final int productId;
+  final String? price;
+  final int expectedVersion;
+  final String key;
+  final String? reason;
+}
+
+/// Default behaviour: a successful change against an in-memory price state.
+class FakeProductPriceService implements ProductPriceService {
+  FakeProductPriceService({this.price = 25, this.cataloguePrice = 25});
+  double price;
+  double cataloguePrice;
+  int version = 0;
+  final List<PriceCall> calls = [];
+  final List<PriceChange> changes = [];
+  int historyCalls = 0;
+  Future<ProductPriceState?> Function(PriceCall c)? onChange;
+  Future<ProductPriceState?> Function(int productId)? onHistory;
+
+  ProductPriceState _state(PriceChange? change) => ProductPriceState(
+    sellPrice: price,
+    cataloguePrice: cataloguePrice,
+    priceSource: price == cataloguePrice ? 'catalogue' : 'pos',
+    priceVersion: version,
+    change: change,
+    history: List.of(changes.reversed),
+  );
+
+  Future<ProductPriceState?> _apply(PriceCall c) async {
+    calls.add(c);
+    if (onChange != null) return onChange!(c);
+    final prev = price;
+    price = c.action == 'set' ? double.parse(c.price!) : cataloguePrice;
+    version++;
+    final change = PriceChange(
+      id: changes.length + 1,
+      action: c.action,
+      previousPrice: prev,
+      previousSource: 'pos',
+      newPrice: price,
+      newSource: c.action == 'set' ? 'pos' : 'catalogue',
+      reason: c.reason,
+      createdAt: DateTime(2026, 1, 1),
+    );
+    changes.add(change);
+    return _state(change);
+  }
+
+  @override
+  Future<ProductPriceState?> setPrice({
+    required int productId,
+    required String price,
+    required int expectedVersion,
+    required String idempotencyKey,
+    String? reason,
+  }) => _apply(PriceCall('set', productId, price, expectedVersion, idempotencyKey, reason));
+
+  @override
+  Future<ProductPriceState?> resetPrice({
+    required int productId,
+    required int expectedVersion,
+    required String idempotencyKey,
+    String? reason,
+  }) => _apply(PriceCall('reset', productId, null, expectedVersion, idempotencyKey, reason));
+
+  @override
+  Future<ProductPriceState?> history(int productId) async {
+    historyCalls++;
+    if (onHistory != null) return onHistory!(productId);
+    return _state(null);
   }
 }
