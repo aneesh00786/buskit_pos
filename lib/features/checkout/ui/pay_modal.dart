@@ -14,8 +14,12 @@ import '../../cart/state/cart_controller.dart';
 import '../../receipt/models/receipt_formatter.dart';
 import '../../receipt/state/receipt_services.dart';
 import '../../receipt/ui/receipt_actions.dart';
+import '../data/payment_terminal_service.dart';
 import '../models/payment.dart';
+import '../models/terminal_payment.dart';
 import '../state/payment_plan.dart';
+import 'qr_payment_dialog.dart';
+import 'terminal_payment_dialog.dart';
 
 /// Opens the payment screen for the open sale: a dialog on tablets, a tall
 /// bottom sheet on phones. It cannot be dismissed by tapping outside (that
@@ -95,7 +99,92 @@ class PayModal extends StatefulWidget {
 
 class _PayModalState extends State<PayModal> {
   PayMode _mode = PayMode.cash;
+
+  /// Tender modes this staff member may use (Phase C5). Mirrors the backend's
+  /// method -> permission map (services/pos/posPaymentPermissions.js): cash
+  /// needs payments.accept_cash, card payments.accept_card, other
+  /// payments.accept_other (generic, country-independent — migration 023).
+  /// Hidden only when the loaded permissions positively deny — the backend
+  /// still decides at completion.
+  List<PayMode> _availableModes(BuildContext context) {
+    final session = context.watch<SessionController>();
+    final cash = !session.isDenied('payments.accept_cash');
+    final card = !session.isDenied('payments.accept_card');
+    final other = !session.isDenied('payments.accept_other');
+    return [
+      if (cash) PayMode.cash,
+      if (card) PayMode.card,
+      if (other) PayMode.other,
+      if (cash && (card || other)) PayMode.split,
+    ];
+  }
   TenderMethod _secondary = TenderMethod.card;
+
+  /// Card-terminal integration (optional): present only when the app wires a
+  /// [PaymentTerminalService] and the server reports a provider with a
+  /// terminal configured for THIS register. Otherwise card stays
+  /// recorded-only, exactly as before.
+  PaymentTerminalService? _terminalService;
+  PaymentProviderInfo? _terminal;
+
+  /// UPI / QR provider (tendered as "other"), when the server offers one.
+  PaymentProviderInfo? _qr;
+  bool _providersRequested = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_providersRequested) return;
+    _providersRequested = true;
+    try {
+      _terminalService = Provider.of<PaymentTerminalService>(context, listen: false);
+    } on ProviderNotFoundException {
+      _terminalService = null;
+    }
+    final service = _terminalService;
+    if (service == null) return;
+    service.listProviders().then((providers) {
+      if (!mounted) return;
+      final usable = providers.where((p) => p.isUsableCardTerminal).toList();
+      final qr = providers.where((p) => p.isUsableQr).toList();
+      setState(() {
+        _terminal = usable.isEmpty ? null : usable.first;
+        _qr = qr.isEmpty ? null : qr.first;
+      });
+    }).catchError((Object _) {
+      // No provider list -> no terminal button; manual card still works.
+    });
+  }
+
+  Future<void> _payOnTerminal(CartController cart, int totalMilli) async {
+    final service = _terminalService;
+    final provider = _terminal;
+    final sale = cart.sale;
+    if (service == null || provider == null || sale == null) return;
+    final attempt = await showTerminalPayment(context, service: service, saleId: sale.id, provider: provider, amountMilli: totalMilli);
+    if (attempt == null || !mounted) return;
+    // The server re-verifies the captured attempt (sale, amount, method).
+    await cart.completeSale([PaymentLine(method: TenderMethod.card, amountMilli: totalMilli, paymentAttemptId: attempt.id)]);
+  }
+
+  Future<void> _payByQr(CartController cart, int totalMilli) async {
+    final service = _terminalService;
+    final provider = _qr;
+    final sale = cart.sale;
+    if (service == null || provider == null || sale == null) return;
+    final attempt = await showQrPayment(
+      context,
+      service: service,
+      saleId: sale.id,
+      provider: provider,
+      amountMilli: totalMilli,
+      currencyLabel: provider.currencies.length == 1 ? provider.currencies.first : '',
+    );
+    if (attempt == null || !mounted) return;
+    // QR is tendered as "other"; the server re-verifies the captured attempt.
+    await cart.completeSale([PaymentLine(method: TenderMethod.other, amountMilli: totalMilli, paymentAttemptId: attempt.id)]);
+  }
+
   final _tendered = TextEditingController();
   final _cashApplied = TextEditingController();
   final _cashReceived = TextEditingController();
@@ -160,6 +249,15 @@ class _PayModalState extends State<PayModal> {
 
   @override
   Widget build(BuildContext context) {
+    // Never sit on a tender this staff member may not use (Phase C5).
+    final available = _availableModes(context);
+    if (available.isNotEmpty && !available.contains(_mode)) _mode = available.first;
+    final sessionForTender = context.watch<SessionController>();
+    if (_secondary == TenderMethod.card && sessionForTender.isDenied('payments.accept_card')) {
+      _secondary = TenderMethod.other;
+    } else if (_secondary == TenderMethod.other && sessionForTender.isDenied('payments.accept_other')) {
+      _secondary = TenderMethod.card;
+    }
     final cart = context.watch<CartController>();
     final done = cart.completedSale;
     if (done != null) {
@@ -271,10 +369,27 @@ class _PayModalState extends State<PayModal> {
           ],
           _ModePicker(
             mode: _mode,
+            available: _availableModes(context),
             enabled: !busy,
             onChanged: (m) => setState(() => _mode = m),
           ),
           const SizedBox(height: PosTokens.s16),
+          if (_mode == PayMode.card && _terminal != null) ...[
+            _TerminalPayPanel(
+              provider: _terminal!,
+              enabled: !busy && total > 0,
+              onPressed: () => _payOnTerminal(cart, total),
+            ),
+            const SizedBox(height: PosTokens.s16),
+          ],
+          if (_mode == PayMode.other && _qr != null) ...[
+            _QrPayPanel(
+              provider: _qr!,
+              enabled: !busy && total > 0,
+              onPressed: () => _payByQr(cart, total),
+            ),
+            const SizedBox(height: PosTokens.s16),
+          ],
           ..._modeBody(total, plan, busy),
         ],
       ),
@@ -346,17 +461,19 @@ class _PayModalState extends State<PayModal> {
           ),
           const SizedBox(height: PosTokens.s8),
           SegmentedButton<TenderMethod>(
-            segments: const [
-              ButtonSegment(
-                value: TenderMethod.card,
-                label: Text('Card'),
-                icon: Icon(Icons.credit_card),
-              ),
-              ButtonSegment(
-                value: TenderMethod.other,
-                label: Text('Other'),
-                icon: Icon(Icons.more_horiz),
-              ),
+            segments: [
+              if (!context.watch<SessionController>().isDenied('payments.accept_card'))
+                const ButtonSegment(
+                  value: TenderMethod.card,
+                  label: Text('Card'),
+                  icon: Icon(Icons.credit_card),
+                ),
+              if (!context.watch<SessionController>().isDenied('payments.accept_other'))
+                const ButtonSegment(
+                  value: TenderMethod.other,
+                  label: Text('Other'),
+                  icon: Icon(Icons.more_horiz),
+                ),
             ],
             selected: {_secondary},
             onSelectionChanged: busy
@@ -488,10 +605,12 @@ class _AmountDue extends StatelessWidget {
 class _ModePicker extends StatelessWidget {
   const _ModePicker({
     required this.mode,
+    required this.available,
     required this.enabled,
     required this.onChanged,
   });
   final PayMode mode;
+  final List<PayMode> available;
   final bool enabled;
   final ValueChanged<PayMode> onChanged;
 
@@ -507,7 +626,7 @@ class _ModePicker extends StatelessWidget {
       spacing: PosTokens.s8,
       runSpacing: PosTokens.s8,
       children: [
-        for (final m in PayMode.values)
+        for (final m in available)
           ChoiceChip(
             label: Text(labels[m]!),
             selected: mode == m,
@@ -653,6 +772,56 @@ class _ChangeRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _TerminalPayPanel extends StatelessWidget {
+  const _TerminalPayPanel({required this.provider, required this.enabled, required this.onPressed});
+  final PaymentProviderInfo provider;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton.icon(
+          key: const Key('pay-on-terminal'),
+          onPressed: enabled ? onPressed : null,
+          icon: const Icon(Icons.point_of_sale),
+          label: Text('Pay on terminal (${provider.terminalName ?? provider.label})'),
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+        ),
+        const SizedBox(height: PosTokens.s8),
+        Text('Or record a card payment taken on another terminal:', style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
+class _QrPayPanel extends StatelessWidget {
+  const _QrPayPanel({required this.provider, required this.enabled, required this.onPressed});
+  final PaymentProviderInfo provider;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton.icon(
+          key: const Key('pay-by-qr'),
+          onPressed: enabled ? onPressed : null,
+          icon: const Icon(Icons.qr_code_2),
+          label: Text('UPI QR (${provider.label})'),
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+        ),
+        const SizedBox(height: PosTokens.s8),
+        Text('Or record another payment taken outside the POS:', style: Theme.of(context).textTheme.bodySmall),
+      ],
     );
   }
 }

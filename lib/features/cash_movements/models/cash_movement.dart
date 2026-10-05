@@ -1,9 +1,15 @@
 import '../../../core/utils/json_read.dart';
 import '../../../core/utils/server_time.dart';
 
-/// A single cash-drawer movement (`WITHDRAWAL` only today) — the server's
-/// immutable record from `POST /shifts/cash-withdrawal` or
-/// `GET /shifts/current/cash-movements`.
+/// Server `movement_type` values (pos_cash_movements.movement_type).
+class CashMovementType {
+  static const withdrawal = 'WITHDRAWAL';
+  static const deposit = 'DEPOSIT';
+}
+
+/// A single cash-drawer movement (`WITHDRAWAL` or `DEPOSIT`) — the server's
+/// immutable record from `POST /shifts/cash-withdrawal`,
+/// `POST /shifts/cash-deposit` or `GET /shifts/current/cash-movements`.
 class CashMovement {
   const CashMovement({
     required this.id,
@@ -11,15 +17,22 @@ class CashMovement {
     required this.reason,
     required this.status,
     required this.shiftId,
+    this.movementType = CashMovementType.withdrawal,
     this.createdAt,
   });
 
   final int id;
+
+  /// Defaults to WITHDRAWAL when absent — every Phase 17.3 row is one, and
+  /// the column default is the same.
+  final String movementType;
   final double amount;
   final String? reason;
   final String status;
   final int shiftId;
   final DateTime? createdAt;
+
+  bool get isDeposit => movementType == CashMovementType.deposit;
 
   static CashMovement? fromJson(Object? json) {
     final m = asMap(json);
@@ -37,12 +50,13 @@ class CashMovement {
       reason: asString(m['reason']),
       status: status,
       shiftId: shiftId,
+      movementType: asString(m['movement_type']) ?? CashMovementType.withdrawal,
       createdAt: parseServerTime(m['created_at']),
     );
   }
 }
 
-/// The current open shift's summary, as returned alongside its withdrawals
+/// The current open shift's summary, as returned alongside its movements
 /// by `GET /shifts/current/cash-movements` — `null` when no shift is open.
 class CurrentShiftSummary {
   const CurrentShiftSummary({
@@ -74,7 +88,7 @@ class CurrentShiftSummary {
 }
 
 /// `GET /shifts/current/cash-movements`'s full response: the shift (or
-/// `null` if none is open) plus its withdrawals, newest-first.
+/// `null` if none is open) plus its movements (both types), newest-first.
 class CurrentShiftCashMovements {
   const CurrentShiftCashMovements({required this.shift, required this.movements});
 

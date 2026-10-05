@@ -1,4 +1,7 @@
 import 'package:buskit_pos/core/network/api_exception.dart';
+import 'package:buskit_pos/core/storage/token_store.dart';
+import 'package:buskit_pos/features/auth/models/pos_auth_context.dart';
+import 'package:buskit_pos/features/auth/state/session_controller.dart';
 import 'package:buskit_pos/features/customers/data/customer_service.dart';
 import 'package:buskit_pos/features/customers/models/customer.dart';
 import 'package:buskit_pos/features/customers/models/customer_purchase.dart';
@@ -12,6 +15,7 @@ import 'package:provider/provider.dart';
 
 import '../../support/fake_customer_service.dart';
 import '../../support/fake_loyalty_service.dart';
+import '../../support/fakes.dart';
 
 const netDown = ApiException(
   kind: ApiErrorKind.network,
@@ -45,7 +49,23 @@ Future<CustomerListController> pumpCustomers(
   FakeLoyaltyService? loyaltyService,
   double width = 1000,
   double height = 700,
+  /// Null = no permission context loaded (nothing hidden — the backend
+  /// decides), as for every pre-C5 test here.
+  List<String>? permissions,
 }) async {
+  final auth = FakeAuthService();
+  if (permissions != null) {
+    auth.onAuthContext = (t) async => PosAuthContext(
+      staff: const StaffInfo(salesmanId: 'S1', role: StaffRole(id: 1, name: 'Role')),
+      permissions: permissions,
+    );
+  }
+  final session = SessionController(auth, MemoryTokenStore());
+  addTearDown(session.dispose);
+  if (permissions != null) {
+    await session.loginDevice('REG-1', 'secret');
+    await session.loginStaff('S1', '1234');
+  }
   final svc = service ?? FakeCustomerService();
   final controller = CustomerListController(
     svc,
@@ -56,8 +76,11 @@ Future<CustomerListController> pumpCustomers(
   addTearDown(tester.view.reset);
   addTearDown(controller.dispose);
   await tester.pumpWidget(
-    ChangeNotifierProvider<CustomerListController>.value(
-      value: controller,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<CustomerListController>.value(value: controller),
+        ChangeNotifierProvider<SessionController>.value(value: session),
+      ],
       child: const MaterialApp(
         home: Scaffold(body: SizedBox.expand(child: CustomersView())),
       ),
@@ -487,6 +510,25 @@ void main() {
   });
 
   group('edit', () {
+    testWidgets('Phase C5: Edit Customer is hidden without customers.edit; New customer stays with customers.create', (
+      tester,
+    ) async {
+      final svc = FakeCustomerService();
+      svc.onSearch = (_) async => page([customerJson(customerId: 'CUSTO1', fullname: 'Cashier View')]);
+      svc.onFindByCustomerId = (id) async => Customer.fromJson(customerJson(customerId: id, fullname: 'Cashier View'));
+      await pumpCustomers(tester, service: svc, width: 400, permissions: const ['customers.view', 'customers.create']);
+      expect(find.byTooltip('New customer'), findsOneWidget);
+      await tester.tap(find.text('Cashier View'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextButton, 'Edit Customer'), findsNothing);
+    });
+
+    testWidgets('Phase C5: New customer is hidden without customers.create', (tester) async {
+      await pumpCustomers(tester, permissions: const ['customers.view']);
+      expect(find.byTooltip('New customer'), findsNothing);
+      expect(find.text('New Customer'), findsNothing, reason: 'empty-state button too');
+    });
+
     testWidgets('editing a customer updates the detail and the list', (
       tester,
     ) async {

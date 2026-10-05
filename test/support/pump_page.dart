@@ -1,3 +1,4 @@
+import 'package:buskit_pos/features/checkout/data/payment_terminal_service.dart';
 import 'dart:convert';
 
 import 'package:buskit_pos/core/network/pos_api_client.dart';
@@ -68,6 +69,9 @@ PosApiClient defaultTestApiClient() => PosApiClient(
 
 /// Everything a test needs to drive the real [ProductsPage] with fakes.
 class PageHarness {
+  /// Optional card-terminal service (null = not wired, as in the existing tests).
+  PaymentTerminalService? terminal;
+
   PageHarness({bool withHeld = true, PosApiClient? client})
     : client = client ?? defaultTestApiClient() {
     products = FakeProductService();
@@ -138,6 +142,7 @@ Future<void> pumpProductsPage(
         Provider<ReceiptServices>.value(value: h.receipts.services),
         Provider<ProductService>.value(value: h.products),
         Provider<CameraScanner>.value(value: h.camera),
+        if (h.terminal != null) Provider<PaymentTerminalService>.value(value: h.terminal!),
         ChangeNotifierProvider.value(value: h.list),
         ChangeNotifierProvider.value(value: h.cart),
         if (h.held != null)
@@ -177,6 +182,7 @@ Future<void> pumpProductsPageRaw(
         Provider<ReceiptServices>.value(value: h.receipts.services),
         Provider<ProductService>.value(value: h.products),
         Provider<CameraScanner>.value(value: h.camera),
+        if (h.terminal != null) Provider<PaymentTerminalService>.value(value: h.terminal!),
         ChangeNotifierProvider.value(value: h.list),
         ChangeNotifierProvider.value(value: h.cart),
         if (h.held != null)

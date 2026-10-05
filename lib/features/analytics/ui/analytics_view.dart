@@ -92,6 +92,7 @@ class _AnalyticsViewState extends State<AnalyticsView> {
             ],
           ),
         ),
+        _RangeBar(controller: c),
         SizedBox(
           height: 4,
           child: c.status == AnalyticsStatus.loading
@@ -127,7 +128,7 @@ class _Body extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(PosTokens.s16),
           children: [
-            _TodaySalesCard(summary: s),
+            _TodaySalesCard(summary: s, custom: controller.hasCustomRange),
             const SizedBox(height: PosTokens.s16),
             _SectionCard(
               title: 'Sales by Payment Method',
@@ -146,38 +147,100 @@ class _Body extends StatelessWidget {
                       ],
                     ),
             ),
+            if (s.sales.refundCount > 0) ...[
+              const SizedBox(height: PosTokens.s16),
+              _SectionCard(
+                title: 'Refunds by Method',
+                icon: Icons.replay_circle_filled_outlined,
+                child: Column(
+                  children: [
+                    for (final r in s.refundPayouts)
+                      _StatRow(
+                        label: _methodLabel(r.method),
+                        trailing: '-${formatMoney(r.amount)}',
+                        subtitle: r.method == 'wallet' ? 'returned to customer wallets' : 'paid out',
+                      ),
+                    _StatRow(
+                      label: 'Total refunds',
+                      trailing: '-${formatMoney(s.sales.refundsTotal)}',
+                      subtitle:
+                          '${s.sales.refundCount} refund${s.sales.refundCount == 1 ? '' : 's'} issued today',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (!s.cashMovements.isEmpty) ...[
+              const SizedBox(height: PosTokens.s16),
+              _SectionCard(
+                title: 'Cash Drawer (not sales)',
+                icon: Icons.account_balance_wallet_outlined,
+                child: Column(
+                  children: [
+                    _StatRow(
+                      label: 'Cash deposits',
+                      trailing: formatMoney(s.cashMovements.deposits),
+                      subtitle: '${s.cashMovements.depositCount} deposit${s.cashMovements.depositCount == 1 ? '' : 's'}',
+                    ),
+                    _StatRow(
+                      label: 'Cash withdrawals',
+                      trailing: '-${formatMoney(s.cashMovements.withdrawals)}',
+                      subtitle: '${s.cashMovements.withdrawalCount} withdrawal${s.cashMovements.withdrawalCount == 1 ? '' : 's'}',
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: PosTokens.s16),
             _SectionCard(
-              title: 'Top Selling Products (7 days)',
+              title: controller.hasCustomRange
+                  ? 'Top Selling Products (selected period)'
+                  : 'Top Selling Products (7 days)',
               icon: Icons.trending_up,
               child: s.topProducts.isEmpty
-                  ? const _EmptyLine('No completed sales in the last 7 days.')
+                  ? _EmptyLine(
+                      controller.hasCustomRange
+                          ? 'No completed sales in this period.'
+                          : 'No completed sales in the last 7 days.',
+                    )
                   : Column(
                       children: [
+                        // Net of refunds (server figures); gross shown when
+                        // anything was refunded.
                         for (final p in s.topProducts)
                           _StatRow(
                             label:
                                 p.productName ?? 'Item ${p.productVariationId}',
-                            trailing: '${formatQty(p.quantitySold)} sold',
-                            subtitle: formatMoney(p.revenue),
+                            trailing: '${formatQty(p.displayQuantity)} sold',
+                            subtitle: p.refundedQuantity > 0
+                                ? '${formatMoney(p.displayRevenue)} · '
+                                      '${formatQty(p.refundedQuantity)} refunded of ${formatQty(p.quantitySold)}'
+                                : formatMoney(p.displayRevenue),
                           ),
                       ],
                     ),
             ),
             const SizedBox(height: PosTokens.s16),
             _SectionCard(
-              title: 'Staff Performance (today)',
+              title: controller.hasCustomRange
+                  ? 'Staff Performance (selected period)'
+                  : 'Staff Performance (today)',
               icon: Icons.groups_outlined,
               child: s.staffPerformance.isEmpty
-                  ? const _EmptyLine('No completed sales today yet.')
+                  ? _EmptyLine(
+                      controller.hasCustomRange
+                          ? 'No completed sales in this period.'
+                          : 'No completed sales today yet.',
+                    )
                   : Column(
                       children: [
                         for (final st in s.staffPerformance)
                           _StatRow(
                             label: st.fullname ?? st.salesmanId,
-                            trailing: formatMoney(st.salesTotal),
+                            trailing: formatMoney(st.displayTotal),
                             subtitle:
-                                '${st.transactionCount} transaction${st.transactionCount == 1 ? '' : 's'}',
+                                '${st.transactionCount} transaction${st.transactionCount == 1 ? '' : 's'}'
+                                '${st.refundedTotal > 0 ? ' · gross ${formatMoney(st.salesTotal)}, refunds −${formatMoney(st.refundedTotal)}' : ''}',
                           ),
                       ],
                     ),
@@ -200,12 +263,14 @@ class _Body extends StatelessWidget {
 String _methodLabel(String method) => switch (method) {
   'cash' => 'Cash',
   'card' => 'Card',
+  'wallet' => 'Wallet',
   _ => 'Other',
 };
 
 class _TodaySalesCard extends StatelessWidget {
-  const _TodaySalesCard({required this.summary});
+  const _TodaySalesCard({required this.summary, this.custom = false});
   final AnalyticsSummary summary;
+  final bool custom;
 
   @override
   Widget build(BuildContext context) {
@@ -226,17 +291,25 @@ class _TodaySalesCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Today's Sales",
-                  style: TextStyle(color: Colors.white70),
+                Text(
+                  custom ? 'Net Sales' : "Today's Net Sales",
+                  style: const TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: PosTokens.s4),
                 Text(
-                  formatMoney(summary.todaySalesTotal),
+                  formatMoney(summary.sales.netSales),
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                   ),
+                ),
+                const SizedBox(height: PosTokens.s4),
+                // Server figures only: gross of today's completed sales and
+                // refunds issued today (net = gross - refunds, server-side).
+                Text(
+                  'Gross ${formatMoney(summary.sales.grossSales)} · '
+                  'Refunds ${summary.sales.refundsTotal == 0 ? formatMoney(0) : '-${formatMoney(summary.sales.refundsTotal)}'}',
+                  style: const TextStyle(color: Colors.white70),
                 ),
               ],
             ),
@@ -249,7 +322,7 @@ class _TodaySalesCard extends StatelessWidget {
                 style: TextStyle(color: Colors.white70),
               ),
               Text(
-                '${summary.todayTransactionCount}',
+                '${summary.sales.completedCount}',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
@@ -359,6 +432,80 @@ class _EmptyLine extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Text(text, style: Theme.of(context).textTheme.bodySmall),
+    );
+  }
+}
+
+/// C4.x: which business dates are shown (the store's today by default) and a
+/// date-range picker. Dates are the store's business dates; the server turns
+/// them into its own time window.
+class _RangeBar extends StatelessWidget {
+  const _RangeBar({required this.controller});
+  final AnalyticsController controller;
+
+  static String _iso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  static DateTime _parse(String s) => DateTime.parse(s);
+
+  Future<void> _pick(BuildContext context) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final initial = controller.hasCustomRange
+        ? DateTimeRange(start: _parse(controller.from!), end: _parse(controller.to!))
+        : DateTimeRange(start: today, end: today);
+    final picked = await showDateRangePicker(
+      context: context,
+      // The backend allows ranges of up to 366 days.
+      firstDate: today.subtract(const Duration(days: 365)),
+      // The store's zone may already be a day ahead of this device.
+      lastDate: today.add(const Duration(days: 1)),
+      initialDateRange: initial,
+      helpText: 'Select dates',
+    );
+    if (picked == null) return;
+    await controller.setRange(_iso(picked.start), _iso(picked.end));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = controller.summary;
+    final custom = controller.hasCustomRange;
+    final label = custom
+        ? (controller.from == controller.to
+              ? controller.from!
+              : '${controller.from} – ${controller.to}')
+        : 'Today';
+    final zone = s?.timezone;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              zone == null ? label : '$label · $zone',
+              key: const Key('analytics-range-label'),
+              style: Theme.of(context).textTheme.bodySmall,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (custom)
+            TextButton(
+              key: const Key('analytics-range-today'),
+              onPressed: controller.status == AnalyticsStatus.loading
+                  ? null
+                  : controller.clearRange,
+              child: const Text('Today'),
+            ),
+          OutlinedButton.icon(
+            key: const Key('analytics-range-pick'),
+            onPressed: controller.status == AnalyticsStatus.loading
+                ? null
+                : () => _pick(context),
+            icon: const Icon(Icons.date_range, size: 18),
+            label: const Text('Dates'),
+          ),
+        ],
+      ),
     );
   }
 }

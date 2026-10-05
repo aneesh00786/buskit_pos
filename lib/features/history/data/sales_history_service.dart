@@ -1,6 +1,7 @@
 import '../../../core/network/pos_api_client.dart';
 import '../../../core/utils/json_read.dart';
 import '../../checkout/models/payment.dart';
+import '../models/partial_refund.dart';
 import '../models/sale_history_entry.dart';
 
 abstract class SalesHistoryService {
@@ -12,7 +13,9 @@ abstract class SalesHistoryService {
 
   /// `GET /sales/:id` — items, payments and totals for one completed sale
   /// (no product names; the completed view never carries them).
-  Future<CompletedSale?> getDetail(int id);
+  /// With [refresh], the server first reconciles the sale's pending provider
+  /// refunds (`GET /sales/:id?refresh=true`).
+  Future<CompletedSale?> getDetail(int id, {bool refresh = false});
 
   /// `POST /sales/:id/refund {idempotency_key}` — FULL-SALE REFUND ONLY.
   /// Requires the `payments.refund` permission server-side; the backend
@@ -22,6 +25,34 @@ abstract class SalesHistoryService {
     required int saleId,
     required String idempotencyKey,
   });
+
+  /// `POST /sales/:id/refunds/preview` — the server's calculation for a
+  /// quantity-based partial refund (Phase 17.8). Writes nothing.
+  Future<RefundPreview?> previewRefund({
+    required int saleId,
+    required List<RefundRequestLine> lines,
+    String? refundMethod,
+  });
+
+  /// `POST /sales/:id/refunds` — records a partial refund. The server
+  /// rejects it (409) if its amount no longer equals [expectedRefundAmount]
+  /// (the previewed figure the cashier confirmed).
+  Future<PartialRefundResult> refundItems({
+    required int saleId,
+    required List<RefundRequestLine> lines,
+    required double expectedRefundAmount,
+    required String idempotencyKey,
+    String? refundMethod,
+    String? reason,
+  });
+}
+
+/// `POST /sales/:id/refunds`'s response: the recorded refund and the sale as
+/// the server now reports it.
+class PartialRefundResult {
+  const PartialRefundResult({this.refund, this.sale});
+  final PartialRefund? refund;
+  final CompletedSale? sale;
 }
 
 class ApiSalesHistoryService implements SalesHistoryService {
@@ -38,8 +69,8 @@ class ApiSalesHistoryService implements SalesHistoryService {
   }
 
   @override
-  Future<CompletedSale?> getDetail(int id) async {
-    final data = await _client.get('/sales/$id');
+  Future<CompletedSale?> getDetail(int id, {bool refresh = false}) async {
+    final data = await _client.get('/sales/$id', query: refresh ? const {'refresh': 'true'} : null);
     return CompletedSale.fromJson(data);
   }
 
@@ -53,5 +84,47 @@ class ApiSalesHistoryService implements SalesHistoryService {
       body: {'idempotency_key': idempotencyKey},
     );
     return CompletedSale.fromJson(data);
+  }
+
+  @override
+  Future<RefundPreview?> previewRefund({
+    required int saleId,
+    required List<RefundRequestLine> lines,
+    String? refundMethod,
+  }) async {
+    final data = await _client.post(
+      '/sales/$saleId/refunds/preview',
+      body: {
+        'items': [for (final l in lines) l.toJson()],
+        'refund_method': ?refundMethod,
+      },
+    );
+    return RefundPreview.fromJson(data);
+  }
+
+  @override
+  Future<PartialRefundResult> refundItems({
+    required int saleId,
+    required List<RefundRequestLine> lines,
+    required double expectedRefundAmount,
+    required String idempotencyKey,
+    String? refundMethod,
+    String? reason,
+  }) async {
+    final data = await _client.post(
+      '/sales/$saleId/refunds',
+      body: {
+        'items': [for (final l in lines) l.toJson()],
+        'expected_refund_amount': expectedRefundAmount,
+        'idempotency_key': idempotencyKey,
+        'refund_method': ?refundMethod,
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      },
+    );
+    final m = asMap(data);
+    return PartialRefundResult(
+      refund: PartialRefund.fromJson(m?['refund']),
+      sale: CompletedSale.fromJson(m?['sale']),
+    );
   }
 }

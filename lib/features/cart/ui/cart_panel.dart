@@ -346,6 +346,11 @@ class _PromotionRow extends StatelessWidget {
     final editable = cart.canChoosePromotion;
 
     if (promo == null) {
+      // Phase C5: hidden only when the loaded permissions positively lack
+      // promotions.apply (the backend decides either way).
+      if (context.watch<SessionController>().isDenied('promotions.apply')) {
+        return const SizedBox.shrink();
+      }
       return Padding(
         padding: const EdgeInsets.only(bottom: PosTokens.s8),
         child: Align(
@@ -515,6 +520,10 @@ class _LoyaltyRow extends StatelessWidget {
 
     if (!hasRedemption && !hasTierDiscount && !warning) {
       if (!editable) return const SizedBox.shrink();
+      // Phase C5: no redemption permission at all -> nothing to offer.
+      if (context.watch<SessionController>().isDeniedAll(const ['loyalty.redeem_points', 'loyalty.redeem_wallet'])) {
+        return const SizedBox.shrink();
+      }
       return Padding(
         padding: const EdgeInsets.only(bottom: PosTokens.s8),
         child: Align(
@@ -705,7 +714,11 @@ class _Actions extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: disabled ? null : () => _hold(context),
+                  // Phase C5: disabled (not hidden, to keep the Hold/Pay row
+                  // stable) when the loaded permissions lack sales.hold.
+                  onPressed: disabled || context.watch<SessionController>().isDenied('sales.hold')
+                      ? null
+                      : () => _hold(context),
                   icon: const Icon(Icons.pause_circle_outline),
                   label: const Text('Hold sale'),
                   // A red, filled-looking Hold (kept an OutlinedButton so the

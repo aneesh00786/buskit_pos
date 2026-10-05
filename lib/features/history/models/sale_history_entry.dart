@@ -1,5 +1,6 @@
 import '../../../core/utils/json_read.dart';
 import '../../../core/utils/server_time.dart';
+import 'partial_refund.dart';
 
 /// One row of `GET /sales?status=completed` — the backend returns raw
 /// `pos_sales` columns (no items, no payments), so only the fields useful for
@@ -21,6 +22,7 @@ class SaleHistoryEntry {
     this.grandTotal,
     this.createdAt,
     this.completedAt,
+    this.refundStatus = SaleRefundStatus.none,
   });
 
   final int id;
@@ -36,6 +38,9 @@ class SaleHistoryEntry {
   final double? grandTotal;
   final DateTime? createdAt;
   final DateTime? completedAt;
+
+  /// Phase 17.8 list badge ('none' when the server omits it).
+  final SaleRefundStatus refundStatus;
 
   String get displayNumber =>
       (saleNumber != null && saleNumber!.isNotEmpty) ? saleNumber! : '#$id';
@@ -64,6 +69,7 @@ class SaleHistoryEntry {
       grandTotal: asDouble(m['grand_total']),
       createdAt: parseServerTime(m['created_at']),
       completedAt: parseServerTime(m['completed_at']),
+      refundStatus: SaleRefundStatus.fromWire(asString(m['refund_status'])),
     );
   }
 }

@@ -367,7 +367,7 @@ void main() {
         await pumpProductsPage(tester, h, width: 1800, height: 900);
         expect(find.byType(SalesSummaryPanel), findsOneWidget);
         for (final title in [
-          "Today's sales",
+          "Today's net sales",
           'Top items',
           'Staff performance',
           'Sales trend',

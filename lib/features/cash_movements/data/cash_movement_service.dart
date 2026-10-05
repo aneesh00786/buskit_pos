@@ -8,6 +8,12 @@ abstract class CashMovementService {
     required String idempotencyKey,
   });
 
+  Future<CashMovement?> deposit({
+    required String amount,
+    String? reason,
+    required String idempotencyKey,
+  });
+
   Future<CurrentShiftCashMovements> listCurrentShift();
 }
 
@@ -23,6 +29,23 @@ class ApiCashMovementService implements CashMovementService {
   }) async {
     final data = await _client.post(
       '/shifts/cash-withdrawal',
+      body: {
+        'amount': amount,
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+        'idempotency_key': idempotencyKey,
+      },
+    );
+    return CashMovement.fromJson(data);
+  }
+
+  @override
+  Future<CashMovement?> deposit({
+    required String amount,
+    String? reason,
+    required String idempotencyKey,
+  }) async {
+    final data = await _client.post(
+      '/shifts/cash-deposit',
       body: {
         'amount': amount,
         if (reason != null && reason.isNotEmpty) 'reason': reason,

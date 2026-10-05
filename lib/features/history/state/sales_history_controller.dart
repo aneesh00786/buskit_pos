@@ -7,6 +7,7 @@ import '../../../core/utils/uuid.dart';
 import '../../checkout/models/payment.dart';
 import '../../products/data/product_service.dart';
 import '../data/sales_history_service.dart';
+import '../models/partial_refund.dart';
 import '../models/sale_history_entry.dart';
 
 enum HistoryListStatus { idle, loading, loaded, empty, error }
@@ -64,6 +65,16 @@ class SalesHistoryController extends ChangeNotifier {
   int? _refundAttemptSaleId;
   String? _refundAttemptKey;
 
+  // Partial refunds (Phase 17.8). Same key-per-attempt rule, but the
+  // request body varies, so the fingerprint is sale + lines + method +
+  // reason + the confirmed (server-previewed) amount: an identical retry
+  // reuses the key, any change gets a fresh one.
+  bool _previewing = false;
+  ApiException? _previewError;
+  String? _partialAttemptFingerprint;
+  String? _partialAttemptKey;
+  PartialRefund? _lastPartialRefund;
+
   HistoryListStatus get status => _status;
   ApiException? get error => _error;
   bool get isLoading => _loading;
@@ -80,6 +91,12 @@ class SalesHistoryController extends ChangeNotifier {
 
   bool get isRefunding => _refundStatus == RefundStatus.refunding;
   ApiException? get refundError => _refundError;
+
+  bool get isPreviewing => _previewing;
+  ApiException? get previewError => _previewError;
+
+  /// The refund recorded by the last successful [refundItems] call.
+  PartialRefund? get lastPartialRefund => _lastPartialRefund;
 
   /// Every cashier (`salesman_id`) seen in the currently loaded list, sorted —
   /// the filter dropdown's options. Only as complete as the loaded list.
@@ -237,6 +254,28 @@ class SalesHistoryController extends ChangeNotifier {
     }
   }
 
+  bool _providerRefreshing = false;
+  bool get isRefreshingProviderRefunds => _providerRefreshing;
+
+  /// Asks the server to reconcile the open sale's pending provider refunds
+  /// (e.g. a Razorpay UPI refund) and shows the result. Errors keep the
+  /// current view.
+  Future<void> refreshProviderRefunds() async {
+    final id = _detailId;
+    if (id == null || _providerRefreshing) return;
+    _providerRefreshing = true;
+    _notify();
+    try {
+      final sale = await _history.getDetail(id, refresh: true);
+      if (!_disposed && _detailId == id && sale != null) _detail = sale;
+    } on ApiException {
+      // Leave the current detail in place; the cashier can try again.
+    } finally {
+      _providerRefreshing = false;
+      _notify();
+    }
+  }
+
   /// Best-effort: a product renamed or removed since the sale falls back to
   /// "Item {id}" (the same fallback `ReceiptFormatter` uses), never an error.
   Future<void> _resolveNames(CompletedSale sale, int gen) async {
@@ -309,6 +348,7 @@ class SalesHistoryController extends ChangeNotifier {
       _refundAttemptSaleId = null;
       _refundAttemptKey = null;
       _notify();
+      await _refetchAfterRefund(saleId);
       return true;
     } on ApiException catch (e) {
       _refundStatus = RefundStatus.idle;
@@ -316,6 +356,116 @@ class SalesHistoryController extends ChangeNotifier {
       _notify();
       return false;
     }
+  }
+
+  /// Asks the server to calculate a partial refund. Returns null (with
+  /// [previewError] set) on failure. The preview is display-only — the
+  /// client never computes or trusts its own refund totals.
+  Future<RefundPreview?> previewRefund(
+    int saleId,
+    List<RefundRequestLine> lines, {
+    String? refundMethod,
+  }) async {
+    if (_previewing) return null;
+    _previewing = true;
+    _previewError = null;
+    _notify();
+    try {
+      final preview = await _history.previewRefund(
+        saleId: saleId,
+        lines: lines,
+        refundMethod: refundMethod,
+      );
+      _previewing = false;
+      _notify();
+      return preview;
+    } on ApiException catch (e) {
+      _previewing = false;
+      _previewError = e;
+      _notify();
+      return null;
+    }
+  }
+
+  void clearPreviewError() {
+    if (_previewError == null) return;
+    _previewError = null;
+    _notify();
+  }
+
+  /// Records a partial refund for [saleId] (`POST /sales/:id/refunds`),
+  /// sending the previewed [expectedRefundAmount] the cashier confirmed.
+  /// On success the sale is RE-FETCHED from the server (never patched
+  /// locally) and the list is refreshed for its refund badge. Shares
+  /// [isRefunding] with the whole-sale refund: only one refund in flight.
+  Future<bool> refundItems(
+    int saleId,
+    List<RefundRequestLine> lines, {
+    required double expectedRefundAmount,
+    String? refundMethod,
+    String? reason,
+  }) async {
+    if (_refundStatus == RefundStatus.refunding) return false;
+    final sorted = [...lines]..sort((a, b) => a.saleItemId.compareTo(b.saleItemId));
+    final fingerprint = [
+      saleId,
+      sorted.map((l) => l.canonical).join(','),
+      refundMethod ?? '',
+      reason?.trim() ?? '',
+      expectedRefundAmount,
+    ].join('|');
+    if (_partialAttemptFingerprint != fingerprint) {
+      _partialAttemptFingerprint = fingerprint;
+      _partialAttemptKey = generateUuidV4();
+    }
+    final key = _partialAttemptKey!;
+
+    _refundStatus = RefundStatus.refunding;
+    _refundError = null;
+    _notify();
+    try {
+      final result = await _history.refundItems(
+        saleId: saleId,
+        lines: lines,
+        expectedRefundAmount: expectedRefundAmount,
+        idempotencyKey: key,
+        refundMethod: refundMethod,
+        reason: reason,
+      );
+      _lastPartialRefund = result.refund;
+      // This attempt is closed: an identical later refund is a NEW request.
+      _partialAttemptFingerprint = null;
+      _partialAttemptKey = null;
+      if (result.sale != null && _detailId == saleId) _detail = result.sale;
+      _refundStatus = RefundStatus.idle;
+      _notify();
+      await _refetchAfterRefund(saleId);
+      return true;
+    } on ApiException catch (e) {
+      _refundStatus = RefundStatus.idle;
+      _refundError = e;
+      _notify();
+      return false;
+    }
+  }
+
+  void clearLastPartialRefund() {
+    _lastPartialRefund = null;
+  }
+
+  /// Authoritative re-read after a refund: the sale detail and the list
+  /// (refund badge). A failure here keeps what the refund response returned.
+  Future<void> _refetchAfterRefund(int saleId) async {
+    try {
+      final fresh = await _history.getDetail(saleId);
+      if (fresh != null && _detailId == saleId && !_disposed) {
+        _detail = fresh;
+        _notify();
+      }
+    } on ApiException {
+      // keep the refund response's sale view
+    }
+    unawaited(refresh());
   }
 
   void _notify() {

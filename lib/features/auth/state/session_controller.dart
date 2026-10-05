@@ -60,6 +60,13 @@ class SessionController extends ChangeNotifier {
   bool isDenied(String permission) =>
       _authContext != null && !permissions.hasPermission(permission);
 
+  /// True only when the loaded context positively lacks EVERY one of
+  /// [permissions] — for screens the backend opens with any one of several
+  /// (e.g. analytics: any reports.* permission). Same "never hide on
+  /// missing data" rule as [isDenied].
+  bool isDeniedAll(List<String> permissions) =>
+      _authContext != null && permissions.every(isDenied);
+
   /// Token used for browsing and cart calls: the staff token once signed in.
   String? get activeToken => _staffToken ?? _deviceToken;
 
@@ -179,11 +186,12 @@ class SessionController extends ChangeNotifier {
   }
 
   /// Staff sign-out: back to the PIN screen, device stays registered.
-  void logoutStaff() {
+  /// [notice] is shown on the sign-in screen (e.g. after closing the shift).
+  void logoutStaff({String? notice}) {
     _staffToken = null;
     _salesmanId = null;
     _error = null;
-    _notice = null;
+    _notice = notice;
     _authContext = null;
     _authContextError = null;
     _phase = SessionPhase.staffLogin;

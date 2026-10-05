@@ -82,6 +82,7 @@ class ProductItem {
     this.brandName,
     this.barcode,
     this.unitType,
+    this.sellingMode = 'PIECE',
     this.imageUrl,
     this.category,
     this.currentStock,
@@ -96,7 +97,22 @@ class ProductItem {
   final String? productCode;
   final String? brandName;
   final String? barcode;
+  /// Descriptive pack-size label ("100 Grm", "250 ML") — never decides
+  /// whether the product can be sold.
   final String? unitType;
+
+  /// Server-decided POS selling mode: PIECE, WEIGHT or REVIEW. Older servers
+  /// don't send it, which means PIECE. Only PIECE can be sold in this app
+  /// (WEIGHT waits for the weight-selling phase); the server enforces it.
+  final String sellingMode;
+  bool get isPosSellable => sellingMode == 'PIECE';
+
+  /// The reason a non-PIECE product can't be added (null when it can).
+  String? get notSellableMessage => isPosSellable
+      ? null
+      : sellingMode == 'WEIGHT'
+      ? 'This product is sold by weight, which the POS does not support yet.'
+      : 'This product is not configured for POS sale.';
   final String? imageUrl;
   final CategoryRef? category;
 
@@ -122,6 +138,7 @@ class ProductItem {
       brandName: asString(m['brandname']),
       barcode: asString(m['barcode']),
       unitType: asString(m['unit_type']),
+      sellingMode: (asString(m['selling_mode']) ?? 'PIECE').toUpperCase(),
       imageUrl: _cleanUrl(asString(m['image_url'])),
       category: CategoryRef.fromJson(m['category']),
       currentStock: asDouble(asMap(m['stock'])?['current_stock']),

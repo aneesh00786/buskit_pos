@@ -94,6 +94,7 @@ class PosSidebar extends StatelessWidget {
     this.onOpenSettings,
     this.onHelp,
     this.onSignOut,
+    this.onCloseShift,
     this.active = PosSection.sales,
   });
 
@@ -114,6 +115,9 @@ class PosSidebar extends StatelessWidget {
   final VoidCallback? onOpenSettings;
   final VoidCallback? onHelp;
   final VoidCallback? onSignOut;
+
+  /// Opens Shift Close; the tile is hidden when null.
+  final VoidCallback? onCloseShift;
   final PosSection active;
 
   static const double expandedWidth = 232;
@@ -184,6 +188,13 @@ class PosSidebar extends StatelessWidget {
                       collapsed: collapsed,
                       onTap: onHelp,
                     ),
+                    if (onCloseShift != null)
+                      _FooterTile(
+                        icon: Icons.lock_clock,
+                        label: 'Close shift',
+                        collapsed: collapsed,
+                        onTap: onCloseShift,
+                      ),
                     _FooterTile(
                       icon: Icons.logout,
                       label: 'Sign out',

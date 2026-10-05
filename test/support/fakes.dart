@@ -894,11 +894,28 @@ class FakeCashMovementService implements CashMovementService {
   onWithdraw;
   final List<String> withdrawKeys = [];
 
+  Future<CashMovement?> Function(String amount, String? reason, String key)?
+  onDeposit;
+  final List<String> depositKeys = [];
+
+  /// Movements this fake "recorded" — like the backend, a later list call
+  /// returns them newest-first ahead of [listResult]'s own movements.
+  final List<CashMovement> created = [];
+
   @override
   Future<CurrentShiftCashMovements> listCurrentShift() async {
     listCalls++;
     if (onList != null) return onList!();
-    return listResult;
+    if (created.isEmpty) return listResult;
+    return CurrentShiftCashMovements(
+      shift: listResult.shift,
+      movements: [...created.reversed, ...listResult.movements],
+    );
+  }
+
+  CashMovement _record(CashMovement? m) {
+    if (m != null) created.add(m);
+    return m!;
   }
 
   @override
@@ -908,14 +925,44 @@ class FakeCashMovementService implements CashMovementService {
     required String idempotencyKey,
   }) async {
     withdrawKeys.add(idempotencyKey);
-    if (onWithdraw != null) return onWithdraw!(amount, reason, idempotencyKey);
-    return CashMovement(
-      id: withdrawKeys.length,
-      amount: double.parse(amount),
-      reason: reason,
-      status: 'completed',
-      shiftId: 1,
-      createdAt: DateTime(2026, 1, 1),
+    if (onWithdraw != null) {
+      final m = await onWithdraw!(amount, reason, idempotencyKey);
+      return m == null ? null : _record(m);
+    }
+    return _record(
+      CashMovement(
+        id: 1000 + withdrawKeys.length,
+        amount: double.parse(amount),
+        reason: reason,
+        status: 'completed',
+        shiftId: 1,
+        movementType: CashMovementType.withdrawal,
+        createdAt: DateTime(2026, 1, 1),
+      ),
+    );
+  }
+
+  @override
+  Future<CashMovement?> deposit({
+    required String amount,
+    String? reason,
+    required String idempotencyKey,
+  }) async {
+    depositKeys.add(idempotencyKey);
+    if (onDeposit != null) {
+      final m = await onDeposit!(amount, reason, idempotencyKey);
+      return m == null ? null : _record(m);
+    }
+    return _record(
+      CashMovement(
+        id: 2000 + depositKeys.length,
+        amount: double.parse(amount),
+        reason: reason,
+        status: 'completed',
+        shiftId: 1,
+        movementType: CashMovementType.deposit,
+        createdAt: DateTime(2026, 1, 1),
+      ),
     );
   }
 }

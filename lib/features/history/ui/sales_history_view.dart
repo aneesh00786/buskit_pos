@@ -16,8 +16,11 @@ import '../../products/data/product_service.dart';
 import '../../receipt/models/receipt_formatter.dart';
 import '../../receipt/ui/receipt_actions.dart';
 import '../data/sales_history_service.dart';
+import '../models/partial_refund.dart';
+import '../models/provider_refund.dart';
 import '../models/sale_history_entry.dart';
 import '../state/sales_history_controller.dart';
+import 'partial_refund_view.dart';
 
 /// Opens the completed-sales history: a wide dialog (list + detail
 /// side-by-side) on tablets, a tall bottom sheet (list, pushing to detail) on
@@ -371,7 +374,11 @@ class _SaleCard extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: '${sale.displayNumber}, ${lines.join(', ')}',
+      label: [
+        sale.displayNumber,
+        ?sale.refundStatus.label,
+        ...lines,
+      ].join(', '),
       child: Card(
         margin: EdgeInsets.zero,
         color: selected ? t.surfaceMuted : null,
@@ -393,6 +400,11 @@ class _SaleCard extends StatelessWidget {
                           sale.displayNumber,
                           style: theme.textTheme.titleMedium,
                         ),
+                        if (sale.refundStatus != SaleRefundStatus.none)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: RefundStatusBadge(status: sale.refundStatus),
+                          ),
                         for (final l in lines)
                           Text(l, style: theme.textTheme.bodySmall),
                       ],
@@ -474,7 +486,14 @@ class _DetailBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(PosTokens.s16),
       children: [
-        Text(sale.displayNumber, style: Theme.of(context).textTheme.titleLarge),
+        Wrap(
+          spacing: PosTokens.s8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(sale.displayNumber, style: Theme.of(context).textTheme.titleLarge),
+            RefundStatusBadge(status: sale.refundStatus),
+          ],
+        ),
         if (sale.completedAt != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -509,6 +528,13 @@ class _DetailBody extends StatelessWidget {
                         '${line.quantity} × ${formatMoney(line.unitPrice)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                      if (sale.refundedQuantity(line) > 0)
+                        Text(
+                          'Refunded ${sale.refundedQuantity(line)} of ${line.quantity}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -531,7 +557,7 @@ class _DetailBody extends StatelessWidget {
             formatMoney(p.amount),
           ),
         const SizedBox(height: PosTokens.s16),
-        _RefundSection(sale: sale),
+        _RefundSection(sale: sale, names: h.detailNames),
         const SizedBox(height: PosTokens.s16),
         ReceiptActions(receipt: receipt),
       ],
@@ -539,87 +565,196 @@ class _DetailBody extends StatelessWidget {
   }
 }
 
-/// FULL-SALE REFUND ONLY — no partial/quantity UI exists here by design.
-/// Visibility (hiding the button once already refunded, or when the sale
-/// isn't completed) is a convenience, NOT authorization: the backend is the
-/// only thing that ever decides whether a refund is actually allowed, and a
-/// 403 here is handled exactly like any other API failure would be if
-/// someone bypassed this button entirely.
-class _RefundSection extends StatelessWidget {
-  const _RefundSection({required this.sale});
+/// Refund actions and history. Whole-sale refund (17.1) is offered only
+/// while nothing has been refunded yet (D8); "Refund items" (17.8) stays
+/// available until every line is used up. Visibility is a convenience, NOT
+/// authorization: the backend is the only thing that ever decides whether a
+/// refund is actually allowed, and a 403 here is handled exactly like any
+/// other API failure.
+/// Money returned through the payment provider (e.g. Razorpay UPI): the
+/// provider's status per refund, and a status check while any is pending.
+class _ProviderRefundsBox extends StatelessWidget {
+  const _ProviderRefundsBox({required this.sale});
   final CompletedSale sale;
 
   @override
   Widget build(BuildContext context) {
-    final refund = sale.refund;
-    if (refund != null) {
-      return Container(
-        padding: const EdgeInsets.all(PosTokens.s12),
-        decoration: BoxDecoration(
-          color: PosTokens.of(context).surfaceMuted,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.replay_circle_filled_outlined),
-            const SizedBox(width: PosTokens.s8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Refunded ${formatMoney(refund.refundAmount)}',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  Text(
-                    [
-                      'by ${refund.refundedBy}',
-                      if (refund.refundedAt != null)
-                        formatTimestamp(refund.refundedAt!),
-                    ].join(' · '),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+    final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      key: const Key('provider-refunds'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Refunds to the original payment', style: text.titleSmall),
+        const SizedBox(height: PosTokens.s8),
+        for (final r in sale.providerRefunds)
+          Padding(
+            padding: const EdgeInsets.only(bottom: PosTokens.s4),
+            child: Row(
+              children: [
+                Icon(
+                  switch (r.status) {
+                    ProviderRefundStatus.succeeded => Icons.check_circle,
+                    ProviderRefundStatus.failed => Icons.error,
+                    _ => Icons.schedule,
+                  },
+                  size: 18,
+                  color: r.status == ProviderRefundStatus.failed ? scheme.error : null,
+                ),
+                const SizedBox(width: PosTokens.s8),
+                Expanded(child: Text('${r.providerLabel} · ${formatMoney(r.amount)} — ${r.statusText}')),
+              ],
+            ),
+          ),
+        if (sale.hasPendingProviderRefunds)
+          Consumer<SalesHistoryController>(
+            builder: (context, h, _) => Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('check-provider-refunds'),
+                onPressed: h.isRefreshingProviderRefunds ? null : h.refreshProviderRefunds,
+                icon: const Icon(Icons.refresh),
+                label: Text(h.isRefreshingProviderRefunds ? 'Checking…' : 'Check refund status'),
               ),
             ),
-          ],
+          ),
+      ],
+    );
+  }
+}
+
+class _RefundSection extends StatelessWidget {
+  const _RefundSection({required this.sale, required this.names});
+  final CompletedSale sale;
+  final Map<int, String> names;
+
+  @override
+  Widget build(BuildContext context) {
+    final refund = sale.refund;
+    final status = sale.refundStatus;
+    final children = <Widget>[];
+
+    if (refund != null) {
+      children.add(
+        _RefundedBox(
+          title: 'Refunded ${formatMoney(refund.refundAmount)}',
+          detail: [
+            'by ${refund.refundedBy}',
+            if (refund.refundedAt != null) formatTimestamp(refund.refundedAt!),
+          ].join(' · '),
+        ),
+      );
+    } else if (status == SaleRefundStatus.full) {
+      children.add(
+        _RefundedBox(
+          title: 'Fully refunded ${formatMoney(sale.refundedTotal)}',
+          detail: '${sale.refunds.length} refund${sale.refunds.length == 1 ? '' : 's'}',
+        ),
+      );
+    }
+    if (sale.refunds.isNotEmpty) {
+      if (children.isNotEmpty) children.add(const SizedBox(height: PosTokens.s12));
+      children.add(PartialRefundHistory(sale: sale, names: names));
+    }
+    if (sale.providerRefunds.isNotEmpty) {
+      if (children.isNotEmpty) children.add(const SizedBox(height: PosTokens.s12));
+      children.add(_ProviderRefundsBox(sale: sale));
+    }
+
+    // UI convenience only — SessionController.isDenied hides the actions
+    // only when we POSITIVELY know payments.refund is absent (a loaded
+    // context that doesn't grant it). If the context hasn't loaded yet or
+    // its fetch failed, they stay visible and the backend's own 403 is what
+    // actually decides — never hide on missing data alone.
+    final session = context.watch<SessionController>();
+    final canAct = sale.status == 'completed' &&
+        status != SaleRefundStatus.full &&
+        !session.isDenied('payments.refund');
+    if (canAct) {
+      if (children.isNotEmpty) children.add(const SizedBox(height: PosTokens.s12));
+      children.add(
+        Consumer<SalesHistoryController>(
+          builder: (context, h, _) {
+            final busy = h.isRefunding;
+            final errorColor = Theme.of(context).colorScheme.error;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (busy)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: PosTokens.s8),
+                    child: Row(
+                      children: [
+                        SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                        SizedBox(width: PosTokens.s8),
+                        Text('Processing refund…'),
+                      ],
+                    ),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: busy ? null : () => _startItemsRefund(context, h),
+                  icon: const Icon(Icons.playlist_remove),
+                  label: const Text('Refund items'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: errorColor,
+                    side: BorderSide(color: errorColor),
+                  ),
+                ),
+                if (status == SaleRefundStatus.none) ...[
+                  const SizedBox(height: PosTokens.s8),
+                  OutlinedButton.icon(
+                    onPressed: busy ? null : () => _startRefund(context, h),
+                    icon: const Icon(Icons.replay_circle_filled_outlined),
+                    label: const Text('Refund Sale'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: errorColor,
+                      side: BorderSide(color: errorColor),
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
         ),
       );
     }
 
-    if (sale.status != 'completed') return const SizedBox.shrink();
+    if (children.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
+  }
 
-    // UI convenience only — SessionController.isDenied hides the button
-    // only when we POSITIVELY know payments.refund is absent (a loaded
-    // context that doesn't grant it). If the context hasn't loaded yet or
-    // its fetch failed, the button stays visible and the backend's own 403
-    // is what actually decides — never hide on missing data alone.
-    final session = context.watch<SessionController>();
-    if (session.isDenied('payments.refund')) {
-      return const SizedBox.shrink();
-    }
+  void _showError(BuildContext context, String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
 
-    return Consumer<SalesHistoryController>(
-      builder: (context, h, _) => SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: h.isRefunding ? null : () => _startRefund(context, h),
-          icon: h.isRefunding
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.replay_circle_filled_outlined),
-          label: Text(h.isRefunding ? 'Processing refund…' : 'Refund Sale'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Theme.of(context).colorScheme.error,
-            side: BorderSide(color: Theme.of(context).colorScheme.error),
-          ),
-        ),
-      ),
+  Future<void> _startItemsRefund(BuildContext context, SalesHistoryController h) async {
+    final request = await showRefundItemsDialog(context, sale: sale, names: names, controller: h);
+    if (request == null || !context.mounted) return;
+    final confirmed = await confirmPartialRefund(context, sale: sale, names: names, request: request);
+    if (confirmed != true || !context.mounted) return;
+
+    final ok = await h.refundItems(
+      sale.id,
+      request.lines,
+      expectedRefundAmount: request.preview.refundAmount,
+      refundMethod: request.refundMethod,
+      reason: request.reason,
     );
+    if (!context.mounted) return;
+    if (ok) {
+      final recorded = h.lastPartialRefund;
+      final fresh = h.detail ?? sale;
+      if (recorded != null) {
+        await showPartialRefundResult(context, sale: fresh, names: names, refund: recorded);
+      }
+      h.clearLastPartialRefund();
+      return;
+    }
+    final err = h.refundError;
+    _showError(context, err != null ? describeApiError(err) : 'The refund could not be completed.');
+    h.clearRefundError();
   }
 
   Future<void> _startRefund(
@@ -641,19 +776,48 @@ class _RefundSection extends StatelessWidget {
     }
 
     final err = h.refundError;
-    final message = err != null
-        ? describeApiError(err)
-        : 'The refund could not be completed.';
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    _showError(context, err != null ? describeApiError(err) : 'The refund could not be completed.');
     h.clearRefundError();
   }
 }
 
-/// "Refund this entire sale?" — full-sale only, matches [confirmVoid]'s
-/// destructive-confirmation shape from the cart. No quantity/amount editor:
-/// the refund total is always the sale's full grand total.
+class _RefundedBox extends StatelessWidget {
+  const _RefundedBox({required this.title, required this.detail});
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(PosTokens.s12),
+      decoration: BoxDecoration(
+        color: PosTokens.of(context).surfaceMuted,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.replay_circle_filled_outlined),
+          const SizedBox(width: PosTokens.s8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                Text(detail, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Refund this entire sale?" — the 17.1 whole-sale refund, matches
+/// [confirmVoid]'s destructive-confirmation shape from the cart. The refund
+/// total is always the sale's full grand total; quantity-based refunds use
+/// [showRefundItemsDialog] instead.
 Future<bool?> confirmRefund(BuildContext context, {required CompletedSale sale}) {
   return showDialog<bool>(
     context: context,
@@ -677,8 +841,8 @@ Future<bool?> confirmRefund(BuildContext context, {required CompletedSale sale})
           ),
           const SizedBox(height: PosTokens.s12),
           Text(
-            'This refunds the entire sale — there is no partial refund. '
-            'This cannot be undone.',
+            'This refunds the entire sale. To refund only some items, use '
+            'Refund items instead. This cannot be undone.',
             style: Theme.of(
               ctx,
             ).textTheme.bodySmall?.copyWith(color: Theme.of(ctx).colorScheme.error),

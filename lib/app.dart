@@ -16,6 +16,7 @@ import 'features/held_sales/state/held_sales_controller.dart';
 import 'features/barcode/camera_scanner.dart';
 import 'features/products/data/product_service.dart';
 import 'features/products/state/product_list_controller.dart';
+import 'features/checkout/data/payment_terminal_service.dart';
 import 'features/products/ui/products_page.dart';
 import 'features/receipt/data/printer_settings.dart';
 import 'features/receipt/data/receipt_delivery.dart';
@@ -113,6 +114,8 @@ class _AuthGate extends StatelessWidget {
           providers: [
             Provider<ProductService>.value(value: products),
             Provider<CameraScanner>.value(value: const MobileCameraScanner()),
+            // Card-terminal payments through the server's payment-attempt API.
+            Provider<PaymentTerminalService>.value(value: ApiPaymentTerminalService(client)),
             ChangeNotifierProvider(
               create: (_) => ProductListController(ApiProductService(client)),
             ),

@@ -18,12 +18,16 @@ final zeroAnalyticsSummary = AnalyticsSummary.fromJson(analyticsSummaryJson())!;
 
 class FakeAnalyticsService implements AnalyticsService {
   int callCount = 0;
+  String? lastFrom;
+  String? lastTo;
   Future<AnalyticsSummary> Function() onGetSummary = () async =>
       zeroAnalyticsSummary;
 
   @override
-  Future<AnalyticsSummary> getSummary() {
+  Future<AnalyticsSummary> getSummary({String? from, String? to}) {
     callCount++;
+    lastFrom = from;
+    lastTo = to;
     return onGetSummary();
   }
 }

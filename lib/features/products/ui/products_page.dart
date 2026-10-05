@@ -35,6 +35,7 @@ import '../state/product_list_controller.dart';
 import 'product_filter_bar.dart';
 import 'product_card.dart';
 import 'variation_sheet.dart';
+import '../../shift_close/ui/shift_close_view.dart';
 
 enum _CatalogView { grid, list }
 
@@ -87,6 +88,15 @@ class _ProductsPageState extends State<ProductsPage> {
       return;
     }
     final first = g.first;
+    // Selling mode (server-decided): only PIECE products can be added here.
+    // The server refuses the rest too; this just avoids a pointless request.
+    final notSellable = first.notSellableMessage;
+    if (notSellable != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(_snackBar(notSellable, duration: const Duration(seconds: 5)));
+      return;
+    }
     final label = [
       first.variationName,
       first.unitType,
@@ -292,6 +302,22 @@ class _ProductsPageState extends State<ProductsPage> {
                 showSettings(context);
               },
               onSignOut: session.logoutStaff,
+              // Hidden only when the loaded permissions positively lack
+              // shifts.view (the summary needs it); the backend still
+              // enforces shifts.view / shifts.close itself.
+              onCloseShift: session.isDenied('shifts.view')
+                  ? null
+                  : () {
+                      if (layout.isCompact) Navigator.of(context).pop();
+                      showShiftClose(
+                        context,
+                        cartHasItems: cart.hasActiveDraftWithItems,
+                        onClosed: (result) => session.logoutStaff(
+                          notice:
+                              'Shift #${result.shiftId} closed. Sign in to open the next shift.',
+                        ),
+                      );
+                    },
             ),
             header: PosHeader(
               search: _SearchField(controller: _search),

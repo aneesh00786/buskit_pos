@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:buskit_pos/core/network/api_exception.dart';
 import 'package:buskit_pos/features/checkout/models/payment.dart';
 import 'package:buskit_pos/features/history/data/sales_history_service.dart';
+import 'package:buskit_pos/features/history/models/partial_refund.dart';
 import 'package:buskit_pos/features/history/models/sale_history_entry.dart';
 import 'package:buskit_pos/features/history/state/sales_history_controller.dart';
 import 'package:buskit_pos/features/products/models/product_item.dart';
@@ -25,8 +26,11 @@ class FakeHistoryService implements SalesHistoryService {
     return rows;
   }
 
+  final List<int> refreshCalls = [];
+
   @override
-  Future<CompletedSale?> getDetail(int id) async {
+  Future<CompletedSale?> getDetail(int id, {bool refresh = false}) async {
+    if (refresh) refreshCalls.add(id);
     detailCalls.add(id);
     if (onDetail != null) return onDetail!(id);
     return details[id];
@@ -42,9 +46,73 @@ class FakeHistoryService implements SalesHistoryService {
     required String idempotencyKey,
   }) async {
     refundKeys.add(idempotencyKey);
-    if (onRefund != null) return onRefund!(saleId, idempotencyKey);
+    if (onRefund != null) {
+      // Like the server: once refunded, a later GET returns the refunded sale.
+      final result = await onRefund!(saleId, idempotencyKey);
+      if (result != null) details[saleId] = result;
+      return result;
+    }
     return details[saleId];
   }
+
+  // Phase 17.8 partial refunds.
+  final List<List<RefundRequestLine>> previewCalls = [];
+  final List<String?> previewMethods = [];
+  Future<RefundPreview?> Function(int saleId, List<RefundRequestLine> lines)? onPreview;
+
+  @override
+  Future<RefundPreview?> previewRefund({
+    required int saleId,
+    required List<RefundRequestLine> lines,
+    String? refundMethod,
+  }) async {
+    previewCalls.add(lines);
+    previewMethods.add(refundMethod);
+    if (onPreview != null) return onPreview!(saleId, lines);
+    return RefundPreview(
+      refundAmount: lines.fold(0.0, (s, l) => s + 10.0 * l.quantity),
+      items: [
+        for (final l in lines)
+          RefundLine(saleItemId: l.saleItemId, quantity: l.quantity, damagedQuantity: l.damagedQuantity, refundAmount: 10.0 * l.quantity),
+      ],
+      payouts: [RefundPayout(method: 'cash', amount: lines.fold(0.0, (s, l) => s + 10.0 * l.quantity))],
+    );
+  }
+
+  final List<PartialRefundCall> partialCalls = [];
+  Future<PartialRefundResult> Function(PartialRefundCall call)? onPartialRefund;
+
+  @override
+  Future<PartialRefundResult> refundItems({
+    required int saleId,
+    required List<RefundRequestLine> lines,
+    required double expectedRefundAmount,
+    required String idempotencyKey,
+    String? refundMethod,
+    String? reason,
+  }) async {
+    final call = PartialRefundCall(saleId, lines, expectedRefundAmount, idempotencyKey, refundMethod, reason);
+    partialCalls.add(call);
+    if (onPartialRefund != null) return onPartialRefund!(call);
+    return PartialRefundResult(
+      refund: PartialRefund(
+        id: partialCalls.length,
+        refundAmount: expectedRefundAmount,
+        items: [for (final l in lines) RefundLine(saleItemId: l.saleItemId, quantity: l.quantity, refundAmount: 10.0 * l.quantity)],
+      ),
+      sale: details[saleId],
+    );
+  }
+}
+
+class PartialRefundCall {
+  PartialRefundCall(this.saleId, this.lines, this.expected, this.key, this.method, this.reason);
+  final int saleId;
+  final List<RefundRequestLine> lines;
+  final double expected;
+  final String key;
+  final String? method;
+  final String? reason;
 }
 
 const netDown = ApiException(

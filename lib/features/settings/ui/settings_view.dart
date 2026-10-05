@@ -7,6 +7,7 @@ import '../../../core/network/error_messages.dart';
 import '../../../core/network/pos_api_client.dart';
 import '../../../core/theme/pos_tokens.dart';
 import '../../../core/ui/state_views.dart';
+import '../../auth/state/session_controller.dart';
 import '../../cash_movements/data/cash_movement_service.dart';
 import '../../cash_movements/state/cash_movement_controller.dart';
 import '../../cash_movements/ui/cash_withdrawal_view.dart';
@@ -85,6 +86,10 @@ class _SettingsViewState extends State<SettingsView> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Don't call the store/register/device endpoints when the loaded
+      // permission context positively lacks settings.view (Phase 17.10 C2) —
+      // the rest of Settings (cash, printer, about) still works.
+      if (context.read<SessionController>().isDenied('settings.view')) return;
       context.read<SettingsController>().load();
     });
   }
@@ -129,12 +134,45 @@ class _SettingsViewState extends State<SettingsView> {
   }
 }
 
+/// True when [e] is the backend's 403 for a missing permission.
+bool _isPermissionDenied(ApiException? e) =>
+    e != null && e.errorCode == PosErrorCodes.permissionDenied;
+
 class _Body extends StatelessWidget {
   const _Body({required this.controller});
   final SettingsController controller;
 
   @override
   Widget build(BuildContext context) {
+    // Store/register/device management needs settings.view (Phase 17.10 C2).
+    // Without it — known up front, or learned from the backend's 403 — that
+    // area shows a notice, but cash management, printer setup and About stay
+    // available: they have their own permissions (or none).
+    final session = context.watch<SessionController>();
+    final storeAreaDenied = session.isDenied('settings.view') ||
+        (controller.status == SettingsStatus.error &&
+            _isPermissionDenied(controller.error));
+    if (storeAreaDenied) {
+      return ListView(
+        padding: const EdgeInsets.all(PosTokens.s16),
+        children: const [
+          _SectionCard(
+            title: 'Store, registers & devices',
+            icon: Icons.lock_outline,
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'You do not have permission to view store settings. '
+                'Ask a manager or administrator.',
+              ),
+            ),
+          ),
+          SizedBox(height: PosTokens.s16),
+          _CommonSections(),
+        ],
+      );
+    }
+
     switch (controller.status) {
       case SettingsStatus.idle:
       case SettingsStatus.loading:
@@ -166,39 +204,66 @@ class _Body extends StatelessWidget {
             const SizedBox(height: PosTokens.s16),
             _DevicesSection(controller: controller),
             const SizedBox(height: PosTokens.s16),
-            const CashManagementGate(),
-            const SizedBox(height: PosTokens.s16),
-            _SectionCard(
-              title: 'Printer & Receipt',
-              icon: Icons.print_outlined,
-              child: Material(
-                type: MaterialType.transparency,
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.settings_ethernet),
-                  title: const Text('Printer setup'),
-                  subtitle: const Text(
-                    'Configure the receipt printer address and paper width.',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => showDialog<bool>(
-                    context: context,
-                    builder: (_) =>
-                        const PrinterSetupDialog(receipt: _samplePrintReceipt),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: PosTokens.s16),
-            _SectionCard(
-              title: 'About',
-              icon: Icons.info_outline,
-              child: _KeyValue('App version', AppConfig.appVersion),
-            ),
+            const _CommonSections(),
           ],
         );
     }
   }
+}
+
+/// Cash management, printer setup and About — shown whether or not the staff
+/// member may see the store/register/device area.
+class _CommonSections extends StatelessWidget {
+  const _CommonSections();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const CashManagementGate(),
+        const SizedBox(height: PosTokens.s16),
+        _SectionCard(
+          title: 'Printer & Receipt',
+          icon: Icons.print_outlined,
+          child: Material(
+            type: MaterialType.transparency,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.settings_ethernet),
+              title: const Text('Printer setup'),
+              subtitle: const Text(
+                'Configure the receipt printer address and paper width.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => showDialog<bool>(
+                context: context,
+                builder: (_) =>
+                    const PrinterSetupDialog(receipt: _samplePrintReceipt),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: PosTokens.s16),
+        _SectionCard(
+          title: 'About',
+          icon: Icons.info_outline,
+          child: _KeyValue('App version', AppConfig.appVersion),
+        ),
+      ],
+    );
+  }
+}
+
+/// A management action failed (e.g. 403 after a permission was removed):
+/// say so instead of failing silently, then clear the error.
+void _reportMutationFailure(BuildContext context, SettingsController c) {
+  final e = c.mutationError;
+  if (e == null || !context.mounted) return;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(describeApiError(e))));
+  c.clearMutationError();
 }
 
 class _StoreSwitcher extends StatelessWidget {
@@ -285,15 +350,20 @@ class _StoreSection extends StatelessWidget {
           ),
           _KeyValue('Timezone', store.timezone),
           _KeyValue('Currency', store.currency),
-          const SizedBox(height: PosTokens.s8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => _showEditStoreDialog(context, controller, store),
-              icon: const Icon(Icons.edit_outlined),
-              label: const Text('Edit Store'),
+          // Editing needs settings.store AND settings.edit (Phase 17.10 C2);
+          // hidden only when the loaded context positively lacks one.
+          if (!context.watch<SessionController>().isDenied('settings.store') &&
+              !context.watch<SessionController>().isDenied('settings.edit')) ...[
+            const SizedBox(height: PosTokens.s8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _showEditStoreDialog(context, controller, store),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit Store'),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -441,6 +511,8 @@ class _RegistersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canManage =
+        !context.watch<SessionController>().isDenied('settings.register');
     return _SectionCard(
       title: 'Registers',
       icon: Icons.point_of_sale_outlined,
@@ -456,10 +528,17 @@ class _RegistersSection extends StatelessWidget {
                     title: r.registerName,
                     subtitle: r.registerCode,
                     active: r.isActive,
-                    onToggle: () => controller.setRegisterStatus(
-                      r.id,
-                      r.isActive ? 'inactive' : 'active',
-                    ),
+                    onToggle: canManage
+                        ? () async {
+                            final ok = await controller.setRegisterStatus(
+                              r.id,
+                              r.isActive ? 'inactive' : 'active',
+                            );
+                            if (!ok && context.mounted) {
+                              _reportMutationFailure(context, controller);
+                            }
+                          }
+                        : null,
                   ),
               ],
             ),
@@ -494,12 +573,15 @@ class _DevicesSection extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      await controller.setDeviceStatus(d.id, 'revoked');
+      final ok = await controller.setDeviceStatus(d.id, 'revoked');
+      if (!ok && context.mounted) _reportMutationFailure(context, controller);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final canManage =
+        !context.watch<SessionController>().isDenied('settings.device');
     return _SectionCard(
       title: 'Devices',
       icon: Icons.tablet_mac_outlined,
@@ -515,7 +597,7 @@ class _DevicesSection extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     title: Text(d.deviceName ?? d.deviceIdentifier),
                     subtitle: Text('${d.deviceIdentifier} · ${d.status}'),
-                    trailing: d.isRevoked
+                    trailing: d.isRevoked || !canManage
                         ? null
                         : TextButton(
                             onPressed: () => _confirmRevoke(context, d),
@@ -533,12 +615,14 @@ class _StatusRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.active,
-    required this.onToggle,
+    this.onToggle,
   });
   final String title;
   final String subtitle;
   final bool active;
-  final VoidCallback onToggle;
+
+  /// Null disables the switch (the staff member may not manage registers).
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -546,7 +630,10 @@ class _StatusRow extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       title: Text(title),
       subtitle: Text(subtitle),
-      trailing: Switch(value: active, onChanged: (_) => onToggle()),
+      trailing: Switch(
+        value: active,
+        onChanged: onToggle == null ? null : (_) => onToggle!(),
+      ),
     );
   }
 }

@@ -18,6 +18,27 @@ class AnalyticsController extends ChangeNotifier {
   ApiException? _error;
   int _generation = 0;
   bool _disposed = false;
+  String? _from;
+  String? _to;
+
+  /// The chosen business-date range, or null for the store's today.
+  String? get from => _from;
+  String? get to => _to;
+  bool get hasCustomRange => _from != null && _to != null;
+
+  /// Shows [from]..[to] (inclusive, YYYY-MM-DD) and reloads.
+  Future<void> setRange(String from, String to) {
+    _from = from;
+    _to = to;
+    return load();
+  }
+
+  /// Back to the store's today.
+  Future<void> clearRange() {
+    _from = null;
+    _to = null;
+    return load();
+  }
 
   AnalyticsStatus get status => _status;
   AnalyticsSummary? get summary => _summary;
@@ -29,7 +50,7 @@ class AnalyticsController extends ChangeNotifier {
     _error = null;
     _notify();
     try {
-      final result = await _service.getSummary();
+      final result = await _service.getSummary(from: _from, to: _to);
       if (gen != _generation) return;
       _summary = result;
       _status = AnalyticsStatus.loaded;

@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/network/error_messages.dart';
 import '../../../core/network/pos_api_client.dart';
 import '../../../core/theme/pos_tokens.dart';
 import '../../../core/utils/format.dart';
 import '../../analytics/data/analytics_service.dart';
 import '../../analytics/state/analytics_controller.dart';
+import '../../auth/state/session_controller.dart';
+
+/// Phase C5: the backend opens /analytics/summary with ANY one of these.
+const _reportPermissions = ['reports.sales', 'reports.cashier', 'reports.payment', 'reports.product'];
 
 /// Right-hand sales summary for very wide screens. Three cards (today's
 /// sales, top items, staff performance) show real figures from
@@ -31,7 +36,10 @@ class _SalesSummaryPanelState extends State<SalesSummaryPanel> {
       ApiAnalyticsService(context.read<PosApiClient>()),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _controller.load();
+      if (!mounted) return;
+      // No reporting permission at all (known up front): don't call.
+      if (context.read<SessionController>().isDeniedAll(_reportPermissions)) return;
+      _controller.load();
     });
   }
 
@@ -46,11 +54,19 @@ class _SalesSummaryPanelState extends State<SalesSummaryPanel> {
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
-        final loading =
-            _controller.status == AnalyticsStatus.idle ||
-            _controller.status == AnalyticsStatus.loading;
-        final failed = _controller.status == AnalyticsStatus.error;
-        final s = _controller.summary;
+        final session = context.watch<SessionController>();
+        // Phase C5: no reporting permission (known up front, or the backend's
+        // 403) is its own state — never "loading", never "temporarily
+        // unavailable".
+        final noAccess = session.isDeniedAll(_reportPermissions) ||
+            (_controller.status == AnalyticsStatus.error &&
+                _controller.error?.errorCode == PosErrorCodes.permissionDenied);
+        final loading = !noAccess &&
+            (_controller.status == AnalyticsStatus.idle ||
+                _controller.status == AnalyticsStatus.loading);
+        // Every card below treats "no access" like "unavailable".
+        final failed = noAccess || _controller.status == AnalyticsStatus.error;
+        final s = noAccess ? null : _controller.summary;
         final available = !loading && !failed && s != null;
 
         final topItem = available && s.topProducts.isNotEmpty
@@ -64,16 +80,19 @@ class _SalesSummaryPanelState extends State<SalesSummaryPanel> {
           padding: EdgeInsets.zero,
           children: [
             SummaryCard(
-              title: "Today's sales",
+              title: "Today's net sales",
               icon: Icons.payments_outlined,
               gradient: true,
-              figure: available ? formatMoney(s.todaySalesTotal) : null,
-              message: failed
+              figure: available ? formatMoney(s.sales.netSales) : null,
+              message: noAccess
+                  ? 'Sales figures need a reporting permission.'
+                  : failed
                   ? 'Sales reporting is temporarily unavailable.'
                   : loading
                   ? 'Loading…'
-                  : '${s!.todayTransactionCount} transaction${s.todayTransactionCount == 1 ? '' : 's'} today',
-              showPill: loading || failed,
+                  : '${s!.sales.completedCount} transaction${s.sales.completedCount == 1 ? '' : 's'} today'
+                        '${s.sales.refundsTotal > 0 ? ' · refunds -${formatMoney(s.sales.refundsTotal)}' : ''}',
+              showPill: loading || (failed && !noAccess),
             ),
             const SizedBox(height: PosTokens.s12),
             SummaryCard(
@@ -86,7 +105,7 @@ class _SalesSummaryPanelState extends State<SalesSummaryPanel> {
                   : topItem == null
                   ? 'No sales in the last 7 days yet.'
                   : '${topItem.productName ?? 'Item ${topItem.productVariationId}'} — ${formatQty(topItem.quantitySold)} sold',
-              showPill: loading || failed,
+              showPill: loading || (failed && !noAccess),
             ),
             const SizedBox(height: PosTokens.s12),
             SummaryCard(
@@ -99,7 +118,7 @@ class _SalesSummaryPanelState extends State<SalesSummaryPanel> {
                   : topStaff == null
                   ? 'No sales today yet.'
                   : '${topStaff.fullname ?? topStaff.salesmanId} — ${formatMoney(topStaff.salesTotal)}',
-              showPill: loading || failed,
+              showPill: loading || (failed && !noAccess),
             ),
             const SizedBox(height: PosTokens.s12),
             const SummaryCard(

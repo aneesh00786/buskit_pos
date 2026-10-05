@@ -3,6 +3,8 @@ import '../../../core/utils/money.dart';
 import '../../../core/utils/server_time.dart';
 import '../../cart/models/cart_sale.dart';
 import '../../cart/models/discount_override.dart';
+import '../../history/models/partial_refund.dart';
+import '../../history/models/provider_refund.dart';
 import '../../loyalty/models/loyalty_sale_info.dart';
 import '../../promotions/models/promotion.dart';
 
@@ -35,6 +37,7 @@ class PaymentLine {
     required this.amountMilli,
     this.tenderedMilli,
     this.reference,
+    this.paymentAttemptId,
   });
 
   final TenderMethod method;
@@ -44,6 +47,10 @@ class PaymentLine {
   final int? tenderedMilli;
   final String? reference;
 
+  /// A CAPTURED provider payment (card terminal) backing this tender; the
+  /// server verifies it belongs to the sale and matches the amount.
+  final int? paymentAttemptId;
+
   Map<String, dynamic> toJson() => {
     'method': method.wire,
     'amount': milliToJson(amountMilli),
@@ -51,11 +58,13 @@ class PaymentLine {
       'tendered_amount': milliToJson(tenderedMilli!),
     if (reference != null && reference!.trim().isNotEmpty)
       'reference': reference!.trim(),
+    if (paymentAttemptId != null) 'payment_attempt_id': paymentAttemptId,
   };
 
   /// Stable text for comparing two attempts (idempotency-key reuse rule).
   String get canonical =>
-      '${method.wire}:$amountMilli:${tenderedMilli ?? ''}:${reference?.trim() ?? ''}';
+      '${method.wire}:$amountMilli:${tenderedMilli ?? ''}:${reference?.trim() ?? ''}'
+      '${paymentAttemptId == null ? '' : ':attempt=$paymentAttemptId'}';
 }
 
 /// A payment as recorded by the server (response of `complete`).
@@ -88,11 +97,10 @@ class RecordedPayment {
   }
 }
 
-/// A FULL-SALE refund, present once `POST /sales/:id/refund` has succeeded.
-/// The backend never changes `pos_sales.status` for a refund (it stays
-/// 'completed') — this being non-null is the only signal a sale was
-/// refunded. Partial/quantity refund does not exist; there is no refunded
-/// amount other than the whole sale's total.
+/// A FULL-SALE (Phase 17.1) refund, present once `POST /sales/:id/refund`
+/// has succeeded. The backend never changes `pos_sales.status` for a refund
+/// (it stays 'completed'). Partial refunds (Phase 17.8) are separate — see
+/// [CompletedSale.refunds] / [CompletedSale.refundStatus].
 class RefundInfo {
   const RefundInfo({
     required this.refundedBy,
@@ -134,6 +142,12 @@ class CompletedSale {
     this.loyalty,
     this.refund,
     this.discountOverride,
+    this.serverRefundStatus,
+    this.refundedTotal,
+    this.refundableTotal,
+    this.refunds = const [],
+    this.itemRefunds = const {},
+    this.providerRefunds = const [],
   });
 
   final int id;
@@ -161,6 +175,37 @@ class CompletedSale {
   /// frozen forever — same rule as [promotion]/[loyalty].
   final DiscountOverride? discountOverride;
 
+  /// `refund_status` exactly as the server sent it (null if absent).
+  final SaleRefundStatus? serverRefundStatus;
+
+  /// 'none' / 'partial' / 'full' (Phase 17.8). Falls back to [refund] for a
+  /// server response that predates the field.
+  SaleRefundStatus get refundStatus =>
+      serverRefundStatus ?? (refund != null ? SaleRefundStatus.full : SaleRefundStatus.none);
+
+  final double? refundedTotal;
+  final double? refundableTotal;
+
+  /// Partial refunds, oldest first (empty for a 17.1 whole-sale refund).
+  final List<PartialRefund> refunds;
+
+  /// Per sale-item refund progress, keyed by sale item id.
+  final Map<int, ItemRefundProgress> itemRefunds;
+
+  /// Refunds returned through the payment provider (e.g. Razorpay UPI), with
+  /// the provider's status.
+  final List<ProviderRefund> providerRefunds;
+
+  bool get hasPendingProviderRefunds => providerRefunds.any((r) => r.status == ProviderRefundStatus.pending);
+
+  /// Units of this line still refundable. Without server data: everything,
+  /// unless the sale was refunded as a whole.
+  int refundableQuantity(CartLine line) =>
+      itemRefunds[line.id]?.refundable ?? (refund != null ? 0 : line.quantity);
+
+  int refundedQuantity(CartLine line) =>
+      itemRefunds[line.id]?.refunded ?? (refund != null ? line.quantity : 0);
+
   /// The order/invoice number: the server's sale number, else "#id".
   String get displayNumber =>
       (saleNumber != null && saleNumber!.isNotEmpty) ? saleNumber! : '#$id';
@@ -183,6 +228,28 @@ class CompletedSale {
       loyalty: LoyaltySaleInfo.fromJson(m['loyalty']),
       refund: RefundInfo.fromJson(m['refund']),
       discountOverride: DiscountOverride.fromJson(m['discount_override']),
+      serverRefundStatus: m.containsKey('refund_status')
+          ? SaleRefundStatus.fromWire(asString(m['refund_status']))
+          : null,
+      refundedTotal: asDouble(m['refunded_total']),
+      refundableTotal: asDouble(m['refundable_total']),
+      refunds: asList(m['refunds'])
+          .map(PartialRefund.fromJson)
+          .whereType<PartialRefund>()
+          .toList(),
+      providerRefunds: asList(m['provider_refunds'])
+          .map(ProviderRefund.fromJson)
+          .whereType<ProviderRefund>()
+          .toList(),
+      itemRefunds: {
+        for (final raw in asList(m['items']))
+          if (asMap(raw) case final i?
+              when asInt(i['id']) != null && asInt(i['refundable_quantity']) != null)
+            asInt(i['id'])!: ItemRefundProgress(
+              refunded: asInt(i['refunded_quantity']) ?? 0,
+              refundable: asInt(i['refundable_quantity'])!,
+            ),
+      },
       items: asList(m['items'])
           .map(CartLine.fromJson)
           .whereType<CartLine>()

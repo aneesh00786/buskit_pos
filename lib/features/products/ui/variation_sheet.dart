@@ -133,9 +133,17 @@ class _VariationSheetState extends State<VariationSheet> {
                 ),
               ),
             ],
+            if (_selected.notSellableMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _selected.notSellableMessage!,
+                key: const Key('variation-not-sellable'),
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+            ],
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: cart.isMutating ? null : _add,
+              onPressed: cart.isMutating || !_selected.isPosSellable ? null : _add,
               icon: cart.isMutating
                   ? const SizedBox(
                       height: 18,

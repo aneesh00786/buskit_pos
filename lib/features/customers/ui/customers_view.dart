@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../auth/state/session_controller.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/error_messages.dart';
 import '../../../core/network/pos_api_client.dart';
@@ -149,7 +150,8 @@ class _Header extends StatelessWidget {
               ),
             ),
           ),
-          if (!showingDetail)
+          // Phase C5: hidden when the loaded permissions lack customers.create.
+          if (!showingDetail && !context.watch<SessionController>().isDenied('customers.create'))
             IconButton(
               tooltip: 'New customer',
               constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
@@ -263,7 +265,7 @@ class _ListBody extends StatelessWidget {
                     : 'Try a different search.',
                 icon: Icons.people_outline,
               ),
-              if (c.query.isEmpty)
+              if (c.query.isEmpty && !context.watch<SessionController>().isDenied('customers.create'))
                 FilledButton.icon(
                   onPressed: () => showCustomerForm(context),
                   icon: const Icon(Icons.person_add_alt_outlined),
@@ -548,11 +550,13 @@ class _DetailBody extends StatelessWidget {
                 ],
               ),
             ),
-            TextButton.icon(
-              onPressed: () => showCustomerForm(context, edit: customer),
-              icon: const Icon(Icons.edit_outlined),
-              label: const Text('Edit Customer'),
-            ),
+            // Phase C5: hidden when the loaded permissions lack customers.edit.
+            if (!context.watch<SessionController>().isDenied('customers.edit'))
+              TextButton.icon(
+                onPressed: () => showCustomerForm(context, edit: customer),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit Customer'),
+              ),
           ],
         ),
         const SizedBox(height: PosTokens.s16),

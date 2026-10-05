@@ -359,7 +359,9 @@ void main() {
         await tester.tap(find.text('POS-1'));
         await tester.pumpAndSettle();
         expect(find.text('Refund Sale'), findsNothing);
-        expect(find.textContaining('Refunded'), findsOneWidget);
+        expect(find.text('Refund items'), findsNothing, reason: 'nothing left to refund');
+        expect(find.text('Refunded'), findsOneWidget, reason: 'status badge');
+        expect(find.text('Refunded 10.00'), findsOneWidget);
       },
     );
 
@@ -404,8 +406,10 @@ void main() {
 
         await tester.tap(find.text('Done'));
         await tester.pumpAndSettle();
-        expect(find.textContaining('Refunded'), findsOneWidget);
+        expect(find.text('Refunded'), findsOneWidget, reason: 'status badge');
+        expect(find.text('Refunded 10.00'), findsOneWidget);
         expect(find.text('Refund Sale'), findsNothing);
+        expect(svc.detailCalls.last, 1, reason: 'the sale is re-fetched from the server after the refund');
       },
     );
 

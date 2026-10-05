@@ -334,7 +334,8 @@ class _DetailBody extends StatelessWidget {
               _row(context, 'Total', sale.totals.grandTotal, bold: true),
               const SizedBox(height: 12),
               FilledButton.icon(
-                onPressed: (resumable && !cart.isMutating)
+                // Phase C5: disabled when the loaded permissions lack sales.resume.
+                onPressed: (resumable && !cart.isMutating && !session.isDenied('sales.resume'))
                     ? () => _resume(context, sale)
                     : null,
                 icon: cart.isMutating

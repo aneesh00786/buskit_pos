@@ -11,8 +11,8 @@ import '../../auth/state/session_controller.dart';
 import '../models/cash_movement.dart';
 import '../state/cash_movement_controller.dart';
 
-/// "Cash Management" — current shift info, its withdrawals (newest-first)
-/// and the Cash Withdrawal action. Lives inside Settings (the only existing
+/// "Cash Management" — current shift info, its cash movements (deposits and
+/// withdrawals, newest-first) and the Cash Withdrawal / Cash Deposit actions. Lives inside Settings (the only existing
 /// real, non-placeholder screen reachable from the sidebar) rather than a
 /// new top-level section — see the Phase 17.3 review for why no dedicated
 /// shift screen exists to extend instead.
@@ -57,7 +57,17 @@ class _CashManagementSectionState extends State<CashManagementSection> {
             ],
           ),
           const SizedBox(height: PosTokens.s8),
-          _Body(controller: c),
+          _Body(
+            controller: c,
+            // Each action hides only when the loaded context positively lacks
+            // its own permission (SessionController.isDenied semantics).
+            canWithdraw: !context.watch<SessionController>().isDenied(
+              'payments.cash_withdrawal',
+            ),
+            canDeposit: !context.watch<SessionController>().isDenied(
+              'payments.cash_deposit',
+            ),
+          ),
         ],
       ),
     );
@@ -65,8 +75,14 @@ class _CashManagementSectionState extends State<CashManagementSection> {
 }
 
 class _Body extends StatelessWidget {
-  const _Body({required this.controller});
+  const _Body({
+    required this.controller,
+    required this.canWithdraw,
+    required this.canDeposit,
+  });
   final CashMovementController controller;
+  final bool canWithdraw;
+  final bool canDeposit;
 
   @override
   Widget build(BuildContext context) {
@@ -96,31 +112,53 @@ class _Body extends StatelessWidget {
           children: [
             _ShiftInfo(shift: shift),
             const SizedBox(height: PosTokens.s12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.icon(
-                onPressed: controller.isWithdrawing
-                    ? null
-                    : () => _startWithdrawal(context, controller),
-                icon: controller.isWithdrawing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.remove_circle_outline),
-                label: Text(
-                  controller.isWithdrawing
-                      ? 'Processing withdrawal…'
-                      : 'Cash Withdrawal',
-                ),
-              ),
+            Wrap(
+              spacing: PosTokens.s8,
+              runSpacing: PosTokens.s8,
+              children: [
+                if (canWithdraw)
+                  FilledButton.icon(
+                    onPressed: controller.isBusy
+                        ? null
+                        : () => _startWithdrawal(context, controller),
+                    icon: controller.isWithdrawing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.remove_circle_outline),
+                    label: Text(
+                      controller.isWithdrawing
+                          ? 'Processing withdrawal…'
+                          : 'Cash Withdrawal',
+                    ),
+                  ),
+                if (canDeposit)
+                  FilledButton.tonalIcon(
+                    onPressed: controller.isBusy
+                        ? null
+                        : () => _startDeposit(context, controller),
+                    icon: controller.isDepositing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add_circle_outline),
+                    label: Text(
+                      controller.isDepositing
+                          ? 'Processing deposit…'
+                          : 'Cash Deposit',
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: PosTokens.s12),
             if (controller.movements.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text('No withdrawals on this shift yet.'),
+                child: Text('No cash movements on this shift yet.'),
               )
             else
               Column(
@@ -168,6 +206,42 @@ class _Body extends StatelessWidget {
       ..showSnackBar(SnackBar(content: Text(message)));
     c.clearWithdrawError();
   }
+
+  Future<void> _startDeposit(
+    BuildContext context,
+    CashMovementController c,
+  ) async {
+    final request = await showCashDepositDialog(context);
+    if (request == null || !context.mounted) return;
+
+    final confirmed = await confirmCashDeposit(
+      context,
+      amount: request.amount,
+      reason: request.reason,
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final ok = await c.deposit(amount: request.amount, reason: request.reason);
+    if (!context.mounted) return;
+
+    if (ok) {
+      final movement = c.lastDeposit;
+      if (movement != null) {
+        await showCashDepositResult(context, movement: movement);
+      }
+      c.clearLastDeposit();
+      return;
+    }
+
+    final err = c.depositError;
+    final message = err != null
+        ? describeApiError(err)
+        : 'The deposit could not be completed.';
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+    c.clearDepositError();
+  }
 }
 
 class _ShiftInfo extends StatelessWidget {
@@ -199,12 +273,18 @@ class _MovementRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Deposits add to the drawer (+), withdrawals remove from it (−).
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.remove_circle_outline),
-      title: Text(formatMoney(m.amount)),
+      leading: Icon(
+        m.isDeposit ? Icons.add_circle_outline : Icons.remove_circle_outline,
+        color: m.isDeposit ? theme.colorScheme.primary : theme.colorScheme.error,
+      ),
+      title: Text('${m.isDeposit ? '+' : '−'} ${formatMoney(m.amount)}'),
       subtitle: Text(
         [
+          m.isDeposit ? 'Deposit' : 'Withdrawal',
           if (m.reason != null && m.reason!.isNotEmpty) m.reason!,
           if (m.createdAt != null) formatTimestamp(m.createdAt!),
         ].join(' · '),
@@ -225,12 +305,22 @@ class CashWithdrawalRequest {
 Future<CashWithdrawalRequest?> showCashWithdrawalDialog(BuildContext context) {
   return showDialog<CashWithdrawalRequest>(
     context: context,
-    builder: (ctx) => const _CashWithdrawalForm(),
+    builder: (ctx) => const _CashWithdrawalForm(title: 'Cash Withdrawal'),
+  );
+}
+
+/// Cash In entry — the same amount + optional reason form and the same
+/// client-side precision rule as the withdrawal form.
+Future<CashWithdrawalRequest?> showCashDepositDialog(BuildContext context) {
+  return showDialog<CashWithdrawalRequest>(
+    context: context,
+    builder: (ctx) => const _CashWithdrawalForm(title: 'Cash Deposit'),
   );
 }
 
 class _CashWithdrawalForm extends StatefulWidget {
-  const _CashWithdrawalForm();
+  const _CashWithdrawalForm({required this.title});
+  final String title;
 
   @override
   State<_CashWithdrawalForm> createState() => _CashWithdrawalFormState();
@@ -266,7 +356,7 @@ class _CashWithdrawalFormState extends State<_CashWithdrawalForm> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Cash Withdrawal'),
+      title: Text(widget.title),
       scrollable: true,
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 360),
@@ -393,6 +483,86 @@ Future<void> showCashWithdrawalResult(
   );
 }
 
+/// "Deposit `amount` into this register?" — the final confirmation before
+/// submitting. Not styled as destructive (it adds cash), but still states
+/// that the record is permanent.
+Future<bool?> confirmCashDeposit(
+  BuildContext context, {
+  required String amount,
+  String? reason,
+}) {
+  return showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Confirm cash deposit'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _KeyValue('Amount', formatMoney(double.tryParse(amount))),
+          _KeyValue('Reason', (reason == null || reason.isEmpty) ? '—' : reason),
+          const SizedBox(height: PosTokens.s12),
+          Text(
+            'This adds cash to this register\'s current shift. '
+            'This cannot be undone.',
+            style: Theme.of(ctx).textTheme.bodySmall,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Deposit'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Shown once, right after a successful deposit.
+Future<void> showCashDepositResult(
+  BuildContext context, {
+  required CashMovement movement,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      icon: Icon(
+        Icons.check_circle_outline,
+        color: Theme.of(ctx).colorScheme.primary,
+        size: 32,
+      ),
+      title: const Text('Deposit successful'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _KeyValue('Amount', formatMoney(movement.amount)),
+          _KeyValue(
+            'Reason',
+            (movement.reason == null || movement.reason!.isEmpty)
+                ? '—'
+                : movement.reason!,
+          ),
+          _KeyValue('Reference', '#${movement.id}'),
+          if (movement.createdAt != null)
+            _KeyValue('Date/time', formatTimestamp(movement.createdAt!)),
+        ],
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Done'),
+        ),
+      ],
+    ),
+  );
+}
+
 class _KeyValue extends StatelessWidget {
   const _KeyValue(this.label, this.value);
   final String label;
@@ -417,19 +587,21 @@ class _KeyValue extends StatelessWidget {
   }
 }
 
-/// Permission-gated wrapper — hidden entirely (not just the action button)
-/// when the loaded context positively lacks payments.cash_withdrawal, since
-/// the backend gates BOTH the read and write endpoints behind this one
-/// permission (no separate view-only key exists). A missing/failed context
-/// leaves it visible, deferring to the backend's own 403 — same semantics
-/// as Refund/Cancel (SessionController.isDenied).
+/// Permission-gated wrapper — hidden entirely only when the loaded context
+/// positively lacks BOTH payments.cash_withdrawal and payments.cash_deposit
+/// (the backend's history endpoint accepts either; Phase 17.7). With one of
+/// them, the section shows and only the other action's button is hidden. A
+/// missing/failed context leaves everything visible, deferring to the
+/// backend's own 403 — same semantics as Refund/Cancel
+/// (SessionController.isDenied).
 class CashManagementGate extends StatelessWidget {
   const CashManagementGate({super.key});
 
   @override
   Widget build(BuildContext context) {
     final session = context.watch<SessionController>();
-    if (session.isDenied('payments.cash_withdrawal')) {
+    if (session.isDenied('payments.cash_withdrawal') &&
+        session.isDenied('payments.cash_deposit')) {
       return const SizedBox.shrink();
     }
     return const CashManagementSection();

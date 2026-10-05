@@ -41,9 +41,13 @@ dependencies:
   printing: ^5.15.1
   mobile_scanner: ^7.4.2
   url_launcher: ^6.3.2
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  # Live on-device verification against a local backend (integration_test/).
+  integration_test:
     sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to

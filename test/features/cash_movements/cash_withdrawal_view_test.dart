@@ -190,17 +190,17 @@ void main() {
         );
       await pumpCashManagement(tester, service: svc);
       expect(find.textContaining('Shift #7'), findsOneWidget);
-      expect(find.text('25.00'), findsOneWidget);
-      expect(find.text('10.00'), findsOneWidget);
+      expect(find.text('− 25.00'), findsOneWidget);
+      expect(find.text('− 10.00'), findsOneWidget);
       expect(find.textContaining('Petty cash'), findsOneWidget);
       expect(find.textContaining('Supplier'), findsOneWidget);
     });
 
-    testWidgets('shows an explicit empty state with no withdrawals yet', (
+    testWidgets('shows an explicit empty state with no movements yet', (
       tester,
     ) async {
       await pumpCashManagement(tester);
-      expect(find.text('No withdrawals on this shift yet.'), findsOneWidget);
+      expect(find.text('No cash movements on this shift yet.'), findsOneWidget);
     });
   });
 

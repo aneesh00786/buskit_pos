@@ -3,7 +3,9 @@ import '../../../core/network/pos_api_client.dart';
 import '../models/analytics_summary.dart';
 
 abstract class AnalyticsService {
-  Future<AnalyticsSummary> getSummary();
+  /// [from]/[to] are inclusive business dates (YYYY-MM-DD, store time zone);
+  /// both or neither — neither means the store's today.
+  Future<AnalyticsSummary> getSummary({String? from, String? to});
 }
 
 /// Verified against the backend: `GET /analytics/summary` — store-scoped
@@ -13,8 +15,11 @@ class ApiAnalyticsService implements AnalyticsService {
   final PosApiClient _client;
 
   @override
-  Future<AnalyticsSummary> getSummary() async {
-    final data = await _client.get('/analytics/summary');
+  Future<AnalyticsSummary> getSummary({String? from, String? to}) async {
+    final data = await _client.get(
+      '/analytics/summary',
+      query: from != null && to != null ? {'from': from, 'to': to} : null,
+    );
     final summary = AnalyticsSummary.fromJson(data);
     if (summary == null) {
       throw const ApiException(
