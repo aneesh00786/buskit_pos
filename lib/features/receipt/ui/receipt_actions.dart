@@ -6,6 +6,8 @@ import '../data/printer_driver.dart';
 import '../data/printer_settings.dart';
 import '../data/receipt_delivery.dart';
 import '../models/receipt.dart';
+import '../printing/escpos_receipt_service.dart';
+import '../printing/network_printer_adapter.dart';
 import '../state/print_service.dart';
 import '../state/receipt_services.dart';
 
@@ -284,6 +286,7 @@ class _PrinterSetupDialogState extends State<PrinterSetupDialog> {
   final _host = TextEditingController();
   final _port = TextEditingController(text: '${PrinterSettings.defaultPort}');
   PaperWidth _paper = PaperWidth.mm80;
+  ThermalMode _mode = ThermalMode.image;
   bool _loaded = false;
   bool _busy = false;
   String? _message;
@@ -301,6 +304,7 @@ class _PrinterSetupDialogState extends State<PrinterSetupDialog> {
       _host.text = s.host;
       _port.text = '${s.port}';
       _paper = s.paper;
+      _mode = s.mode;
       _loaded = true;
     });
   }
@@ -316,6 +320,7 @@ class _PrinterSetupDialogState extends State<PrinterSetupDialog> {
     host: _host.text.trim(),
     port: int.tryParse(_port.text.trim()) ?? PrinterSettings.defaultPort,
     paper: _paper,
+    mode: _mode,
   );
 
   Future<void> _save() async {
@@ -337,8 +342,18 @@ class _PrinterSetupDialogState extends State<PrinterSetupDialog> {
     });
     String message;
     try {
-      await NetworkEscPosPrinter(settings: _current).print(widget.receipt);
-      message = 'Test receipt sent.';
+      if (_current.mode == ThermalMode.escPos) {
+        final r = await EscPosReceiptService(
+          adapter: NetworkPrinterAdapter(settings: _current),
+          config: NetworkPrinterAdapter.configFor(_current),
+        ).print(widget.receipt);
+        message = r.ok
+            ? 'Test receipt sent.'
+            : (r.message ?? 'The test print failed.');
+      } else {
+        await NetworkEscPosPrinter(settings: _current).print(widget.receipt);
+        message = 'Test receipt sent.';
+      }
     } on PrintException catch (e) {
       message = e.message;
     } catch (_) {
@@ -404,6 +419,20 @@ class _PrinterSetupDialogState extends State<PrinterSetupDialog> {
                       onSelectionChanged: _busy
                           ? null
                           : (s) => setState(() => _paper = s.first),
+                    ),
+                    const SizedBox(height: PosTokens.s12),
+                    // Phase 11C: how receipts go to the LAN printer
+                    // (Image = unchanged default).
+                    SegmentedButton<ThermalMode>(
+                      key: const Key('printer-mode'),
+                      segments: [
+                        for (final m in ThermalMode.values)
+                          ButtonSegment(value: m, label: Text(m.label)),
+                      ],
+                      selected: {_mode},
+                      onSelectionChanged: _busy
+                          ? null
+                          : (s) => setState(() => _mode = s.first),
                     ),
                     if (_message != null) ...[
                       const SizedBox(height: PosTokens.s12),

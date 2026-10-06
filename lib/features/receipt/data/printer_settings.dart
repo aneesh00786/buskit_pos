@@ -10,27 +10,47 @@ enum PaperWidth {
   final String label;
 }
 
+/// Phase 11C — how receipts are sent to the LAN thermal printer.
+enum ThermalMode {
+  /// The receipt drawn as an image (raster) — prints the same on any printer.
+  /// The default (unchanged behaviour).
+  image('Image'),
+
+  /// ESC/POS text commands (Phase 11A layer) — smaller and faster, ASCII text.
+  escPos('ESC/POS text');
+
+  const ThermalMode(this.label);
+  final String label;
+}
+
 /// Where thermal receipts go. No host = not configured (system print is used).
 class PrinterSettings {
   const PrinterSettings({
     this.host = '',
     this.port = defaultPort,
     this.paper = PaperWidth.mm80,
+    this.mode = ThermalMode.image,
   });
 
   static const int defaultPort = 9100; // raw ESC/POS over LAN
   final String host;
   final int port;
   final PaperWidth paper;
+  final ThermalMode mode;
 
   bool get thermalConfigured => host.trim().isNotEmpty;
 
-  PrinterSettings copyWith({String? host, int? port, PaperWidth? paper}) =>
-      PrinterSettings(
-        host: host ?? this.host,
-        port: port ?? this.port,
-        paper: paper ?? this.paper,
-      );
+  PrinterSettings copyWith({
+    String? host,
+    int? port,
+    PaperWidth? paper,
+    ThermalMode? mode,
+  }) => PrinterSettings(
+    host: host ?? this.host,
+    port: port ?? this.port,
+    paper: paper ?? this.paper,
+    mode: mode ?? this.mode,
+  );
 
   /// Null when valid, else the problem.
   static String? validate(String host, String portText) {
@@ -56,6 +76,7 @@ class PrinterSettingsStore {
   static const _kHost = 'printer_host';
   static const _kPort = 'printer_port';
   static const _kPaper = 'printer_paper';
+  static const _kMode = 'printer_mode';
 
   Future<PrinterSettings> load() async {
     final host = await _store.read(_kHost) ?? '';
@@ -66,7 +87,11 @@ class PrinterSettingsStore {
     final paper =
         PaperWidth.values.where((p) => p.name == paperName).firstOrNull ??
         PaperWidth.mm80;
-    return PrinterSettings(host: host, port: port, paper: paper);
+    final modeName = await _store.read(_kMode);
+    final mode =
+        ThermalMode.values.where((m) => m.name == modeName).firstOrNull ??
+        ThermalMode.image;
+    return PrinterSettings(host: host, port: port, paper: paper, mode: mode);
   }
 
   Future<void> save(PrinterSettings s) async {
@@ -77,5 +102,6 @@ class PrinterSettingsStore {
     }
     await _store.write(_kPort, '${s.port}');
     await _store.write(_kPaper, s.paper.name);
+    await _store.write(_kMode, s.mode.name);
   }
 }
