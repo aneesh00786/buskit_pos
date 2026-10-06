@@ -97,22 +97,22 @@ class ProductItem {
   final String? productCode;
   final String? brandName;
   final String? barcode;
+
   /// Descriptive pack-size label ("100 Grm", "250 ML") — never decides
   /// whether the product can be sold.
   final String? unitType;
 
   /// Server-decided POS selling mode: PIECE, WEIGHT or REVIEW. Older servers
-  /// don't send it, which means PIECE. Only PIECE can be sold in this app
-  /// (WEIGHT waits for the weight-selling phase); the server enforces it.
+  /// don't send it, which means PIECE. PIECE sells in whole units; WEIGHT
+  /// (Phase 12B) by an entered weight — the server decides whether weight
+  /// sales are enabled and refuses them when not. REVIEW is never sold.
   final String sellingMode;
-  bool get isPosSellable => sellingMode == 'PIECE';
+  bool get isWeight => sellingMode == 'WEIGHT';
+  bool get isPosSellable => sellingMode == 'PIECE' || isWeight;
 
-  /// The reason a non-PIECE product can't be added (null when it can).
-  String? get notSellableMessage => isPosSellable
-      ? null
-      : sellingMode == 'WEIGHT'
-      ? 'This product is sold by weight, which the POS does not support yet.'
-      : 'This product is not configured for POS sale.';
+  /// The reason the product can't be added (null when it can).
+  String? get notSellableMessage =>
+      isPosSellable ? null : 'This product is not configured for POS sale.';
   final String? imageUrl;
   final CategoryRef? category;
 

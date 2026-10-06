@@ -62,11 +62,14 @@ void main() {
       expect(p.unitType, 'Grm', reason: 'the label is kept, only descriptive');
     });
 
-    test('WEIGHT and REVIEW are not sellable, each with its own message; values are case-normalised', () {
+    // Phase 12B: WEIGHT is sold by an entered weight (the server decides
+    // whether weight sales are enabled); REVIEW is still never sellable.
+    test('WEIGHT is sold by weight, REVIEW is not sellable with its message; values are case-normalised', () {
       final w = ProductItem.fromJson(withMode(productJson(id: 2, name: 'Apples', unit: 'KG'), 'weight'))!;
       expect(w.sellingMode, 'WEIGHT');
-      expect(w.isPosSellable, isFalse);
-      expect(w.notSellableMessage, 'This product is sold by weight, which the POS does not support yet.');
+      expect(w.isWeight, isTrue);
+      expect(w.isPosSellable, isTrue);
+      expect(w.notSellableMessage, isNull);
       final r = ProductItem.fromJson(withMode(productJson(id: 3, name: 'Badam', unit: 'Grm'), 'REVIEW'))!;
       expect(r.isPosSellable, isFalse);
       expect(r.notSellableMessage, 'This product is not configured for POS sale.');
@@ -98,12 +101,17 @@ void main() {
     expect(carts.addCalls, isEmpty);
   });
 
-  testWidgets('tapping a WEIGHT product shows the weight message and is never added as a piece', (tester) async {
+  // Phase 12B: a WEIGHT product asks for the weight first and is never added
+  // as a piece; cancelling adds nothing.
+  testWidgets('tapping a WEIGHT product asks for the weight and is never added as a piece', (tester) async {
     products.onSearch = (_) async => page([withMode(productJson(id: 9, name: 'Apples', unit: 'KG'), 'WEIGHT')]);
     await pumpPage(tester);
     await tester.tap(find.text('Add'));
     await tester.pumpAndSettle();
-    expect(find.text('This product is sold by weight, which the POS does not support yet.'), findsOneWidget);
+    expect(find.text('Set weight'), findsOneWidget);
+    expect(carts.addCalls, isEmpty);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
     expect(carts.addCalls, isEmpty);
   });
 

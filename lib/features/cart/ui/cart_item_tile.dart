@@ -5,6 +5,7 @@ import '../../../core/theme/pos_tokens.dart';
 import '../../../core/ui/product_image.dart';
 import '../../../core/ui/quantity_stepper.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/quantity.dart';
 import '../models/cart_sale.dart';
 import '../state/cart_controller.dart';
 import 'quantity_dialog.dart';
@@ -71,6 +72,7 @@ class CartItemTile extends StatelessWidget {
       context,
       initial: line.quantity,
       itemName: _name,
+      weight: line.isWeight,
     );
     if (q != null) await cart.updateQuantity(line.id, q);
   }
@@ -86,7 +88,7 @@ class CartItemTile extends StatelessWidget {
       if (line.isUnavailable)
         'No longer available'
       else
-        '${line.quantity} × ${formatMoney(line.unitPrice)}',
+        '${line.quantityText} × ${formatMoney(line.unitPrice)}',
       ?tax,
       if (discount != null && discount != 0)
         'Discount ${formatMoney(discount)}',
@@ -95,7 +97,7 @@ class CartItemTile extends StatelessWidget {
     return Semantics(
       container: true,
       label:
-          '$_name, quantity ${line.quantity}, line total ${formatMoney(line.lineTotal)}',
+          '$_name, ${line.isWeight ? 'weight' : 'quantity'} ${line.quantityText}, line total ${formatMoney(line.lineTotal)}',
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: PosTokens.s8),
         child: Column(
@@ -153,14 +155,27 @@ class CartItemTile extends StatelessWidget {
               alignment: WrapAlignment.spaceBetween,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                QuantityStepper(
-                  value: line.quantity,
-                  min: CartController.minQuantity,
-                  max: CartController.maxQuantity,
-                  enabled: enabled && !line.isUnavailable,
-                  onChanged: (q) => cart.updateQuantity(line.id, q),
-                  onTapValue: () => _editQuantity(context),
-                ),
+                // Phase 12B: a weighed line is set by typing its weight
+                // (the existing quantity dialog in weight mode); pieces keep
+                // the +/- stepper exactly as before.
+                if (line.isWeight)
+                  OutlinedButton.icon(
+                    key: Key('weight-${line.id}'),
+                    onPressed: enabled && !line.isUnavailable
+                        ? () => _editQuantity(context)
+                        : null,
+                    icon: const Icon(Icons.scale_outlined, size: 18),
+                    label: Text(line.quantityText),
+                  )
+                else
+                  QuantityStepper(
+                    value: line.quantityMilli ~/ quantityUnit,
+                    min: CartController.minQuantity,
+                    max: CartController.maxQuantity,
+                    enabled: enabled && !line.isUnavailable,
+                    onChanged: (q) => cart.updateQuantity(line.id, q),
+                    onTapValue: () => _editQuantity(context),
+                  ),
                 IconButton(
                   tooltip: 'Remove $_name',
                   constraints: const BoxConstraints(

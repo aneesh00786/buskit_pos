@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
+    <!-- Voice (Phase 13A): asked only when voice is first used. Optional hardware. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
     <application
         android:label="buskit_pos"
         android:name="${applicationName}"
@@ -43,6 +46,10 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- Voice (Phase 13A): the device's speech recognition service (Android 11+). -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
+        </intent>
         <!-- Email / SMS receipt hand-off. -->
         <intent>
             <action android:name="android.intent.action.SENDTO"/>

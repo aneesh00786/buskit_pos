@@ -9,13 +9,13 @@ abstract class CartService {
   Future<CartSale> addItem({
     required int saleId,
     required int productVariationId,
-    required int quantity,
+    required num quantity,
     required int expectedVersion,
   });
   Future<CartSale> updateItem({
     required int saleId,
     required int itemId,
-    required int quantity,
+    required num quantity,
     required int expectedVersion,
   });
   Future<CartSale> removeItem({
@@ -128,7 +128,7 @@ class ApiCartService implements CartService {
   Future<CartSale> addItem({
     required int saleId,
     required int productVariationId,
-    required int quantity,
+    required num quantity,
     required int expectedVersion,
   }) async {
     final data = await _client.post(
@@ -149,7 +149,7 @@ class ApiCartService implements CartService {
   Future<CartSale> updateItem({
     required int saleId,
     required int itemId,
-    required int quantity,
+    required num quantity,
     required int expectedVersion,
   }) async {
     final data = await _client.patch(

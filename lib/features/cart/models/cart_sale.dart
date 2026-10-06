@@ -1,4 +1,5 @@
 import '../../../core/utils/json_read.dart';
+import '../../../core/utils/quantity.dart';
 import '../../loyalty/models/loyalty_sale_info.dart';
 import '../../promotions/models/promotion.dart';
 import 'discount_override.dart';
@@ -18,11 +19,26 @@ class CartLine {
     this.taxIncluded,
     this.discountAmount,
     this.lineTotal,
+    this.sellingMode = 'PIECE',
   });
 
   final int id;
   final int productVariationId;
-  final int quantity;
+
+  /// An int for whole quantities (every PIECE line, exactly as before) or,
+  /// for a WEIGHT line, the exact decimal the server sent (e.g. 1.25).
+  final num quantity;
+
+  /// Phase 12B: PIECE | WEIGHT (from the server's item view; older servers and
+  /// completed-sale views don't send it = PIECE).
+  final String sellingMode;
+  bool get isWeight => sellingMode == 'WEIGHT';
+
+  /// Exact thousandths of [quantity].
+  int get quantityMilli => quantityMilliOf(quantity) ?? 0;
+
+  /// "2" for pieces, "1.250" for a weight.
+  String get quantityText => formatQuantity(quantity, weight: isWeight);
   final String? productName;
   final String? barcode;
   final String? brandName;
@@ -44,12 +60,14 @@ class CartLine {
     if (m == null) return null;
     final id = asInt(m['id']);
     final variation = asInt(m['product_variation_id']);
-    final qty = asInt(m['quantity']);
-    if (id == null || variation == null || qty == null) return null;
+    // Exact: whole quantities stay ints; WEIGHT decimals keep 3 places.
+    final qtyMilli = quantityMilliOf(m['quantity']);
+    if (id == null || variation == null || qtyMilli == null) return null;
     return CartLine(
       id: id,
       productVariationId: variation,
-      quantity: qty,
+      quantity: quantityFromMilli(qtyMilli),
+      sellingMode: (asString(m['selling_mode']) ?? 'PIECE').toUpperCase(),
       productName: asString(m['product_name']),
       barcode: asString(m['barcode']),
       brandName: asString(m['brandname']),
@@ -146,7 +164,11 @@ class CartSale {
 
   bool get isDraft => status == 'draft';
 
-  int get itemCount => items.fold(0, (a, b) => a + b.quantity);
+  /// Pieces in the sale; a weighed line counts as one item (Phase 12B).
+  int get itemCount => items.fold(
+    0,
+    (a, b) => a + (b.isWeight ? 1 : b.quantityMilli ~/ quantityUnit),
+  );
 
   static CartSale? fromJson(Object? json) {
     final m = asMap(json);

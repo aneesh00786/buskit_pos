@@ -20,7 +20,10 @@ class ReceiptLine {
 
   /// Variation / unit label remembered from the cart (display only).
   final String? variant;
-  final int quantity;
+
+  /// Whole number for pieces; the exact decimal for a weighed line (Phase
+  /// 12B), printed with 3 decimals.
+  final num quantity;
 
   /// Server figures, already formatted for display (e.g. `50.00`).
   final String unitPrice;

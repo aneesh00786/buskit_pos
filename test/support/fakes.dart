@@ -250,7 +250,7 @@ class AddCall {
   AddCall(this.saleId, this.variationId, this.quantity, this.expectedVersion);
   final int saleId;
   final int variationId;
-  final int quantity;
+  final num quantity;
   final int expectedVersion;
 }
 
@@ -413,7 +413,7 @@ class UpdateCall {
   UpdateCall(this.saleId, this.itemId, this.quantity, this.expectedVersion);
   final int saleId;
   final int itemId;
-  final int quantity;
+  final num quantity;
   final int expectedVersion;
 }
 
@@ -428,7 +428,7 @@ class RemoveCall {
 Map<String, dynamic> lineJson({
   required int id,
   int variationId = 42,
-  int quantity = 1,
+  num quantity = 1,
   String name = 'Tea',
   double unitPrice = 10,
   double tax = 1.2,
@@ -436,10 +436,12 @@ Map<String, dynamic> lineJson({
   double taxPercent = 12,
   double? lineTotal,
   String availability = 'available',
+  String? sellingMode,
 }) => {
   'id': id,
   'product_variation_id': variationId,
   'quantity': quantity,
+  'selling_mode': ?sellingMode,
   'product_name': name,
   'barcode': 'BC$id',
   'brandname': 'Brand',
@@ -503,7 +505,7 @@ class FakeCartService implements CartService {
   Future<CartSale> updateItem({
     required int saleId,
     required int itemId,
-    required int quantity,
+    required num quantity,
     required int expectedVersion,
   }) {
     final c = UpdateCall(saleId, itemId, quantity, expectedVersion);
@@ -658,7 +660,7 @@ class FakeCartService implements CartService {
   Future<CartSale> addItem({
     required int saleId,
     required int productVariationId,
-    required int quantity,
+    required num quantity,
     required int expectedVersion,
   }) {
     final c = AddCall(saleId, productVariationId, quantity, expectedVersion);

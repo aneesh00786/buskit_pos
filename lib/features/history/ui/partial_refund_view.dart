@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import '../../../core/network/error_messages.dart';
 import '../../../core/theme/pos_tokens.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/quantity.dart';
 import '../../../core/utils/server_time.dart';
 import '../../cart/models/cart_sale.dart';
+import '../../cart/ui/quantity_dialog.dart';
 import '../../checkout/models/payment.dart';
 import '../models/partial_refund.dart';
 import '../state/sales_history_controller.dart';
@@ -89,8 +91,11 @@ class _RefundItemsDialog extends StatefulWidget {
 }
 
 class _RefundItemsDialogState extends State<_RefundItemsDialog> {
-  final Map<int, int> _qty = {};
-  final Map<int, int> _damaged = {};
+  // Phase 12C: an int per PIECE line (unchanged), the exact decimal per WEIGHT
+  // line (never float arithmetic — compared and checked in thousandths).
+  final Map<int, num> _qty = {};
+  final Map<int, num> _damaged = {};
+  String? _weightError;
   final _reason = TextEditingController();
   late final List<String> _methods;
   String? _method;
@@ -124,6 +129,49 @@ class _RefundItemsDialogState extends State<_RefundItemsDialog> {
     setState(() {
       _qty[itemId] = q;
       if ((_damaged[itemId] ?? 0) > q) _damaged[itemId] = q;
+    });
+    context.read<SalesHistoryController>().clearPreviewError();
+  }
+
+  /// Phase 12C — a WEIGHT line: the refund (or damaged) weight is typed in the
+  /// existing quantity dialog (weight mode: 0.001+, at most 3 decimals) and
+  /// must not exceed [max] — refused with a message, never clamped or rounded.
+  Future<void> _enterWeight(CartLine line, {required bool damaged, required num max}) async {
+    final name = _itemName(widget.names, line);
+    final current = (damaged ? _damaged[line.id] : _qty[line.id]) ?? 0;
+    final w = await showQuantityDialog(
+      context,
+      initial: current > 0 ? current : max,
+      itemName: damaged ? '$name (damaged, not restocked)' : name,
+      weight: true,
+    );
+    if (w == null || !mounted) return;
+    final wMilli = quantityMilliOf(w)!;
+    final maxMilli = quantityMilliOf(max) ?? 0;
+    if (wMilli > maxMilli) {
+      setState(() => _weightError = damaged
+          ? 'The damaged weight cannot be more than the refund weight (${formatQuantity(max, weight: true)}).'
+          : 'Only ${formatQuantity(max, weight: true)} of $name can still be refunded.');
+      return;
+    }
+    setState(() {
+      _weightError = null;
+      if (damaged) {
+        _damaged[line.id] = w;
+      } else {
+        _qty[line.id] = w;
+        final d = quantityMilliOf(_damaged[line.id] ?? 0) ?? 0;
+        if (d > wMilli) _damaged[line.id] = w;
+      }
+    });
+    context.read<SalesHistoryController>().clearPreviewError();
+  }
+
+  void _clearWeight(int itemId) {
+    setState(() {
+      _qty[itemId] = 0;
+      _damaged[itemId] = 0;
+      _weightError = null;
     });
     context.read<SalesHistoryController>().clearPreviewError();
   }
@@ -173,20 +221,44 @@ class _RefundItemsDialogState extends State<_RefundItemsDialog> {
               ),
             ),
             for (final line in refundable)
-              _LineSelector(
-                key: ValueKey('refund-line-${line.id}'),
-                itemId: line.id,
-                name: _itemName(widget.names, line),
-                sold: line.quantity,
-                refunded: widget.sale.refundedQuantity(line),
-                refundable: widget.sale.refundableQuantity(line),
-                quantity: _qty[line.id] ?? 0,
-                damaged: _damaged[line.id] ?? 0,
-                onQuantity: (v) => _setQty(line.id, v, widget.sale.refundableQuantity(line)),
-                onDamaged: (v) {
-                  setState(() => _damaged[line.id] = v.clamp(0, _qty[line.id] ?? 0));
-                  h.clearPreviewError();
-                },
+              if (line.isWeight)
+                _WeightLineSelector(
+                  key: ValueKey('refund-line-${line.id}'),
+                  itemId: line.id,
+                  name: _itemName(widget.names, line),
+                  sold: line.quantity,
+                  refunded: widget.sale.refundedQuantity(line),
+                  refundable: widget.sale.refundableQuantity(line),
+                  quantity: _qty[line.id] ?? 0,
+                  damaged: _damaged[line.id] ?? 0,
+                  onQuantity: () => _enterWeight(line, damaged: false, max: widget.sale.refundableQuantity(line)),
+                  onDamaged: () => _enterWeight(line, damaged: true, max: _qty[line.id] ?? 0),
+                  onClear: () => _clearWeight(line.id),
+                )
+              else
+                _LineSelector(
+                  key: ValueKey('refund-line-${line.id}'),
+                  itemId: line.id,
+                  name: _itemName(widget.names, line),
+                  sold: line.quantity.toInt(),
+                  refunded: widget.sale.refundedQuantity(line).toInt(),
+                  refundable: widget.sale.refundableQuantity(line).toInt(),
+                  quantity: (_qty[line.id] ?? 0).toInt(),
+                  damaged: (_damaged[line.id] ?? 0).toInt(),
+                  onQuantity: (v) => _setQty(line.id, v, widget.sale.refundableQuantity(line).toInt()),
+                  onDamaged: (v) {
+                    setState(() => _damaged[line.id] = v.clamp(0, (_qty[line.id] ?? 0).toInt()));
+                    h.clearPreviewError();
+                  },
+                ),
+            if (_weightError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: PosTokens.s4),
+                child: Text(
+                  _weightError!,
+                  key: const Key('refund-weight-error'),
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
               ),
             if (_methods.length > 1) ...[
               const SizedBox(height: PosTokens.s12),
@@ -308,6 +380,97 @@ class _LineSelector extends StatelessWidget {
                   max: quantity,
                   onChanged: onDamaged,
                   label: 'Damaged quantity for $name',
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Phase 12C — a WEIGHT line: sold / refunded / refundable as weights, and
+/// the refund and damaged weights entered with the quantity dialog. Same
+/// layout as [_LineSelector] (which PIECE lines keep).
+class _WeightLineSelector extends StatelessWidget {
+  const _WeightLineSelector({
+    super.key,
+    required this.itemId,
+    required this.name,
+    required this.sold,
+    required this.refunded,
+    required this.refundable,
+    required this.quantity,
+    required this.damaged,
+    required this.onQuantity,
+    required this.onDamaged,
+    required this.onClear,
+  });
+
+  final int itemId;
+  final String name;
+  final num sold;
+  final num refunded;
+  final num refundable;
+  final num quantity;
+  final num damaged;
+  final VoidCallback onQuantity;
+  final VoidCallback onDamaged;
+  final VoidCallback onClear;
+
+  String _w(num v) => formatQuantity(v, weight: true);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: PosTokens.s4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    Text(
+                      'Sold ${_w(sold)} · ${refunded > 0 ? 'refunded ${_w(refunded)} · ' : ''}refundable ${_w(refundable)}',
+                      key: Key('refund-weight-summary-$itemId'),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              if (quantity > 0)
+                IconButton(
+                  key: Key('refund-weight-clear-$itemId'),
+                  tooltip: 'Do not refund',
+                  onPressed: onClear,
+                  icon: const Icon(Icons.remove_circle_outline),
+                ),
+              OutlinedButton.icon(
+                key: Key('refund-weight-$itemId'),
+                onPressed: onQuantity,
+                icon: const Icon(Icons.scale_outlined, size: 18),
+                label: Text(quantity > 0 ? _w(quantity) : 'Weight'),
+              ),
+            ],
+          ),
+          if (quantity > 0)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Damaged (not restocked)',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                OutlinedButton(
+                  key: Key('refund-weight-damaged-$itemId'),
+                  onPressed: onDamaged,
+                  child: Text(_w(damaged)),
                 ),
               ],
             ),

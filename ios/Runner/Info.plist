@@ -68,6 +68,10 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>The camera is used to scan product barcodes.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>The microphone is used for voice commands, only when you start voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition turns your voice command into text.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Used to send receipts to a printer on your local network.</string>
 	<key>LSApplicationQueriesSchemes</key>

@@ -59,6 +59,15 @@ class BarcodeScanHandler {
           code: code,
         );
       }
+      // Phase 12B: a product sold by weight is never added by a scan with a
+      // guessed weight — the cashier selects it and enters the weight.
+      if (item.isWeight) {
+        return ScanResult(
+          ScanOutcome.invalid,
+          '${item.productName} is sold by weight: select it and enter the weight.',
+          code: code,
+        );
+      }
       final label = [
         item.variationName,
         item.unitType,

@@ -1,4 +1,5 @@
 import '../../../core/utils/format.dart';
+import '../../../core/utils/quantity.dart';
 import '../../checkout/models/payment.dart';
 import 'receipt.dart';
 
@@ -158,7 +159,11 @@ extension ReceiptText on ReceiptData {
         out.add('  ${_ascii(l.barcode!)}');
       }
       out.add(
-        _pair('  ${l.quantity} x ${l.unitPrice}', _ascii(l.lineTotal), columns),
+        _pair(
+          '  ${formatQuantity(l.quantity)} x ${l.unitPrice}',
+          _ascii(l.lineTotal),
+          columns,
+        ),
       );
     }
     out.add(rule);

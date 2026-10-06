@@ -1146,7 +1146,7 @@ class _SuccessView extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          '${line.quantity} × ${formatMoney(line.unitPrice)}',
+                          '${line.quantityText} × ${formatMoney(line.unitPrice)}',
                           style: theme.textTheme.bodySmall,
                         ),
                       ],

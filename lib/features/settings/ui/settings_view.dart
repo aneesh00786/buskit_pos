@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../voice/ui/voice_test_view.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/error_messages.dart';
@@ -241,6 +242,27 @@ class _CommonSections extends StatelessWidget {
                 builder: (_) =>
                     const PrinterSetupDialog(receipt: _samplePrintReceipt),
               ),
+            ),
+          ),
+        ),
+        const SizedBox(height: PosTokens.s16),
+        // Phase 13A: developer-only test of the voice foundation (speech to
+        // text + session ids). No POS action; microphone asked on first use.
+        _SectionCard(
+          title: 'Voice (developer test)',
+          icon: Icons.mic_none,
+          child: Material(
+            type: MaterialType.transparency,
+            child: ListTile(
+              key: const Key('voice-test-entry'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.record_voice_over_outlined),
+              title: const Text('Voice test'),
+              subtitle: const Text(
+                'Speak and see the recognized text. Nothing is billed.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => showVoiceTest(context),
             ),
           ),
         ),

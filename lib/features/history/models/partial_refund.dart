@@ -1,4 +1,5 @@
 import '../../../core/utils/json_read.dart';
+import '../../../core/utils/quantity.dart';
 import '../../../core/utils/server_time.dart';
 
 /// A completed sale's refund state (`refund_status`, Phase 17.8). `full`
@@ -23,7 +24,8 @@ enum SaleRefundStatus {
 }
 
 /// One line of a refund request: quantity-based only (no amount field —
-/// every amount is computed by the server).
+/// every amount is computed by the server). Phase 12C: an int for pieces
+/// (unchanged), the exact decimal (at most 3 places) for a WEIGHT line.
 class RefundRequestLine {
   const RefundRequestLine({
     required this.saleItemId,
@@ -32,8 +34,8 @@ class RefundRequestLine {
   });
 
   final int saleItemId;
-  final int quantity;
-  final int damagedQuantity;
+  final num quantity;
+  final num damagedQuantity;
 
   Map<String, dynamic> toJson() => {
     'sale_item_id': saleItemId,
@@ -42,6 +44,13 @@ class RefundRequestLine {
   };
 
   String get canonical => '$saleItemId:$quantity:$damagedQuantity';
+}
+
+/// Exact quantity from a server value (ints stay ints; decimals keep 3
+/// places); null when it is not a valid quantity.
+num? _qty(Object? v) {
+  final m = quantityMilliOf(v);
+  return m == null ? null : quantityFromMilli(m);
 }
 
 class RefundPayout {
@@ -75,9 +84,9 @@ class RefundLine {
   });
 
   final int saleItemId;
-  final int quantity;
-  final int damagedQuantity;
-  final int? restockedQuantity;
+  final num quantity;
+  final num damagedQuantity;
+  final num? restockedQuantity;
   final double? unitPrice;
   final double? subtotalAmount;
   final double? discountAmount;
@@ -88,14 +97,14 @@ class RefundLine {
     final m = asMap(json);
     if (m == null) return null;
     final id = asInt(m['sale_item_id']);
-    final qty = asInt(m['quantity']);
+    final qty = _qty(m['quantity']);
     final amount = asDouble(m['refund_amount']);
     if (id == null || qty == null || amount == null) return null;
     return RefundLine(
       saleItemId: id,
       quantity: qty,
-      damagedQuantity: asInt(m['damaged_quantity']) ?? 0,
-      restockedQuantity: asInt(m['restocked_quantity']),
+      damagedQuantity: _qty(m['damaged_quantity']) ?? 0,
+      restockedQuantity: _qty(m['restocked_quantity']),
       unitPrice: asDouble(m['unit_price']),
       subtotalAmount: asDouble(m['subtotal_amount']),
       discountAmount: asDouble(m['discount_amount']),
@@ -196,8 +205,14 @@ class RefundPreview implements RefundAmounts {
       discountAmount: asDouble(m['discount_amount']),
       taxAmount: asDouble(m['tax_amount']),
       walletAmount: asDouble(m['wallet_amount']) ?? 0,
-      payouts: asList(m['payouts']).map(RefundPayout.fromJson).whereType<RefundPayout>().toList(),
-      items: asList(m['items']).map(RefundLine.fromJson).whereType<RefundLine>().toList(),
+      payouts: asList(m['payouts'])
+          .map(RefundPayout.fromJson)
+          .whereType<RefundPayout>()
+          .toList(),
+      items: asList(m['items'])
+          .map(RefundLine.fromJson)
+          .whereType<RefundLine>()
+          .toList(),
       loyalty: RefundLoyalty.fromJson(m['loyalty']),
       fullyRefundedAfter: m['fully_refunded_after'] == true,
       remainingAfter: asDouble(m['remaining_refundable_after']),
@@ -243,7 +258,11 @@ class PartialRefund implements RefundAmounts {
   final String? refundedBy;
   final DateTime? refundedAt;
 
-  int get unitCount => items.fold(0, (s, i) => s + i.quantity);
+  /// Pieces refunded; a weighed (fractional) line counts as one item.
+  int get unitCount => items.fold(0, (s, i) {
+    final m = quantityMilliOf(i.quantity) ?? 0;
+    return s + (m % quantityUnit == 0 ? m ~/ quantityUnit : 1);
+  });
 
   static PartialRefund? fromJson(Object? json) {
     final m = asMap(json);
@@ -258,8 +277,14 @@ class PartialRefund implements RefundAmounts {
       discountAmount: asDouble(m['discount_amount']),
       taxAmount: asDouble(m['tax_amount']),
       walletAmount: asDouble(m['wallet_amount']) ?? 0,
-      payouts: asList(m['payouts']).map(RefundPayout.fromJson).whereType<RefundPayout>().toList(),
-      items: asList(m['items']).map(RefundLine.fromJson).whereType<RefundLine>().toList(),
+      payouts: asList(m['payouts'])
+          .map(RefundPayout.fromJson)
+          .whereType<RefundPayout>()
+          .toList(),
+      items: asList(m['items'])
+          .map(RefundLine.fromJson)
+          .whereType<RefundLine>()
+          .toList(),
       loyalty: RefundLoyalty.fromJson(m['loyalty']),
       reason: asString(m['reason']),
       refundedBy: asString(m['refunded_by']),
@@ -271,6 +296,6 @@ class PartialRefund implements RefundAmounts {
 /// Per-line refund progress from the sale view's items.
 class ItemRefundProgress {
   const ItemRefundProgress({required this.refunded, required this.refundable});
-  final int refunded;
-  final int refundable;
+  final num refunded;
+  final num refundable;
 }

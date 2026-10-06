@@ -11,11 +11,13 @@ import '../../../core/network/pos_api_client.dart';
 import '../../../core/theme/pos_tokens.dart';
 import '../../../core/ui/state_views.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/quantity.dart';
 import '../../auth/state/session_controller.dart';
 import '../../barcode/barcode_key_listener.dart';
 import '../../barcode/barcode_scan_handler.dart';
 import '../../barcode/camera_scanner.dart';
 import '../../cart/state/cart_controller.dart';
+import '../../cart/ui/quantity_dialog.dart';
 import '../../cart/ui/cart_panel.dart';
 import '../../held_sales/state/held_sales_controller.dart';
 import '../../held_sales/ui/held_sales_view.dart';
@@ -189,17 +191,35 @@ class _ProductsPageState extends State<ProductsPage>
       first.variationName,
       first.unitType,
     ].where((x) => x != null && x.trim().isNotEmpty).join(' · ');
+    // Phase 12B: a product sold by weight asks for the weight first (the
+    // existing quantity dialog in weight mode); pieces add 1 as before.
+    num quantity = 1;
+    if (first.isWeight) {
+      final w = await showQuantityDialog(
+        context,
+        initial: 1,
+        itemName: g.name,
+        weight: true,
+      );
+      if (w == null || !mounted) return;
+      quantity = w;
+    }
     final ok = await cart.addItem(
       g.first.id,
-      1,
+      quantity,
       label: label.isEmpty ? null : label,
       imageUrl: g.imageUrl,
+      sellingMode: first.sellingMode,
     );
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     if (ok) {
-      messenger.showSnackBar(_snackBar('Added 1 × ${g.name}'));
+      messenger.showSnackBar(
+        _snackBar(
+          'Added ${formatQuantity(quantity, weight: first.isWeight)} × ${g.name}',
+        ),
+      );
     } else if (cart.error != null) {
       messenger.showSnackBar(
         _snackBar(

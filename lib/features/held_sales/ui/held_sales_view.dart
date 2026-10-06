@@ -507,7 +507,7 @@ class _DetailLine extends StatelessWidget {
                 Text(
                   line.isUnavailable
                       ? 'No longer available'
-                      : '${line.quantity} × ${formatMoney(line.unitPrice)}',
+                      : '${line.quantityText} × ${formatMoney(line.unitPrice)}',
                   style: theme.textTheme.bodySmall,
                 ),
               ],

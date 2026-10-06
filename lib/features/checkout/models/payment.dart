@@ -1,5 +1,6 @@
 import '../../../core/utils/json_read.dart';
 import '../../../core/utils/money.dart';
+import '../../../core/utils/quantity.dart';
 import '../../../core/utils/server_time.dart';
 import '../../cart/models/cart_sale.dart';
 import '../../cart/models/discount_override.dart';
@@ -181,7 +182,8 @@ class CompletedSale {
   /// 'none' / 'partial' / 'full' (Phase 17.8). Falls back to [refund] for a
   /// server response that predates the field.
   SaleRefundStatus get refundStatus =>
-      serverRefundStatus ?? (refund != null ? SaleRefundStatus.full : SaleRefundStatus.none);
+      serverRefundStatus ??
+      (refund != null ? SaleRefundStatus.full : SaleRefundStatus.none);
 
   final double? refundedTotal;
   final double? refundableTotal;
@@ -196,14 +198,16 @@ class CompletedSale {
   /// the provider's status.
   final List<ProviderRefund> providerRefunds;
 
-  bool get hasPendingProviderRefunds => providerRefunds.any((r) => r.status == ProviderRefundStatus.pending);
+  bool get hasPendingProviderRefunds =>
+      providerRefunds.any((r) => r.status == ProviderRefundStatus.pending);
 
-  /// Units of this line still refundable. Without server data: everything,
-  /// unless the sale was refunded as a whole.
-  int refundableQuantity(CartLine line) =>
+  /// Quantity of this line still refundable (Phase 12C: exact — an int for
+  /// pieces, the decimal for a WEIGHT line). Without server data:
+  /// everything, unless the sale was refunded as a whole.
+  num refundableQuantity(CartLine line) =>
       itemRefunds[line.id]?.refundable ?? (refund != null ? 0 : line.quantity);
 
-  int refundedQuantity(CartLine line) =>
+  num refundedQuantity(CartLine line) =>
       itemRefunds[line.id]?.refunded ?? (refund != null ? line.quantity : 0);
 
   /// The order/invoice number: the server's sale number, else "#id".
@@ -241,13 +245,20 @@ class CompletedSale {
           .map(ProviderRefund.fromJson)
           .whereType<ProviderRefund>()
           .toList(),
+      // Phase 12C: exact (whole numbers stay ints; a WEIGHT line keeps its
+      // decimals) — a decimal is never dropped or rounded.
       itemRefunds: {
         for (final raw in asList(m['items']))
           if (asMap(raw) case final i?
-              when asInt(i['id']) != null && asInt(i['refundable_quantity']) != null)
+              when asInt(i['id']) != null &&
+                  quantityMilliOf(i['refundable_quantity']) != null)
             asInt(i['id'])!: ItemRefundProgress(
-              refunded: asInt(i['refunded_quantity']) ?? 0,
-              refundable: asInt(i['refundable_quantity'])!,
+              refunded: quantityFromMilli(
+                quantityMilliOf(i['refunded_quantity']) ?? 0,
+              ),
+              refundable: quantityFromMilli(
+                quantityMilliOf(i['refundable_quantity'])!,
+              ),
             ),
       },
       items: asList(m['items'])

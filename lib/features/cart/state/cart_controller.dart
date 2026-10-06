@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/utils/money.dart';
+import '../../../core/utils/quantity.dart';
 import '../../../core/utils/uuid.dart';
 import '../../checkout/models/payment.dart';
 import '../../offline/models/offline_sale.dart';
@@ -255,15 +256,26 @@ class CartController extends ChangeNotifier {
   /// rejections).
   Future<bool> addItem(
     int productVariationId,
-    int quantity, {
+    num quantity, {
     String? label,
     String? imageUrl,
+    String sellingMode = 'PIECE',
   }) async {
     if (_op != null) return false;
-    final invalid = _validateQuantity(quantity);
+    final invalid = _validateQuantity(quantity, sellingMode);
     if (invalid != null) return _rejectLocally(invalid, CartOperation.add);
+    final milli = quantityMilliOf(quantity)!;
     if (_local != null || (_sale == null && _isOffline)) {
-      return _addLocal(productVariationId, quantity, label, imageUrl);
+      // Phase 12B: weight sales are online only.
+      if (sellingMode == 'WEIGHT' || milli % quantityUnit != 0) {
+        return _rejectLocally(_weightNeedsServer, CartOperation.add);
+      }
+      return _addLocal(
+        productVariationId,
+        milli ~/ quantityUnit,
+        label,
+        imageUrl,
+      );
     }
 
     return _run(CartOperation.add, null, () async {
@@ -271,7 +283,8 @@ class CartController extends ChangeNotifier {
       final updated = await _service.addItem(
         saleId: sale.id,
         productVariationId: productVariationId,
-        quantity: quantity,
+        // Exact: whole quantities stay ints (unchanged), decimals keep 3 places.
+        quantity: quantityFromMilli(milli),
         expectedVersion: sale.version,
       );
       if (label != null && label.trim().isNotEmpty) {
@@ -288,21 +301,30 @@ class CartController extends ChangeNotifier {
 
   /// Sets line [itemId] (`items[].id`) to [quantity]. Unchanged quantities
   /// succeed without a request.
-  Future<bool> updateQuantity(int itemId, int quantity) async {
+  Future<bool> updateQuantity(int itemId, num quantity) async {
     if (_op != null) return false;
-    if (_local != null) return _updateLocal(itemId, quantity);
+    if (_local != null) {
+      final m = quantityMilliOf(quantity);
+      if (m == null || m % quantityUnit != 0) {
+        final invalid = _validateQuantity(quantity);
+        return _rejectLocally(invalid ?? _weightNeedsServer, CartOperation.update);
+      }
+      return _updateLocal(itemId, m ~/ quantityUnit);
+    }
     final sale = _sale;
     final line = sale?.items.where((l) => l.id == itemId).firstOrNull;
     if (sale == null || line == null || !sale.isDraft) return false;
-    final invalid = _validateQuantity(quantity);
+    // The LINE decides the rule: whole units, or a weight (Phase 12B).
+    final invalid = _validateQuantity(quantity, line.sellingMode);
     if (invalid != null) return _rejectLocally(invalid, CartOperation.update);
-    if (line.quantity == quantity) return true;
+    final milli = quantityMilliOf(quantity)!;
+    if (line.quantityMilli == milli) return true;
 
     return _run(CartOperation.update, itemId, () async {
       return _service.updateItem(
         saleId: sale.id,
         itemId: itemId,
-        quantity: quantity,
+        quantity: quantityFromMilli(milli),
         expectedVersion: sale.version,
       );
     });
@@ -769,12 +791,15 @@ class CartController extends ChangeNotifier {
       if (price == null || tax == null || total == null || l.isUnavailable) {
         return null;
       }
+      // Phase 12B: weight sales are online only — a sale with a weighed (or
+      // any non-whole) line cannot continue offline.
+      if (l.isWeight || l.quantityMilli % quantityUnit != 0) return null;
       out.add(
         OfflineCheckoutLine(
           productVariationId: l.productVariationId,
           productName: l.productName ?? 'Item ${l.productVariationId}',
           variationName: _labels[l.productVariationId],
-          quantity: l.quantity,
+          quantity: l.quantityMilli ~/ quantityUnit,
           unitPriceMilli: milliFromDouble(price),
           taxPercent: l.taxPercent ?? 0,
           taxMode: l.taxIncluded == true ? 'inclusive' : 'exclusive',
@@ -1116,9 +1141,13 @@ class CartController extends ChangeNotifier {
 
   // ---- internals ----
 
-  String? _validateQuantity(int q) => (q < minQuantity || q > maxQuantity)
-      ? 'Quantity must be a whole number from $minQuantity to $maxQuantity.'
-      : null;
+  /// Phase 12B: PIECE = whole units (message unchanged); WEIGHT = a positive
+  /// decimal with at most 3 places. Invalid input is refused, never rounded.
+  String? _validateQuantity(num q, [String sellingMode = 'PIECE']) =>
+      quantityError(sellingMode, q);
+
+  static const _weightNeedsServer =
+      'Sales by weight need a connection to the server.';
 
   bool _rejectLocally(String message, CartOperation op) {
     _error = ApiException(kind: ApiErrorKind.validation, message: message);

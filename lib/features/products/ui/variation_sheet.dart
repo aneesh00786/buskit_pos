@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../../../core/network/error_messages.dart';
 import '../../../core/ui/quantity_stepper.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/quantity.dart';
 import '../../cart/state/cart_controller.dart';
+import '../../cart/ui/quantity_dialog.dart';
 import '../models/product_group.dart';
 import '../models/product_item.dart';
 import 'product_card.dart';
@@ -47,17 +49,35 @@ class _VariationSheetState extends State<VariationSheet> {
 
   Future<void> _add() async {
     final cart = context.read<CartController>();
+    // Phase 12B: a variation sold by weight asks for the weight (the existing
+    // quantity dialog in weight mode); pieces use the stepper as before.
+    num quantity = _qty;
+    if (_selected.isWeight) {
+      final w = await showQuantityDialog(
+        context,
+        initial: 1,
+        itemName: widget.group.name,
+        weight: true,
+      );
+      if (w == null || !mounted) return;
+      quantity = w;
+    }
     final ok = await cart.addItem(
       _selected.id,
-      _qty,
+      quantity,
       label: _label(_selected),
       imageUrl: _selected.imageUrl ?? widget.group.imageUrl,
+      sellingMode: _selected.sellingMode,
     );
     if (ok && mounted) {
       final name = widget.group.name;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Added $_qty × $name to the cart')),
+        SnackBar(
+          content: Text(
+            'Added ${formatQuantity(quantity, weight: _selected.isWeight)} × $name to the cart',
+          ),
+        ),
       );
     }
   }
@@ -143,7 +163,9 @@ class _VariationSheetState extends State<VariationSheet> {
             ],
             const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: cart.isMutating || !_selected.isPosSellable ? null : _add,
+              onPressed: cart.isMutating || !_selected.isPosSellable
+                  ? null
+                  : _add,
               icon: cart.isMutating
                   ? const SizedBox(
                       height: 18,
