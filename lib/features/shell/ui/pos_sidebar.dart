@@ -10,6 +10,7 @@ enum PosSection {
   inventory,
   promotions,
   analytics,
+  paymentExceptions,
   settings,
 }
 
@@ -64,6 +65,14 @@ const _items = [
     'Analytics',
     placeholder: false,
   ),
+  // Phase 9: only shown when [PosSidebar.onOpenPaymentExceptions] is set
+  // (a manager with payments.view_store_exceptions).
+  _NavItem(
+    PosSection.paymentExceptions,
+    Icons.report_gmailerrorred_outlined,
+    'Payment exceptions',
+    placeholder: false,
+  ),
   _NavItem(
     PosSection.settings,
     Icons.settings_outlined,
@@ -92,6 +101,7 @@ class PosSidebar extends StatelessWidget {
     this.onOpenPromotions,
     this.onOpenAnalytics,
     this.onOpenSettings,
+    this.onOpenPaymentExceptions,
     this.onHelp,
     this.onSignOut,
     this.onCloseShift,
@@ -113,6 +123,9 @@ class PosSidebar extends StatelessWidget {
   final VoidCallback? onOpenPromotions;
   final VoidCallback? onOpenAnalytics;
   final VoidCallback? onOpenSettings;
+
+  /// Phase 9 — the store-wide Payment Exceptions screen; null hides it.
+  final VoidCallback? onOpenPaymentExceptions;
   final VoidCallback? onHelp;
   final VoidCallback? onSignOut;
 
@@ -148,7 +161,11 @@ class PosSidebar extends StatelessWidget {
                     horizontal: PosTokens.s12,
                   ),
                   children: [
-                    for (final item in _items)
+                    for (final item in _items.where(
+                      (i) =>
+                          i.section != PosSection.paymentExceptions ||
+                          onOpenPaymentExceptions != null,
+                    ))
                       _NavTile(
                         item: item,
                         collapsed: collapsed,
@@ -164,6 +181,8 @@ class PosSidebar extends StatelessWidget {
                           PosSection.promotions => onOpenPromotions,
                           PosSection.analytics => onOpenAnalytics,
                           PosSection.settings => onOpenSettings,
+                          PosSection.paymentExceptions =>
+                            onOpenPaymentExceptions,
                           _ => null,
                         },
                         tooltip: _tooltip(item),

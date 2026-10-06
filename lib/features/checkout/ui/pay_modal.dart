@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/error_messages.dart';
+import '../../../core/network/pos_api_client.dart';
 import '../../../core/theme/pos_tokens.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/json_read.dart';
@@ -11,6 +13,8 @@ import '../../../core/utils/money.dart';
 import '../../../core/utils/server_time.dart';
 import '../../auth/state/session_controller.dart';
 import '../../cart/state/cart_controller.dart';
+import '../../offline/offline_payment_policy.dart';
+import '../../offline/ui/offline_sale_views.dart';
 import '../../receipt/models/receipt_formatter.dart';
 import '../../receipt/state/receipt_services.dart';
 import '../../receipt/ui/receipt_actions.dart';
@@ -27,6 +31,7 @@ import 'terminal_payment_dialog.dart';
 Future<void> showPay(BuildContext context) {
   final cart = context.read<CartController>();
   cart.acknowledgeCompletion(); // a fresh checkout never re-shows an old receipt
+  cart.acknowledgeOfflineCompletion();
   cart.clearError();
   final size = MediaQuery.sizeOf(context);
   final session = context.read<SessionController>();
@@ -118,6 +123,7 @@ class _PayModalState extends State<PayModal> {
       if (cash && (card || other)) PayMode.split,
     ];
   }
+
   TenderMethod _secondary = TenderMethod.card;
 
   /// Card-terminal integration (optional): present only when the app wires a
@@ -125,6 +131,15 @@ class _PayModalState extends State<PayModal> {
   /// terminal configured for THIS register. Otherwise card stays
   /// recorded-only, exactly as before.
   PaymentTerminalService? _terminalService;
+
+  /// Server reachability (the API client's): provider payments (terminal,
+  /// UPI QR) need the server and the provider, so they are blocked while it
+  /// is unreachable — never simulated offline.
+  ValueListenable<bool?>? _reachable;
+  // A local (offline) cart has no server sale, so provider payments are
+  // impossible for it even if the connection has come back.
+  bool get _offline =>
+      _reachable?.value == false || context.read<CartController>().isLocalSale;
   PaymentProviderInfo? _terminal;
 
   /// UPI / QR provider (tendered as "other"), when the server offers one.
@@ -137,52 +152,111 @@ class _PayModalState extends State<PayModal> {
     if (_providersRequested) return;
     _providersRequested = true;
     try {
-      _terminalService = Provider.of<PaymentTerminalService>(context, listen: false);
+      _reachable = Provider.of<PosApiClient?>(
+        context,
+        listen: false,
+      )?.reachable;
+    } on ProviderNotFoundException {
+      _reachable = null;
+    }
+    try {
+      _terminalService = Provider.of<PaymentTerminalService>(
+        context,
+        listen: false,
+      );
     } on ProviderNotFoundException {
       _terminalService = null;
     }
     final service = _terminalService;
     if (service == null) return;
-    service.listProviders().then((providers) {
-      if (!mounted) return;
-      final usable = providers.where((p) => p.isUsableCardTerminal).toList();
-      final qr = providers.where((p) => p.isUsableQr).toList();
-      setState(() {
-        _terminal = usable.isEmpty ? null : usable.first;
-        _qr = qr.isEmpty ? null : qr.first;
-      });
-    }).catchError((Object _) {
-      // No provider list -> no terminal button; manual card still works.
-    });
+    service
+        .listProviders()
+        .then((providers) {
+          if (!mounted) return;
+          final usable = providers
+              .where((p) => p.isUsableCardTerminal)
+              .toList();
+          final qr = providers.where((p) => p.isUsableQr).toList();
+          setState(() {
+            _terminal = usable.isEmpty ? null : usable.first;
+            _qr = qr.isEmpty ? null : qr.first;
+          });
+        })
+        .catchError((Object _) {
+          // No provider list -> no terminal button; manual card still works.
+        });
+  }
+
+  void _showOnlineRequired() {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(content: Text(OfflinePaymentPolicy.onlineRequiredMessage)),
+    );
+  }
+
+  /// Phase 6: a local reminder (the sale id only) BEFORE a provider payment
+  /// starts, so a restart mid-payment is recovered from the server instead
+  /// of starting a new sale. Best-effort: recovery also finds this device's
+  /// drafts without it.
+  Future<void> _rememberForRecovery(int saleId) async {
+    try {
+      await readOfflineServices(context)?.storage
+          .addPaymentRecoveryMarker(saleId);
+    } catch (_) {}
   }
 
   Future<void> _payOnTerminal(CartController cart, int totalMilli) async {
+    if (_offline) return _showOnlineRequired();
     final service = _terminalService;
     final provider = _terminal;
     final sale = cart.sale;
     if (service == null || provider == null || sale == null) return;
-    final attempt = await showTerminalPayment(context, service: service, saleId: sale.id, provider: provider, amountMilli: totalMilli);
+    await _rememberForRecovery(sale.id);
+    if (!mounted) return;
+    final attempt = await showTerminalPayment(
+      context,
+      service: service,
+      saleId: sale.id,
+      provider: provider,
+      amountMilli: totalMilli,
+    );
     if (attempt == null || !mounted) return;
     // The server re-verifies the captured attempt (sale, amount, method).
-    await cart.completeSale([PaymentLine(method: TenderMethod.card, amountMilli: totalMilli, paymentAttemptId: attempt.id)]);
+    await cart.completeSale([
+      PaymentLine(
+        method: TenderMethod.card,
+        amountMilli: totalMilli,
+        paymentAttemptId: attempt.id,
+      ),
+    ]);
   }
 
   Future<void> _payByQr(CartController cart, int totalMilli) async {
+    if (_offline) return _showOnlineRequired();
     final service = _terminalService;
     final provider = _qr;
     final sale = cart.sale;
     if (service == null || provider == null || sale == null) return;
+    await _rememberForRecovery(sale.id);
+    if (!mounted) return;
     final attempt = await showQrPayment(
       context,
       service: service,
       saleId: sale.id,
       provider: provider,
       amountMilli: totalMilli,
-      currencyLabel: provider.currencies.length == 1 ? provider.currencies.first : '',
+      currencyLabel: provider.currencies.length == 1
+          ? provider.currencies.first
+          : '',
     );
     if (attempt == null || !mounted) return;
     // QR is tendered as "other"; the server re-verifies the captured attempt.
-    await cart.completeSale([PaymentLine(method: TenderMethod.other, amountMilli: totalMilli, paymentAttemptId: attempt.id)]);
+    await cart.completeSale([
+      PaymentLine(
+        method: TenderMethod.other,
+        amountMilli: totalMilli,
+        paymentAttemptId: attempt.id,
+      ),
+    ]);
   }
 
   final _tendered = TextEditingController();
@@ -253,9 +327,11 @@ class _PayModalState extends State<PayModal> {
     final available = _availableModes(context);
     if (available.isNotEmpty && !available.contains(_mode)) _mode = available.first;
     final sessionForTender = context.watch<SessionController>();
-    if (_secondary == TenderMethod.card && sessionForTender.isDenied('payments.accept_card')) {
+    if (_secondary == TenderMethod.card &&
+        sessionForTender.isDenied('payments.accept_card')) {
       _secondary = TenderMethod.other;
-    } else if (_secondary == TenderMethod.other && sessionForTender.isDenied('payments.accept_other')) {
+    } else if (_secondary == TenderMethod.other &&
+        sessionForTender.isDenied('payments.accept_other')) {
       _secondary = TenderMethod.card;
     }
     final cart = context.watch<CartController>();
@@ -265,6 +341,20 @@ class _PayModalState extends State<PayModal> {
         sale: done,
         names: cart.completedNames,
         variants: cart.completedVariants,
+      );
+    }
+
+    final savedOffline = cart.completedOfflineSale;
+    if (savedOffline != null) {
+      void newSale() {
+        cart.acknowledgeOfflineCompletion();
+        Navigator.of(context).pop();
+      }
+
+      return _Shell(
+        title: 'Sale saved offline',
+        onClose: newSale,
+        child: OfflineSaleSavedView(sale: savedOffline, onNewSale: newSale),
       );
     }
 
@@ -359,6 +449,20 @@ class _PayModalState extends State<PayModal> {
                 value: '-${formatMilli(_walletMilli(cart))}',
               ),
             ),
+          ValueListenableBuilder<bool?>(
+            valueListenable: _reachable ?? ValueNotifier<bool?>(null),
+            builder: (context, _, _) => cart.willCompleteOffline
+                ? Padding(
+                    padding: const EdgeInsets.only(top: PosTokens.s8),
+                    child: Text(
+                      'Offline — this sale will be saved on this device. '
+                      'It is not synced with the server yet.',
+                      key: const Key('offline-checkout-note'),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
           const SizedBox(height: PosTokens.s12),
           if (failure != null) ...[
             _Failure(
@@ -374,22 +478,45 @@ class _PayModalState extends State<PayModal> {
             onChanged: (m) => setState(() => _mode = m),
           ),
           const SizedBox(height: PosTokens.s16),
-          if (_mode == PayMode.card && _terminal != null) ...[
-            _TerminalPayPanel(
-              provider: _terminal!,
-              enabled: !busy && total > 0,
-              onPressed: () => _payOnTerminal(cart, total),
+          if ((_mode == PayMode.card && _terminal != null) ||
+              (_mode == PayMode.other && _qr != null))
+            ValueListenableBuilder<bool?>(
+              valueListenable: _reachable ?? ValueNotifier<bool?>(null),
+              builder: (context, reachable, _) {
+                final offline = reachable == false || cart.isLocalSale;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: PosTokens.s16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_mode == PayMode.card)
+                        _TerminalPayPanel(
+                          provider: _terminal!,
+                          enabled: !busy && total > 0 && !offline,
+                          onPressed: () => _payOnTerminal(cart, total),
+                        )
+                      else
+                        _QrPayPanel(
+                          provider: _qr!,
+                          enabled: !busy && total > 0 && !offline,
+                          onPressed: () => _payByQr(cart, total),
+                        ),
+                      if (offline)
+                        Padding(
+                          padding: const EdgeInsets.only(top: PosTokens.s8),
+                          child: Text(
+                            OfflinePaymentPolicy.onlineRequiredMessage,
+                            key: const Key('online-required'),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
             ),
-            const SizedBox(height: PosTokens.s16),
-          ],
-          if (_mode == PayMode.other && _qr != null) ...[
-            _QrPayPanel(
-              provider: _qr!,
-              enabled: !busy && total > 0,
-              onPressed: () => _payByQr(cart, total),
-            ),
-            const SizedBox(height: PosTokens.s16),
-          ],
           ..._modeBody(total, plan, busy),
         ],
       ),
@@ -462,13 +589,17 @@ class _PayModalState extends State<PayModal> {
           const SizedBox(height: PosTokens.s8),
           SegmentedButton<TenderMethod>(
             segments: [
-              if (!context.watch<SessionController>().isDenied('payments.accept_card'))
+              if (!context.watch<SessionController>().isDenied(
+                'payments.accept_card',
+              ))
                 const ButtonSegment(
                   value: TenderMethod.card,
                   label: Text('Card'),
                   icon: Icon(Icons.credit_card),
                 ),
-              if (!context.watch<SessionController>().isDenied('payments.accept_other'))
+              if (!context.watch<SessionController>().isDenied(
+                'payments.accept_other',
+              ))
                 const ButtonSegment(
                   value: TenderMethod.other,
                   label: Text('Other'),
@@ -777,7 +908,11 @@ class _ChangeRow extends StatelessWidget {
 }
 
 class _TerminalPayPanel extends StatelessWidget {
-  const _TerminalPayPanel({required this.provider, required this.enabled, required this.onPressed});
+  const _TerminalPayPanel({
+    required this.provider,
+    required this.enabled,
+    required this.onPressed,
+  });
   final PaymentProviderInfo provider;
   final bool enabled;
   final VoidCallback onPressed;
@@ -791,18 +926,27 @@ class _TerminalPayPanel extends StatelessWidget {
           key: const Key('pay-on-terminal'),
           onPressed: enabled ? onPressed : null,
           icon: const Icon(Icons.point_of_sale),
-          label: Text('Pay on terminal (${provider.terminalName ?? provider.label})'),
+          label: Text(
+            'Pay on terminal (${provider.terminalName ?? provider.label})',
+          ),
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
         ),
         const SizedBox(height: PosTokens.s8),
-        Text('Or record a card payment taken on another terminal:', style: Theme.of(context).textTheme.bodySmall),
+        Text(
+          'Or record a card payment taken on another terminal:',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
       ],
     );
   }
 }
 
 class _QrPayPanel extends StatelessWidget {
-  const _QrPayPanel({required this.provider, required this.enabled, required this.onPressed});
+  const _QrPayPanel({
+    required this.provider,
+    required this.enabled,
+    required this.onPressed,
+  });
   final PaymentProviderInfo provider;
   final bool enabled;
   final VoidCallback onPressed;
@@ -820,7 +964,10 @@ class _QrPayPanel extends StatelessWidget {
           style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
         ),
         const SizedBox(height: PosTokens.s8),
-        Text('Or record another payment taken outside the POS:', style: Theme.of(context).textTheme.bodySmall),
+        Text(
+          'Or record another payment taken outside the POS:',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
       ],
     );
   }

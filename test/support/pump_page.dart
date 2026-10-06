@@ -1,11 +1,18 @@
+import 'package:buskit_pos/features/checkout/data/payment_exception_service.dart';
+import 'package:buskit_pos/features/payment_exceptions/data/store_exception_service.dart';
+import 'package:buskit_pos/features/checkout/data/payment_recovery_service.dart';
 import 'package:buskit_pos/features/checkout/data/payment_terminal_service.dart';
+
 import 'dart:convert';
 
 import 'package:buskit_pos/core/network/pos_api_client.dart';
 import 'package:buskit_pos/core/storage/token_store.dart';
 import 'package:buskit_pos/core/theme/app_theme.dart';
 import 'package:buskit_pos/features/auth/state/session_controller.dart';
+import 'package:buskit_pos/features/auth/models/pos_token_scope.dart';
 import 'package:buskit_pos/features/cart/state/cart_controller.dart';
+import 'package:buskit_pos/features/offline/offline_checkout_service.dart';
+import 'package:buskit_pos/features/offline/offline_services.dart';
 import 'package:buskit_pos/features/held_sales/state/held_sales_controller.dart';
 import 'package:buskit_pos/features/products/state/product_list_controller.dart';
 import 'package:buskit_pos/features/products/ui/products_page.dart';
@@ -72,7 +79,25 @@ class PageHarness {
   /// Optional card-terminal service (null = not wired, as in the existing tests).
   PaymentTerminalService? terminal;
 
-  PageHarness({bool withHeld = true, PosApiClient? client})
+  /// Optional Phase 6 payment-recovery service (null = not wired, as in the
+  /// tests written before it: no recovery check runs).
+  PaymentRecoveryService? recovery;
+
+  /// Optional Phase 7 captured-payment exception service.
+  PaymentExceptionService? exceptions;
+
+  /// Optional Phase 9 store-wide exception service (null = not wired: the
+  /// sidebar item stays hidden, as in every earlier test).
+  StoreExceptionService? storeExceptions;
+
+  /// Optional offline wiring (real local storage); null = online-only, as
+  /// in every test written before offline checkout.
+  final OfflineServices? offline;
+
+  /// The staff scope offline checkout stamps on sales (tests set it).
+  PosTokenScope? offlineScope;
+
+  PageHarness({bool withHeld = true, PosApiClient? client, this.offline})
     : client = client ?? defaultTestApiClient() {
     products = FakeProductService();
     carts = FakeCartService();
@@ -90,6 +115,13 @@ class PageHarness {
     cart = CartController(
       carts,
       onHeldSalesChanged: held == null ? null : () => held!.refresh(),
+      offline: offline == null
+          ? null
+          : OfflineCartSupport(
+              checkout: offline!.checkout,
+              isOffline: () => this.client.reachable.value == false,
+              scope: () => offlineScope,
+            ),
     );
     products.onSearch = (_) async =>
         page([productJson(id: 1, name: 'Tea', variation: '250g')]);
@@ -142,12 +174,21 @@ Future<void> pumpProductsPage(
         Provider<ReceiptServices>.value(value: h.receipts.services),
         Provider<ProductService>.value(value: h.products),
         Provider<CameraScanner>.value(value: h.camera),
-        if (h.terminal != null) Provider<PaymentTerminalService>.value(value: h.terminal!),
+        if (h.terminal != null)
+          Provider<PaymentTerminalService>.value(value: h.terminal!),
+        if (h.recovery != null)
+          Provider<PaymentRecoveryService?>.value(value: h.recovery),
+        if (h.exceptions != null)
+          Provider<PaymentExceptionService?>.value(value: h.exceptions),
+        if (h.storeExceptions != null)
+          Provider<StoreExceptionService?>.value(value: h.storeExceptions),
         ChangeNotifierProvider.value(value: h.list),
         ChangeNotifierProvider.value(value: h.cart),
         if (h.held != null)
           ChangeNotifierProvider<HeldSalesController>.value(value: h.held!),
         Provider<PosApiClient>.value(value: h.client),
+        if (h.offline != null)
+          Provider<OfflineServices?>.value(value: h.offline),
       ],
       child: MaterialApp(
         theme: theme ?? AppTheme.light(),
@@ -182,12 +223,21 @@ Future<void> pumpProductsPageRaw(
         Provider<ReceiptServices>.value(value: h.receipts.services),
         Provider<ProductService>.value(value: h.products),
         Provider<CameraScanner>.value(value: h.camera),
-        if (h.terminal != null) Provider<PaymentTerminalService>.value(value: h.terminal!),
+        if (h.terminal != null)
+          Provider<PaymentTerminalService>.value(value: h.terminal!),
+        if (h.recovery != null)
+          Provider<PaymentRecoveryService?>.value(value: h.recovery),
+        if (h.exceptions != null)
+          Provider<PaymentExceptionService?>.value(value: h.exceptions),
+        if (h.storeExceptions != null)
+          Provider<StoreExceptionService?>.value(value: h.storeExceptions),
         ChangeNotifierProvider.value(value: h.list),
         ChangeNotifierProvider.value(value: h.cart),
         if (h.held != null)
           ChangeNotifierProvider<HeldSalesController>.value(value: h.held!),
         Provider<PosApiClient>.value(value: h.client),
+        if (h.offline != null)
+          Provider<OfflineServices?>.value(value: h.offline),
       ],
       child: MaterialApp(theme: AppTheme.light(), home: const ProductsPage()),
     ),

@@ -6,10 +6,16 @@ import '../models/sale_history_entry.dart';
 
 abstract class SalesHistoryService {
   /// `GET /sales?status=completed` — the store is taken from the device
-  /// token server-side; no date range, search, cashier or payment-method
-  /// filter exists on the backend, so those are applied client-side over
-  /// this list (see [SalesHistoryController]).
-  Future<List<SaleHistoryEntry>> listCompleted();
+  /// token server-side. [todayOnly] asks for the store's current business
+  /// day only (`range=today`); [limit] / [beforeId] page the history newest
+  /// first (`limit`, `before_id`). Search, cashier and payment-method
+  /// filters are still applied client-side over the loaded rows (see
+  /// [SalesHistoryController]).
+  Future<List<SaleHistoryEntry>> listCompleted({
+    bool todayOnly = false,
+    int? limit,
+    int? beforeId,
+  });
 
   /// `GET /sales/:id` — items, payments and totals for one completed sale
   /// (no product names; the completed view never carries them).
@@ -60,8 +66,20 @@ class ApiSalesHistoryService implements SalesHistoryService {
   final PosApiClient _client;
 
   @override
-  Future<List<SaleHistoryEntry>> listCompleted() async {
-    final data = await _client.get('/sales', query: {'status': 'completed'});
+  Future<List<SaleHistoryEntry>> listCompleted({
+    bool todayOnly = false,
+    int? limit,
+    int? beforeId,
+  }) async {
+    final data = await _client.get(
+      '/sales',
+      query: {
+        'status': 'completed',
+        if (todayOnly) 'range': 'today',
+        if (limit != null) 'limit': '$limit',
+        if (beforeId != null) 'before_id': '$beforeId',
+      },
+    );
     return asList(data)
         .map(SaleHistoryEntry.fromJson)
         .whereType<SaleHistoryEntry>()

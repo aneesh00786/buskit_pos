@@ -200,6 +200,49 @@ class _StaffChip extends StatelessWidget {
   }
 }
 
+/// Global offline notice: visible only while the last request could not
+/// reach the server (the API client's reachability — real server access, not
+/// "Wi-Fi is on"). It never says anything was synced.
+class OfflineBanner extends StatelessWidget {
+  const OfflineBanner({super.key, this.reachable});
+  final ValueListenable<bool?>? reachable;
+
+  static const message =
+      'OFFLINE — cannot reach the server. Card-terminal and UPI payments need an internet connection.';
+
+  @override
+  Widget build(BuildContext context) {
+    final source = reachable;
+    if (source == null) return const SizedBox.shrink();
+    return ValueListenableBuilder<bool?>(
+      valueListenable: source,
+      builder: (context, ok, _) {
+        if (ok != false) return const SizedBox.shrink();
+        final t = PosTokens.of(context);
+        return Semantics(
+          liveRegion: true,
+          child: Container(
+            key: const Key('offline-banner'),
+            width: double.infinity,
+            color: t.warning.withValues(alpha: 0.15),
+            padding: const EdgeInsets.symmetric(
+              horizontal: PosTokens.s16,
+              vertical: PosTokens.s8,
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.cloud_off, size: 18, color: t.warning),
+                const SizedBox(width: PosTokens.s8),
+                const Expanded(child: Text(message)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// Server reachability, from the API client's last request (not a system
 /// connectivity check).
 class NetworkStatusChip extends StatelessWidget {

@@ -5,6 +5,7 @@ import '../../../core/network/error_messages.dart';
 import '../../../core/storage/token_store.dart';
 import '../data/auth_service.dart';
 import '../models/pos_auth_context.dart';
+import '../models/pos_token_scope.dart';
 import 'permission_service.dart';
 
 /// Where the cashier is in the sign-in sequence.
@@ -36,6 +37,11 @@ class SessionController extends ChangeNotifier {
   // this never substitutes for the backend's own enforcement.
   PosAuthContext? _authContext;
   ApiException? _authContextError;
+
+  // The shift this session opened itself (null when it joined a shift that
+  // was already open — the server answers that with a 409 and no shift).
+  int? _openedShiftId;
+  DateTime? _openedShiftAt;
 
   SessionPhase get phase => _phase;
   bool get busy => _busy;
@@ -69,6 +75,15 @@ class SessionController extends ChangeNotifier {
 
   /// Token used for browsing and cart calls: the staff token once signed in.
   String? get activeToken => _staffToken ?? _deviceToken;
+
+  /// Company/store/register/device/staff of the signed-in staff session, as
+  /// the server stated it in the staff token (null when not signed in). Only
+  /// used to stamp/check sales recorded on this device while offline.
+  PosTokenScope? get tokenScope => PosTokenScope.fromToken(_staffToken);
+
+  /// The shift opened by THIS session (see [openShift]), if any.
+  int? get openedShiftId => _openedShiftId;
+  DateTime? get openedShiftAt => _openedShiftAt;
 
   Future<void> restore() async {
     _deviceToken = await _store.read(TokenKeys.deviceToken);
@@ -143,7 +158,11 @@ class SessionController extends ChangeNotifier {
     if (_busy || staff == null) return false;
     return _run(() async {
       try {
-        await _auth.openShift(staffToken: staff, openingAmount: openingAmount);
+        _openedShiftId = await _auth.openShift(
+          staffToken: staff,
+          openingAmount: openingAmount,
+        );
+        _openedShiftAt = DateTime.now().toUtc();
       } on ApiException catch (e) {
         if (e.kind != ApiErrorKind.conflict) rethrow;
         _notice =
@@ -189,6 +208,8 @@ class SessionController extends ChangeNotifier {
   /// [notice] is shown on the sign-in screen (e.g. after closing the shift).
   void logoutStaff({String? notice}) {
     _staffToken = null;
+    _openedShiftId = null;
+    _openedShiftAt = null;
     _salesmanId = null;
     _error = null;
     _notice = notice;

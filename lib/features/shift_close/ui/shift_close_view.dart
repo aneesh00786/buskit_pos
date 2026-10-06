@@ -22,6 +22,7 @@ Future<void> showShiftClose(
   required bool cartHasItems,
   required void Function(ShiftSummary result) onClosed,
   ShiftCloseService? service, // tests only; production uses the API
+  int unsyncedOfflineSales = 0,
 }) async {
   final controller = ShiftCloseController(
     service ?? ApiShiftCloseService(context.read<PosApiClient>()),
@@ -29,7 +30,10 @@ Future<void> showShiftClose(
   final size = MediaQuery.sizeOf(context);
   Widget content() => ChangeNotifierProvider<ShiftCloseController>.value(
     value: controller,
-    child: ShiftCloseView(cartHasItems: cartHasItems),
+    child: ShiftCloseView(
+      cartHasItems: cartHasItems,
+      unsyncedOfflineSales: unsyncedOfflineSales,
+    ),
   );
 
   if (size.width >= 900) {
@@ -72,9 +76,18 @@ String paymentMethodLabel(String method) => switch (method) {
 };
 
 class ShiftCloseView extends StatefulWidget {
-  const ShiftCloseView({super.key, this.cartHasItems = false});
+  const ShiftCloseView({
+    super.key,
+    this.cartHasItems = false,
+    this.unsyncedOfflineSales = 0,
+  });
 
   final bool cartHasItems;
+
+  /// Sales saved on this device while offline and not yet on the server.
+  /// Closing the shift first means they can only be synced through a
+  /// manager resolution afterwards, so the cashier is warned.
+  final int unsyncedOfflineSales;
 
   @override
   State<ShiftCloseView> createState() => _ShiftCloseViewState();
@@ -127,6 +140,17 @@ class _ShiftCloseViewState extends State<ShiftCloseView> {
               Text(
                 'The sale in the cart has not been completed and will be '
                 'left on this closed shift.',
+                style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+              ),
+            ],
+            if (widget.unsyncedOfflineSales > 0) ...[
+              const SizedBox(height: PosTokens.s8),
+              Text(
+                '${widget.unsyncedOfflineSales} offline '
+                '${widget.unsyncedOfflineSales == 1 ? 'sale has' : 'sales have'} '
+                'not synced yet. Sync them first (Sales history → Sync now); '
+                'after the shift closes a manager will have to resolve them.',
+                key: const Key('shift-close-unsynced-warning'),
                 style: TextStyle(color: Theme.of(ctx).colorScheme.error),
               ),
             ],

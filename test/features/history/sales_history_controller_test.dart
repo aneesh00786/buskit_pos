@@ -19,8 +19,15 @@ class FakeHistoryService implements SalesHistoryService {
   Future<CompletedSale?> Function(int id)? onDetail;
   final List<int> detailCalls = [];
 
+  final List<Map<String, Object?>> listArgs = [];
+
   @override
-  Future<List<SaleHistoryEntry>> listCompleted() async {
+  Future<List<SaleHistoryEntry>> listCompleted({
+    bool todayOnly = false,
+    int? limit,
+    int? beforeId,
+  }) async {
+    listArgs.add({'today': todayOnly, 'limit': limit, 'before': beforeId});
     listCalls++;
     if (onList != null) return onList!();
     return rows;
@@ -229,6 +236,40 @@ const forbiddenRefund = ApiException(
 );
 
 void main() {
+  group('server window (Phase 5)', () {
+    test('Today asks the server for today only; All asks for the newest batch, never the whole history', () async {
+      final svc = FakeHistoryService()..rows = [entry(id: 3), entry(id: 2)];
+      final c = SalesHistoryController(svc, FakeProductService());
+      await c.refresh();
+      expect(svc.listArgs.last, {'today': true, 'limit': null, 'before': null});
+      expect(c.hasOlder, isFalse);
+      c.setDateFilter(HistoryDateFilter.all);
+      await Future<void>.delayed(Duration.zero);
+      await c.refresh();
+      expect(svc.listArgs.last, {'today': false, 'limit': historyBatchSize, 'before': null});
+      expect(c.hasOlder, isFalse, reason: 'fewer than a full batch');
+    });
+
+    test('All: a full batch offers older sales; Load older appends the next batch by before_id without duplicates', () async {
+      final svc = FakeHistoryService();
+      final first = [for (var i = 1000; i > 1000 - historyBatchSize; i--) entry(id: i)];
+      svc.rows = first;
+      final c = SalesHistoryController(svc, FakeProductService());
+      c.setDateFilter(HistoryDateFilter.all);
+      await Future<void>.delayed(Duration.zero);
+      await c.refresh();
+      expect(c.hasOlder, isTrue);
+      svc.rows = [entry(id: 501), entry(id: 400), entry(id: 399)];
+      await c.loadOlder();
+      expect(svc.listArgs.last, {'today': false, 'limit': historyBatchSize, 'before': 501});
+      expect(c.filtered.length, historyBatchSize + 2, reason: '501 was already loaded');
+      expect(c.filtered.last.id, 399);
+      expect(c.hasOlder, isFalse);
+      await c.loadOlder();
+      expect(svc.listArgs.length, 3, reason: 'nothing more to load');
+    });
+  });
+
   group('loading', () {
     test('idle -> loading -> loaded', () async {
       final svc = FakeHistoryService()..rows = [entry(id: 1), entry(id: 2)];

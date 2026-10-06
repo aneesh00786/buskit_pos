@@ -102,6 +102,10 @@ class CartSale {
     this.promotion,
     this.loyalty,
     this.discountOverride,
+    this.shiftId,
+    this.storeId,
+    this.registerId,
+    this.isLocal = false,
   });
 
   final int id;
@@ -130,6 +134,16 @@ class CartSale {
   /// live by the server.
   final DiscountOverride? discountOverride;
 
+  /// Scope of the sale as the server reports it (null for a local cart).
+  final int? shiftId;
+  final int? storeId;
+  final int? registerId;
+
+  /// True for a cart built on this device while offline: it has no server
+  /// sale ([id] is 0), its figures come from the offline catalogue and the
+  /// ported tax rule, and it can only be completed as an offline sale.
+  final bool isLocal;
+
   bool get isDraft => status == 'draft';
 
   int get itemCount => items.fold(0, (a, b) => a + b.quantity);
@@ -154,6 +168,9 @@ class CartSale {
       promotion: AppliedPromotion.fromJson(m['promotion']),
       loyalty: LoyaltySaleInfo.fromJson(m['loyalty']),
       discountOverride: DiscountOverride.fromJson(m['discount_override']),
+      shiftId: asInt(m['shift_id']),
+      storeId: asInt(m['store_id']),
+      registerId: asInt(m['register_id']),
     );
   }
 }

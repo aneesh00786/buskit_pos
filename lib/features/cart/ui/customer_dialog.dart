@@ -10,6 +10,8 @@ import '../../customers/models/customer.dart';
 import '../../customers/state/customer_list_controller.dart';
 import '../../customers/ui/customer_form.dart';
 import '../../customers/ui/customers_view.dart' show CustomerAvatar;
+import '../../offline/offline_services.dart';
+import '../../offline/ui/offline_sale_views.dart';
 
 /// Result of the customer dialog: `guest == true` means guest checkout,
 /// otherwise [customerId] holds the customer picked from search (or the one
@@ -32,7 +34,17 @@ Future<CustomerChoice?> showCustomerDialog(
   String? current,
 }) {
   final client = context.read<PosApiClient>();
-  final controller = CustomerListController(ApiCustomerService(client));
+  final offline = readOfflineServices(context);
+  // Offline, the picker searches the customers cached on this device (an
+  // uncached customer cannot be chosen); online it is the server, as before.
+  final CustomerService service = offline == null
+      ? ApiCustomerService(client)
+      : OfflineCustomerService(
+          ApiCustomerService(client),
+          offline.storage,
+          isOffline: () => client.reachable.value == false,
+        );
+  final controller = CustomerListController(service);
   return showDialog<CustomerChoice>(
     context: context,
     builder: (_) => ChangeNotifierProvider<CustomerListController>.value(

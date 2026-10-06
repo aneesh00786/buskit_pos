@@ -12,6 +12,7 @@ import '../../../core/utils/format.dart';
 import '../../../core/utils/server_time.dart';
 import '../../auth/state/session_controller.dart';
 import '../../checkout/models/payment.dart';
+import '../../offline/ui/offline_sale_views.dart';
 import '../../products/data/product_service.dart';
 import '../../receipt/models/receipt_formatter.dart';
 import '../../receipt/ui/receipt_actions.dart';
@@ -81,6 +82,7 @@ class _SalesHistoryViewState extends State<SalesHistoryView> {
   @override
   Widget build(BuildContext context) {
     final h = context.watch<SalesHistoryController>();
+    final offline = readOfflineServices(context);
     return LayoutBuilder(
       builder: (context, box) {
         final sideBySide = box.maxWidth >= 640;
@@ -97,6 +99,17 @@ class _SalesHistoryViewState extends State<SalesHistoryView> {
             ),
             if (!sideBySide && !showingDetail) const _Filters(),
             if (sideBySide) const _Filters(),
+            // Sales saved on this device while offline: shown separately,
+            // never mixed into (or numbered like) the server's sales.
+            if ((sideBySide || !showingDetail) && offline != null)
+              LocalSalesSection(
+                offline: offline,
+                canResolve: context
+                    .read<SessionController>()
+                    .permissions
+                    .hasPermission('sales.resolve_offline'),
+                currentSalesmanId: context.read<SessionController>().salesmanId,
+              ),
             Expanded(
               child: sideBySide
                   ? Row(
@@ -319,6 +332,19 @@ class _ListBody extends StatelessWidget {
               ),
             ),
             if (h.totalPages > 1) _Pager(h: h),
+            if (h.hasOlder)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Center(
+                  child: TextButton(
+                    key: const Key('history-load-older'),
+                    onPressed: h.loadingOlder ? null : h.loadOlder,
+                    child: Text(
+                      h.loadingOlder ? 'Loading…' : 'Load older sales',
+                    ),
+                  ),
+                ),
+              ),
           ],
         );
     }

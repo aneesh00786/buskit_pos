@@ -110,6 +110,7 @@ Future<void> pumpHost(
   required FakeShiftCloseService service,
   required SessionController session,
   bool cartHasItems = false,
+  int unsyncedOfflineSales = 0,
   double width = 1200,
 }) async {
   tester.view.physicalSize = Size(width, 1600);
@@ -127,6 +128,7 @@ Future<void> pumpHost(
                   context,
                   service: service,
                   cartHasItems: cartHasItems,
+                  unsyncedOfflineSales: unsyncedOfflineSales,
                   onClosed: (r) => session.logoutStaff(
                     notice: 'Shift #${r.shiftId} closed. Sign in to open the next shift.',
                   ),
@@ -196,6 +198,28 @@ void main() {
     await enterCounted(tester, '1.2345');
     expect(find.text('Enter an amount with up to 3 decimals.'), findsOneWidget);
     expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+  });
+
+  testWidgets('Phase 5: unsynced offline sales on this device are warned about before the shift closes (none -> no warning)', (tester) async {
+    await pumpHost(tester, service: service, session: session, unsyncedOfflineSales: 2);
+    await enterCounted(tester, '380');
+    await tester.tap(find.byKey(const Key('shift-close-submit')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('shift-close-unsynced-warning')), findsOneWidget);
+    expect(find.textContaining('2 offline sales have not synced yet'), findsOneWidget);
+    expect(find.textContaining('a manager will have to resolve them'), findsOneWidget);
+    expect(service.closeCalls, isEmpty, reason: 'only a warning: nothing sent before confirming');
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(service.closeCalls, isEmpty);
+  });
+
+  testWidgets('Phase 5: no offline sales pending -> no offline warning', (tester) async {
+    await pumpHost(tester, service: service, session: session);
+    await enterCounted(tester, '380');
+    await tester.tap(find.byKey(const Key('shift-close-submit')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('shift-close-unsynced-warning')), findsNothing);
   });
 
   testWidgets('7/8. confirm -> close once with the server shift id -> server result -> Done signs out', (tester) async {

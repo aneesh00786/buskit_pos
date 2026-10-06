@@ -22,6 +22,12 @@ import '../../held_sales/ui/held_sales_view.dart';
 import '../../customers/ui/customers_view.dart';
 import '../../history/ui/sales_history_view.dart';
 import '../../inventory/ui/inventory_view.dart';
+import '../../offline/ui/offline_sale_views.dart';
+import '../../payment_exceptions/data/store_exception_service.dart';
+import '../../payment_exceptions/ui/store_exceptions_view.dart';
+import '../../checkout/data/payment_exception_service.dart';
+import '../../checkout/data/payment_recovery_service.dart';
+import '../../checkout/ui/payment_recovery_view.dart';
 import '../../promotions/ui/promotions_view.dart';
 import '../../analytics/ui/analytics_view.dart';
 import '../../settings/ui/settings_view.dart';
@@ -48,7 +54,8 @@ class ProductsPage extends StatefulWidget {
   State<ProductsPage> createState() => _ProductsPageState();
 }
 
-class _ProductsPageState extends State<ProductsPage> {
+class _ProductsPageState extends State<ProductsPage>
+    with WidgetsBindingObserver {
   final _search = TextEditingController();
   final _scroll = ScrollController();
   _CatalogView _view = _CatalogView.grid;
@@ -56,6 +63,7 @@ class _ProductsPageState extends State<ProductsPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _scroll.addListener(_onScroll);
     // Controller methods notify listeners synchronously, which is not allowed
     // while the tree is still being built — start the first loads after it.
@@ -64,11 +72,91 @@ class _ProductsPageState extends State<ProductsPage> {
       final c = context.read<ProductListController>();
       unawaited(c.loadCategories());
       unawaited(c.loadInitial());
+      _startPaymentRecovery();
     });
+  }
+
+  // ---- Phase 6: payment & sale recovery after a restart ----
+  PaymentRecoveryService? _recovery;
+  ValueNotifier<bool?>? _reachable;
+  bool? _lastReachable;
+  bool _recoveryRunning = false;
+  PaymentExceptionService? _exceptions;
+
+  /// Only when the app wired a recovery service (tests without one keep the
+  /// previous behaviour). Runs now (app start / sign-in) and again whenever
+  /// the connection comes back while the cart is empty.
+  void _startPaymentRecovery() {
+    try {
+      _recovery = Provider.of<PaymentRecoveryService?>(context, listen: false);
+    } on ProviderNotFoundException {
+      _recovery = null;
+    }
+    if (_recovery == null) return;
+    try {
+      _exceptions = Provider.of<PaymentExceptionService?>(
+        context,
+        listen: false,
+      );
+    } on ProviderNotFoundException {
+      _exceptions = null;
+    }
+    _reachable = Provider.of<PosApiClient?>(context, listen: false)?.reachable;
+    _lastReachable = _reachable?.value;
+    _reachable?.addListener(_onReachability);
+    if (_lastReachable != false) unawaited(_checkRecovery());
+  }
+
+  void _onReachability() {
+    final now = _reachable?.value;
+    final wasOffline = _lastReachable == false;
+    _lastReachable = now;
+    if (wasOffline && now == true) unawaited(_checkRecovery());
+  }
+
+  StoreExceptionService? _storeExceptions(BuildContext context) {
+    try {
+      return Provider.of<StoreExceptionService?>(context, listen: false);
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
+  /// Phase 7: back from the background (e.g. after a UPI app or a call) —
+  /// check again, with the same guards (empty cart, nothing on top).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _lastReachable != false) {
+      unawaited(_checkRecovery());
+    }
+  }
+
+  Future<void> _checkRecovery() async {
+    final service = _recovery;
+    if (service == null || _recoveryRunning || !mounted) return;
+    final cart = context.read<CartController>();
+    // Never interrupt a sale being rung up.
+    if (cart.sale != null || cart.isMutating) return;
+    // Nor a dialog / screen the cashier has open on top of this page.
+    if (ModalRoute.of(context)?.isCurrent == false) return;
+    _recoveryRunning = true;
+    try {
+      await runPaymentRecovery(
+        context,
+        service: service,
+        cart: cart,
+        storage: readOfflineServices(context)?.storage,
+        exceptions: _exceptions,
+      );
+    } finally {
+      _recoveryRunning = false;
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _reachable?.removeListener(_onReachability);
     _scroll.dispose();
     _search.dispose();
     super.dispose();
@@ -301,21 +389,50 @@ class _ProductsPageState extends State<ProductsPage> {
                 if (layout.isCompact) Navigator.of(context).pop();
                 showSettings(context);
               },
+              // Phase 9: store-wide payment exceptions — only when wired
+              // and not positively denied payments.view_store_exceptions
+              // (the server enforces it either way).
+              onOpenPaymentExceptions:
+                  _storeExceptions(context) == null ||
+                      session.isDenied('payments.view_store_exceptions')
+                  ? null
+                  : () {
+                      if (layout.isCompact) Navigator.of(context).pop();
+                      showStoreExceptions(context);
+                    },
               onSignOut: session.logoutStaff,
               // Hidden only when the loaded permissions positively lack
               // shifts.view (the summary needs it); the backend still
               // enforces shifts.view / shifts.close itself.
               onCloseShift: session.isDenied('shifts.view')
                   ? null
-                  : () {
+                  : () async {
                       if (layout.isCompact) Navigator.of(context).pop();
+                      // Sales saved offline and not yet synced (warned about).
+                      var unsynced = 0;
+                      try {
+                        unsynced =
+                            (await readOfflineServices(
+                                      context,
+                                    )?.storage.getPendingSales() ??
+                                    const [])
+                                .length;
+                      } catch (_) {}
+                      if (!context.mounted) return;
                       showShiftClose(
                         context,
                         cartHasItems: cart.hasActiveDraftWithItems,
-                        onClosed: (result) => session.logoutStaff(
-                          notice:
-                              'Shift #${result.shiftId} closed. Sign in to open the next shift.',
-                        ),
+                        unsyncedOfflineSales: unsynced,
+                        onClosed: (result) {
+                          // Offline sales must stop with the shift.
+                          readOfflineServices(
+                            context,
+                          )?.cache.markShiftClosed(result.shiftId);
+                          session.logoutStaff(
+                            notice:
+                                'Shift #${result.shiftId} closed. Sign in to open the next shift.',
+                          );
+                        },
                       );
                     },
             ),
@@ -325,6 +442,7 @@ class _ProductsPageState extends State<ProductsPage> {
               reachable: client?.reachable,
               onScanBarcode: onScan,
             ),
+            banner: OfflineBanner(reachable: client?.reachable),
             body: _Catalog(
               layout: layout,
               search: _search,

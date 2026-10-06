@@ -23,6 +23,7 @@ class PosScaffold extends StatelessWidget {
     this.compactActions = const [],
     this.bottomBar,
     this.summary,
+    this.banner,
   });
 
   final PosLayoutClass layout;
@@ -39,6 +40,10 @@ class PosScaffold extends StatelessWidget {
   final Widget? bottomBar;
   final Widget? summary;
 
+  /// A full-width notice shown above [body] in every layout (e.g. the
+  /// offline banner). Should size itself to nothing when not needed.
+  final Widget? banner;
+
   @override
   Widget build(BuildContext context) {
     final t = PosTokens.of(context);
@@ -53,7 +58,14 @@ class PosScaffold extends StatelessWidget {
           actions: compactActions,
         ),
         drawer: Drawer(child: sidebarBuilder(false)),
-        body: body,
+        body: banner == null
+            ? body
+            : Column(
+                children: [
+                  banner!,
+                  Expanded(child: body),
+                ],
+              ),
         bottomNavigationBar: bottomBar,
       );
     }
@@ -67,6 +79,7 @@ class PosScaffold extends StatelessWidget {
             child: Column(
               children: [
                 header,
+                ?banner,
                 Expanded(child: body),
               ],
             ),

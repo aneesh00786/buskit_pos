@@ -89,6 +89,8 @@ class _CartPanelState extends State<CartPanel> {
                     : null,
               ),
               _CustomerRow(dense: dense),
+              if (sale != null && sale.isLocal)
+                const _LocalCartNotice(),
               if (sale != null && !sale.isDraft)
                 _NotOpenNotice(status: sale.status, onNewCart: cart.reset),
               if (panelError != null)
@@ -953,4 +955,37 @@ class _NotOpenNotice extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// Shown on a cart built while offline: it lives on this device only and is
+/// recorded locally when paid (never sent to the server in this phase).
+class _LocalCartNotice extends StatelessWidget {
+  const _LocalCartNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        PosTokens.s16,
+        0,
+        PosTokens.s16,
+        PosTokens.s8,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.cloud_off, size: 18, color: theme.colorScheme.error),
+          const SizedBox(width: PosTokens.s8),
+          Expanded(
+            child: Text(
+              'Offline sale — prices from this device. It will be saved on '
+              'this device when paid.',
+              key: const Key('local-cart-notice'),
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

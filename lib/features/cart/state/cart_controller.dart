@@ -1,8 +1,11 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/utils/money.dart';
 import '../../../core/utils/uuid.dart';
 import '../../checkout/models/payment.dart';
+import '../../offline/models/offline_sale.dart';
+import '../../offline/offline_checkout_service.dart';
 import '../data/cart_service.dart';
 import '../models/cart_sale.dart';
 
@@ -41,8 +44,28 @@ enum CartOperation {
 /// the draft); resume = held -> draft, re-assigned to the resumer's shift.
 /// An open draft that has items is never discarded: resuming another sale over
 /// it requires `holdCurrentFirst`, which holds it (safely, on the server) first.
+///
+/// OFFLINE (only when [offline] is wired and the API client reports the
+/// server unreachable — `reachable == false`; unknown is NOT offline):
+///  * a cart started while offline is a LOCAL cart ([CartSale.isLocal]): its
+///    lines are priced from the offline catalogue with the ported server tax
+///    rule, and it can only be completed as an offline sale (even if the
+///    connection returns meanwhile — nothing is ever sent twice);
+///  * a cart started online (a server draft) can still be PAID while offline:
+///    its server-computed lines are re-checked and recorded as an offline
+///    sale, unless an earlier online completion attempt may have reached the
+///    server (then the cashier must retry online, so the sale is never
+///    recorded twice);
+///  * the online paths below are unchanged and are taken whenever the server
+///    is reachable or reachability is unknown.
 class CartController extends ChangeNotifier {
-  CartController(this._service, {this.onUnauthorized, this.onHeldSalesChanged});
+  CartController(
+    this._service, {
+    this.onUnauthorized,
+    this.onHeldSalesChanged,
+    this.offline,
+    this.onServerSaleCompleted,
+  });
 
   static const int minQuantity = 1;
   static const int maxQuantity = 9999; // backend MAX_QUANTITY
@@ -67,6 +90,20 @@ class CartController extends ChangeNotifier {
 
   final CartService _service;
   final VoidCallback? onUnauthorized;
+
+  /// Offline checkout wiring; null = online-only (the previous behaviour).
+  final OfflineCartSupport? offline;
+
+  /// Called with the server sale id after it completed (Phase 6: clears the
+  /// sale's payment-recovery reminder).
+  final void Function(int saleId)? onServerSaleCompleted;
+
+  static const String holdOfflineMessage =
+      'Holding a sale needs an internet connection.';
+  static const String localCartOpenMessage =
+      'Complete or void the offline sale before resuming another one.';
+  static const String completionMayHaveReachedServerMessage =
+      'The last payment attempt may have reached the server. Reconnect and retry so the sale is not recorded twice.';
 
   /// Called after a hold or resume succeeded, and when a resume failed because
   /// the held-sales list is out of date, so the list can reload.
@@ -103,7 +140,33 @@ class CartController extends ChangeNotifier {
   /// Display-only thumbnails remembered at add time, for the same reason.
   final Map<int, String> _images = {};
 
-  CartSale? get sale => _sale;
+  // ---- local (offline) cart ----
+  /// Lines of a cart built on this device while offline; null = no local
+  /// cart. Each line is keyed (and shown with line id) by its variation id.
+  List<OfflineCheckoutLine>? _local;
+  int _localVersion = 0;
+  OfflineSale? _completedOffline;
+  _CompletionAttempt? _offlineAttempt;
+
+  /// True when the last ONLINE completion failed in a way whose outcome is
+  /// unknown (network, timeout, server error): the sale may already be
+  /// completed on the server, so it must not be recorded offline as well.
+  bool _onlineOutcomeUnknown = false;
+
+  CartSale? get sale => _local != null ? _localView() : _sale;
+
+  /// True while the cart is a local (offline) cart.
+  bool get isLocalSale => _local != null;
+
+  /// The sale most recently saved on this device (for the success view).
+  OfflineSale? get completedOfflineSale => _completedOffline;
+
+  /// True when paying now would record the sale on this device instead of
+  /// completing it on the server.
+  bool get willCompleteOffline =>
+      _local != null || (_sale != null && _isOffline);
+
+  bool get _isOffline => offline != null && offline!.isOffline();
 
   /// True while any add/update/remove/hold/resume request is in flight.
   bool get isMutating => _op != null;
@@ -133,7 +196,8 @@ class CartController extends ChangeNotifier {
   /// An open draft that holds items — the only state in which resuming
   /// another sale could lose work.
   bool get hasActiveDraftWithItems =>
-      _sale != null && _sale!.isDraft && _sale!.items.isNotEmpty;
+      (_local != null && _local!.isNotEmpty) ||
+      (_sale != null && _sale!.isDraft && _sale!.items.isNotEmpty);
 
   int? get lastCancelledSaleId => _lastCancelledSaleId;
 
@@ -153,7 +217,7 @@ class CartController extends ChangeNotifier {
       _sale != null ? _sale!.customerId : _pendingCustomerId;
 
   /// The customer can only be chosen while no sale exists yet.
-  bool get canChooseCustomer => _sale == null && _op == null;
+  bool get canChooseCustomer => _sale == null && _local == null && _op == null;
 
   /// The sale completed most recently (for the success view).
   CompletedSale? get completedSale => _completed;
@@ -198,6 +262,9 @@ class CartController extends ChangeNotifier {
     if (_op != null) return false;
     final invalid = _validateQuantity(quantity);
     if (invalid != null) return _rejectLocally(invalid, CartOperation.add);
+    if (_local != null || (_sale == null && _isOffline)) {
+      return _addLocal(productVariationId, quantity, label, imageUrl);
+    }
 
     return _run(CartOperation.add, null, () async {
       final sale = await _ensureSale();
@@ -223,6 +290,7 @@ class CartController extends ChangeNotifier {
   /// succeed without a request.
   Future<bool> updateQuantity(int itemId, int quantity) async {
     if (_op != null) return false;
+    if (_local != null) return _updateLocal(itemId, quantity);
     final sale = _sale;
     final line = sale?.items.where((l) => l.id == itemId).firstOrNull;
     if (sale == null || line == null || !sale.isDraft) return false;
@@ -244,6 +312,7 @@ class CartController extends ChangeNotifier {
 
   Future<bool> removeItem(int itemId) async {
     if (_op != null) return false;
+    if (_local != null) return _updateLocal(itemId, 0);
     final sale = _sale;
     final line = sale?.items.where((l) => l.id == itemId).firstOrNull;
     if (sale == null || line == null || !sale.isDraft) return false;
@@ -267,6 +336,14 @@ class CartController extends ChangeNotifier {
   /// version conflict refreshes the cart and is never retried.
   Future<bool> clearAll() async {
     if (_op != null) return false;
+    if (_local != null) {
+      if (_local!.isEmpty) return false;
+      _local = [];
+      _localVersion++;
+      _offlineAttempt = null;
+      _notify();
+      return true;
+    }
     final sale = _sale;
     if (sale == null || !sale.isDraft || sale.items.isEmpty) return false;
 
@@ -292,6 +369,9 @@ class CartController extends ChangeNotifier {
   /// the server and is resumed from the held-sales list.
   Future<bool> holdCurrent() async {
     if (_op != null) return false;
+    if (_local != null) {
+      return _rejectLocally(holdOfflineMessage, CartOperation.hold);
+    }
     final sale = _sale;
     if (sale == null || !sale.isDraft || sale.items.isEmpty) {
       return _rejectLocally(emptyHoldMessage, CartOperation.hold);
@@ -325,6 +405,9 @@ class CartController extends ChangeNotifier {
     bool holdCurrentFirst = false,
   }) async {
     if (_op != null) return false;
+    if (_local != null && _local!.isNotEmpty) {
+      return _rejectLocally(localCartOpenMessage, CartOperation.resume);
+    }
     final active = _sale;
     final mustHold = hasActiveDraftWithItems;
     if (mustHold && !holdCurrentFirst) {
@@ -524,6 +607,16 @@ class CartController extends ChangeNotifier {
   /// total exactly. Nothing is retried automatically.
   Future<bool> completeSale(List<PaymentLine> payments) async {
     if (_op != null) return false;
+    if (_local != null) return _completeOffline(payments, null);
+    if (_sale != null && _isOffline) {
+      if (_onlineOutcomeUnknown) {
+        return _rejectLocally(
+          completionMayHaveReachedServerMessage,
+          CartOperation.complete,
+        );
+      }
+      return _completeOffline(payments, _sale);
+    }
     final sale = _sale;
     if (sale == null ||
         !sale.isDraft ||
@@ -561,14 +654,345 @@ class CartController extends ChangeNotifier {
         _completed = result as CompletedSale;
         _completedNames = names;
         _completedVariants = variants;
+        onServerSaleCompleted?.call(sale.id);
         _sale = null; // the sale is done: the cart is empty again
         _pendingCustomerId = null;
         _pendingCustomerLabel = null;
         _attempt = null;
+        _onlineOutcomeUnknown = false;
         _labels.clear();
         _images.clear();
       },
     );
+  }
+
+  // ---- offline completion ----
+
+  static const String _offlineUnavailable =
+      'Offline sales are not available on this device.';
+
+  /// Records the sale on this device: the local cart, or the server draft
+  /// [draft] when the connection dropped before it was paid. The cart is
+  /// cleared ONLY once the sale and its queue entry are safely stored; a
+  /// storage failure keeps the cart and the same local sale id, so a retry
+  /// finishes the same save instead of creating a second sale.
+  Future<bool> _completeOffline(
+    List<PaymentLine> payments,
+    CartSale? draft,
+  ) async {
+    final support = offline;
+    if (support == null) {
+      return _rejectLocally(_offlineUnavailable, CartOperation.complete);
+    }
+    final lines = draft == null ? List.of(_local!) : _linesFromDraft(draft);
+    if (lines == null) {
+      return _rejectLocally(
+        OfflineCheckoutService.totalsMessage,
+        CartOperation.complete,
+      );
+    }
+    if (lines.isEmpty || payments.isEmpty) {
+      return _rejectLocally(emptyCompleteMessage, CartOperation.complete);
+    }
+
+    final fingerprint = [
+      draft?.id ?? 'local',
+      for (final l in lines)
+        '${l.productVariationId}x${l.quantity}@${l.unitPriceMilli}',
+      ...(payments.map((p) => p.canonical).toList()..sort()),
+    ].join('|');
+    if (_offlineAttempt == null ||
+        _offlineAttempt!.fingerprint != fingerprint) {
+      _offlineAttempt = _CompletionAttempt(generateUuidV4(), fingerprint);
+    }
+    final attempt = _offlineAttempt!;
+    final customerId = draft != null ? draft.customerId : _pendingCustomerId;
+    final request = OfflineCheckoutRequest(
+      localSaleId: attempt.key,
+      scope: support.scope(),
+      staffName: support.staffName?.call(),
+      lines: lines,
+      payments: payments,
+      customerId: customerId,
+      customerName: customerId == null ? null : _pendingCustomerLabel,
+      sourceDraftSaleId: draft?.id,
+      serverDiscountsApplied: draft != null && _hasServerDiscounts(draft),
+    );
+
+    _op = CartOperation.complete;
+    _step = CartOperation.complete;
+    _error = null;
+    _errorOp = null;
+    _notify();
+    try {
+      final saved = await support.checkout.complete(request);
+      _completedOffline = saved;
+      _completed = null;
+      _local = null;
+      _sale = null; // a server draft stays a draft; it is never completed
+      _pendingCustomerId = null;
+      _pendingCustomerLabel = null;
+      _offlineAttempt = null;
+      _attempt = null;
+      _labels.clear();
+      _images.clear();
+      support.onOfflineSaleRecorded?.call(saved);
+      return true;
+    } on OfflineCheckoutRejected catch (e) {
+      _offlineAttempt = null; // nothing was written
+      _error = ApiException(kind: ApiErrorKind.validation, message: e.message);
+      _errorOp = CartOperation.complete;
+      return false;
+    } on OfflineCheckoutStorageFailure {
+      _error = const ApiException(
+        kind: ApiErrorKind.unknown,
+        message: OfflineCheckoutService.storageFailureMessage,
+      );
+      _errorOp = CartOperation.complete;
+      return false;
+    } finally {
+      _op = null;
+      _step = null;
+      _notify();
+    }
+  }
+
+  /// The server draft's lines as offline lines, or null when a line has no
+  /// usable price (unavailable item) — such a cart cannot be paid offline.
+  List<OfflineCheckoutLine>? _linesFromDraft(CartSale draft) {
+    if (draft.hasUnavailableItems) return null;
+    final out = <OfflineCheckoutLine>[];
+    for (final l in draft.items) {
+      final price = l.unitPrice;
+      final tax = l.taxAmount;
+      final total = l.lineTotal;
+      if (price == null || tax == null || total == null || l.isUnavailable) {
+        return null;
+      }
+      out.add(
+        OfflineCheckoutLine(
+          productVariationId: l.productVariationId,
+          productName: l.productName ?? 'Item ${l.productVariationId}',
+          variationName: _labels[l.productVariationId],
+          quantity: l.quantity,
+          unitPriceMilli: milliFromDouble(price),
+          taxPercent: l.taxPercent ?? 0,
+          taxMode: l.taxIncluded == true ? 'inclusive' : 'exclusive',
+          taxAmountMilli: milliFromDouble(tax),
+          discountAmountMilli: milliFromDouble(l.discountAmount ?? 0),
+          lineTotalMilli: milliFromDouble(total),
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Promotion, loyalty (tier discount / points / wallet) or a manual
+  /// discount override: all evaluated by the server only.
+  static bool _hasServerDiscounts(CartSale draft) {
+    final loyalty = draft.loyalty;
+    return draft.promotion != null ||
+        draft.discountOverride != null ||
+        (draft.totals.discountTotal ?? 0) != 0 ||
+        (loyalty != null &&
+            (loyalty.tierDiscountAmount != 0 ||
+                loyalty.pointsRedeemed != 0 ||
+                loyalty.walletRedeemed != 0));
+  }
+
+  /// Forget the offline sale after the cashier dismisses the success view.
+  void acknowledgeOfflineCompletion() {
+    if (_completedOffline == null) return;
+    _completedOffline = null;
+    _notify();
+  }
+
+  // ---- local cart editing ----
+
+  Future<bool> _addLocal(
+    int productVariationId,
+    int quantity,
+    String? label,
+    String? imageUrl,
+  ) async {
+    final support = offline;
+    if (support == null) {
+      return _rejectLocally(_offlineUnavailable, CartOperation.add);
+    }
+    _op = CartOperation.add;
+    _error = null;
+    _errorOp = null;
+    _notify();
+    try {
+      final product = await support.checkout.storage.getProduct(
+        productVariationId,
+      );
+      if (product == null) {
+        return _rejectLocally(
+          OfflineCheckoutService.notInCatalogueMessage(label ?? 'This product'),
+          CartOperation.add,
+        );
+      }
+      if (!product.isPosSellable) {
+        return _rejectLocally(
+          OfflineCheckoutService.notSellableMessage(product.productName),
+          CartOperation.add,
+        );
+      }
+      final lines = _local ?? <OfflineCheckoutLine>[];
+      final i = lines.indexWhere(
+        (l) => l.productVariationId == productVariationId,
+      );
+      final next = (i < 0 ? 0 : lines[i].quantity) + quantity;
+      final invalid = _validateQuantity(next);
+      if (invalid != null) return _rejectLocally(invalid, CartOperation.add);
+      final stockProblem = await _localStockProblem(
+        productVariationId,
+        product.productName,
+        next,
+      );
+      if (stockProblem != null) {
+        return _rejectLocally(stockProblem, CartOperation.add);
+      }
+      // The price the cashier sees is fixed when the item is first added.
+      final line = i < 0
+          ? OfflineCheckoutLine.fromProduct(product, next)
+          : lines[i].withQuantity(next);
+      if (i < 0) {
+        lines.add(line);
+      } else {
+        lines[i] = line;
+      }
+      _local = lines;
+      _localVersion++;
+      _offlineAttempt = null;
+      if (label != null && label.trim().isNotEmpty) {
+        _labels[productVariationId] = label.trim();
+      }
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        _images[productVariationId] = imageUrl;
+      }
+      return true;
+    } catch (_) {
+      return _rejectLocally(
+        'Offline data on this device could not be read.',
+        CartOperation.add,
+      );
+    } finally {
+      _op = null;
+      _notify();
+    }
+  }
+
+  Future<bool> _updateLocal(int productVariationId, int quantity) async {
+    final lines = _local!;
+    final i = lines.indexWhere(
+      (l) => l.productVariationId == productVariationId,
+    );
+    if (i < 0) return false;
+    if (quantity == 0) {
+      lines.removeAt(i);
+    } else {
+      final invalid = _validateQuantity(quantity);
+      if (invalid != null) {
+        return _rejectLocally(invalid, CartOperation.update);
+      }
+      if (quantity == lines[i].quantity) return true;
+      if (quantity > lines[i].quantity) {
+        final problem = await _localStockProblem(
+          productVariationId,
+          lines[i].productName,
+          quantity,
+        );
+        if (problem != null) {
+          return _rejectLocally(problem, CartOperation.update);
+        }
+      }
+      lines[i] = lines[i].withQuantity(quantity);
+    }
+    _localVersion++;
+    _offlineAttempt = null;
+    _error = null;
+    _errorOp = null;
+    _notify();
+    return true;
+  }
+
+  /// Early feedback while building a local cart (the authoritative check runs
+  /// again when the sale is completed).
+  Future<String?> _localStockProblem(int id, String name, int wanted) async {
+    final levels = await offline!.checkout.storage.getStockLevels();
+    final level = levels[id];
+    if (level == null) return OfflineCheckoutService.noStockInfoMessage(name);
+    if (wanted > level.availableQuantity) {
+      return OfflineCheckoutService.insufficientStockMessage(
+        name,
+        level.serverQuantity,
+        level.availableQuantity < 0 ? 0 : level.availableQuantity,
+      );
+    }
+    return null;
+  }
+
+  CartSale _localView() {
+    final lines = _local!;
+    double m(int milli) => milli / 1000;
+    final subtotal = lines.fold<int>(0, (s, l) => s + l.listedAmountMilli);
+    final tax = lines.fold<int>(0, (s, l) => s + l.taxAmountMilli);
+    final grand = lines.fold<int>(0, (s, l) => s + l.lineTotalMilli);
+    return CartSale(
+      id: 0,
+      version: _localVersion,
+      status: 'draft',
+      isLocal: true,
+      customerId: _pendingCustomerId,
+      items: [
+        for (final l in lines)
+          CartLine(
+            id: l.productVariationId,
+            productVariationId: l.productVariationId,
+            quantity: l.quantity,
+            productName: l.productName,
+            availabilityStatus: 'available',
+            unitPrice: m(l.unitPriceMilli),
+            taxPercent: l.taxPercent,
+            taxAmount: m(l.taxAmountMilli),
+            taxIncluded: l.taxMode == 'inclusive',
+            discountAmount: 0,
+            lineTotal: m(l.lineTotalMilli),
+          ),
+      ],
+      totals: CartTotals(
+        subtotal: m(subtotal),
+        taxTotal: m(tax),
+        discountTotal: 0,
+        grandTotal: m(grand),
+      ),
+    );
+  }
+
+  // ---- payment recovery (Phase 6) ----
+
+  /// Puts a server draft found by payment recovery back into the cart. Only
+  /// into an EMPTY cart (or the same sale): two drafts are never mixed, and
+  /// a cart being edited is never replaced. Nothing is sent to the server —
+  /// the draft is exactly as the server holds it.
+  bool restoreRecoveredSale(CartSale sale) {
+    if (_op != null || _local != null || sale.isLocal || !sale.isDraft) {
+      return false;
+    }
+    final current = _sale;
+    if (current != null && current.id != sale.id && current.items.isNotEmpty) {
+      return false;
+    }
+    _sale = sale;
+    _error = null;
+    _errorOp = null;
+    _attempt = null;
+    _onlineOutcomeUnknown = false;
+    _completed = null;
+    _notify();
+    return true;
   }
 
   /// Forget the completed sale after the cashier dismisses the success view.
@@ -586,6 +1010,19 @@ class CartController extends ChangeNotifier {
   /// cleared. Only the caller decides to do this — the UI asks for confirmation.
   Future<bool> cancelCurrent() async {
     if (_op != null) return false;
+    if (_local != null) {
+      // Nothing was saved for a local cart until it is paid: voiding it just
+      // discards the lines on this device.
+      _local = null;
+      _localVersion++;
+      _offlineAttempt = null;
+      _pendingCustomerId = null;
+      _pendingCustomerLabel = null;
+      _labels.clear();
+      _images.clear();
+      _notify();
+      return true;
+    }
     final sale = _sale;
     if (sale == null || !sale.isDraft) return false;
     return _run(
@@ -669,6 +1106,11 @@ class CartController extends ChangeNotifier {
     _completedNames = const {};
     _completedVariants = const {};
     _attempt = null;
+    _local = null;
+    _localVersion++;
+    _offlineAttempt = null;
+    _completedOffline = null;
+    _onlineOutcomeUnknown = false;
     _notify();
   }
 
@@ -724,6 +1166,7 @@ class CartController extends ChangeNotifier {
       final step = _step ?? op;
       _error = _friendly(e, step);
       _errorOp = op;
+      if (op == CartOperation.complete) _onlineOutcomeUnknown = e.isRetryable;
       if (e.isUnauthorized) onUnauthorized?.call();
 
       final vanished =
@@ -803,6 +1246,7 @@ class CartController extends ChangeNotifier {
       return;
     }
     _sale = incoming;
+    offline?.onServerSale?.call(incoming);
   }
 
   Future<void> _reload() async {

@@ -11,8 +11,8 @@ class OfflineShiftContext {
     required this.registerId,
     required this.shiftId,
     required this.salesmanId,
-    required this.openedAt,
     required this.status,
+    this.openedAt,
     this.deviceId,
     this.currency,
   });
@@ -27,7 +27,10 @@ class OfflineShiftContext {
 
   /// Staff id (salesman_id) who opened the shift / is signed in.
   final String salesmanId;
-  final DateTime openedAt;
+
+  /// Null when the shift was learned from a sale view (which carries the
+  /// shift id but not its opening time).
+  final DateTime? openedAt;
 
   /// 'open' | 'closed' as last known.
   final String status;
@@ -37,6 +40,19 @@ class OfflineShiftContext {
 
   bool get isOpen => status == 'open';
 
+  OfflineShiftContext copyWith({String? status, DateTime? openedAt}) =>
+      OfflineShiftContext(
+        companyId: companyId,
+        storeId: storeId,
+        registerId: registerId,
+        deviceId: deviceId,
+        shiftId: shiftId,
+        salesmanId: salesmanId,
+        openedAt: openedAt ?? this.openedAt,
+        status: status ?? this.status,
+        currency: currency,
+      );
+
   Map<String, dynamic> toJson() => {
     'company_id': companyId,
     'store_id': storeId,
@@ -44,7 +60,7 @@ class OfflineShiftContext {
     'device_id': deviceId,
     'shift_id': shiftId,
     'salesman_id': salesmanId,
-    'opened_at': openedAt.toUtc().toIso8601String(),
+    'opened_at': openedAt?.toUtc().toIso8601String(),
     'status': status,
     'currency': currency,
   };
@@ -57,7 +73,14 @@ class OfflineShiftContext {
     final staff = asString(m['salesman_id']);
     final opened = DateTime.tryParse(asString(m['opened_at']) ?? '');
     final status = asString(m['status']);
-    if (company == null || store == null || register == null || shift == null || staff == null || opened == null || status == null) return null;
+    if (company == null ||
+        store == null ||
+        register == null ||
+        shift == null ||
+        staff == null ||
+        status == null) {
+      return null;
+    }
     return OfflineShiftContext(
       companyId: company,
       storeId: store,
@@ -65,7 +88,7 @@ class OfflineShiftContext {
       deviceId: asInt(m['device_id']),
       shiftId: shift,
       salesmanId: staff,
-      openedAt: opened.toUtc(),
+      openedAt: opened?.toUtc(),
       status: status,
       currency: asString(m['currency']),
     );
@@ -81,13 +104,20 @@ class OfflineShiftContext {
 /// created records so a future sync can tell which installation made them.
 /// The user-entered device identifier is stored only as a reference.
 class OfflineDeviceInfo {
-  const OfflineDeviceInfo({required this.installationId, required this.createdAt, this.deviceIdentifier});
+  const OfflineDeviceInfo({
+    required this.installationId,
+    required this.createdAt,
+    this.deviceIdentifier,
+  });
   final String installationId;
   final DateTime createdAt;
   final String? deviceIdentifier;
 
-  OfflineDeviceInfo copyWith({String? deviceIdentifier}) =>
-      OfflineDeviceInfo(installationId: installationId, createdAt: createdAt, deviceIdentifier: deviceIdentifier ?? this.deviceIdentifier);
+  OfflineDeviceInfo copyWith({String? deviceIdentifier}) => OfflineDeviceInfo(
+    installationId: installationId,
+    createdAt: createdAt,
+    deviceIdentifier: deviceIdentifier ?? this.deviceIdentifier,
+  );
 
   Map<String, dynamic> toJson() => {
     'installation_id': installationId,
@@ -99,7 +129,11 @@ class OfflineDeviceInfo {
     final id = asString(m['installation_id']);
     final at = DateTime.tryParse(asString(m['created_at']) ?? '');
     if (id == null || at == null) return null;
-    return OfflineDeviceInfo(installationId: id, createdAt: at.toUtc(), deviceIdentifier: asString(m['device_identifier']));
+    return OfflineDeviceInfo(
+      installationId: id,
+      createdAt: at.toUtc(),
+      deviceIdentifier: asString(m['device_identifier']),
+    );
   }
 }
 
@@ -112,8 +146,15 @@ class OfflineSettings {
   /// online. Cash is always allowed; provider payments never are.
   final Set<String> offlineManualTenders;
 
-  Map<String, dynamic> toJson() => {'offline_manual_tenders': offlineManualTenders.toList()..sort()};
+  Map<String, dynamic> toJson() => {
+    'offline_manual_tenders': offlineManualTenders.toList()..sort(),
+  };
 
-  static OfflineSettings fromJson(Map<String, dynamic> m) =>
-      OfflineSettings(offlineManualTenders: asList(m['offline_manual_tenders']).map(asString).whereType<String>().where((t) => t == 'card' || t == 'other').toSet());
+  static OfflineSettings fromJson(Map<String, dynamic> m) => OfflineSettings(
+    offlineManualTenders: asList(m['offline_manual_tenders'])
+        .map(asString)
+        .whereType<String>()
+        .where((t) => t == 'card' || t == 'other')
+        .toSet(),
+  );
 }

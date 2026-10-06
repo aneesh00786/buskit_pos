@@ -18,11 +18,16 @@ enum HistoryDateFilter { today, all }
 
 const int historyPageSize = 20;
 
-/// The store's completed sales (`GET /sales?status=completed`), with search,
-/// date and cashier filtering, pagination and per-sale detail all done
-/// client-side — the backend has no date range, search, cashier or
-/// payment-method filter, and no pagination (verified against
-/// Routes/posRoutes.js and posSaleService.listSales before writing this).
+/// "All" loads the history in batches of this many sales, newest first
+/// ("Load older sales" fetches the next batch) — never the whole history.
+const int historyBatchSize = 500;
+
+/// The store's completed sales (`GET /sales?status=completed`). "Today" asks
+/// the server for the store's current business day only; "All" loads the
+/// newest [historyBatchSize] sales and older batches on request (Phase 5 —
+/// the list used to download every sale the store ever made). Search,
+/// cashier filtering, pagination of the loaded rows and per-sale detail are
+/// done client-side.
 ///
 /// A payment-method filter is intentionally NOT offered: the list response
 /// carries no payment data (payments only exist on the per-sale detail), so a
@@ -40,6 +45,12 @@ class SalesHistoryController extends ChangeNotifier {
   List<SaleHistoryEntry> _all = const [];
   ApiException? _error;
   bool _loading = false;
+  bool _hasOlder = false;
+  bool _loadingOlder = false;
+
+  /// "All" view: older sales exist beyond the loaded batches.
+  bool get hasOlder => _dateFilter == HistoryDateFilter.all && _hasOlder;
+  bool get loadingOlder => _loadingOlder;
   bool _refreshQueued = false;
   int _generation = 0;
   bool _disposed = false;
@@ -158,6 +169,34 @@ class SalesHistoryController extends ChangeNotifier {
     _dateFilter = value;
     _page = 1;
     _notify();
+    // Today and All come from different server windows.
+    unawaited(refresh());
+  }
+
+  /// Appends the next batch of older sales to the "All" view.
+  Future<void> loadOlder() async {
+    if (!hasOlder || _loadingOlder || _loading || _all.isEmpty) return;
+    _loadingOlder = true;
+    final gen = _generation;
+    _notify();
+    try {
+      final rows = await _history.listCompleted(
+        limit: historyBatchSize,
+        beforeId: _all.last.id,
+      );
+      if (gen != _generation || _disposed) return;
+      final known = _all.map((s) => s.id).toSet();
+      _all = [..._all, ...rows.where((r) => !known.contains(r.id))];
+      _hasOlder = rows.length >= historyBatchSize;
+    } on ApiException catch (e) {
+      if (gen != _generation || _disposed) return;
+      _error = e;
+    } finally {
+      if (!_disposed) {
+        _loadingOlder = false;
+        _notify();
+      }
+    }
   }
 
   void setCashierFilter(String? value) {
@@ -194,9 +233,13 @@ class SalesHistoryController extends ChangeNotifier {
     final gen = ++_generation;
     _notify();
     try {
-      final rows = await _history.listCompleted();
+      final all = _dateFilter == HistoryDateFilter.all;
+      final rows = all
+          ? await _history.listCompleted(limit: historyBatchSize)
+          : await _history.listCompleted(todayOnly: true);
       if (gen != _generation || _disposed) return;
       _all = rows;
+      _hasOlder = all && rows.length >= historyBatchSize;
       _status = rows.isEmpty
           ? HistoryListStatus.empty
           : HistoryListStatus.loaded;
