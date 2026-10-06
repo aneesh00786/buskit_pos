@@ -9,8 +9,12 @@ import 'printer_settings.dart';
 import 'receipt_rasterizer.dart';
 
 class PrintException implements Exception {
-  const PrintException(this.message);
+  const PrintException(this.message, {this.connected = false});
   final String message;
+
+  /// Phase 11B: true when the connection was made and the write / flush /
+  /// close failed (false = the printer could not be reached at all).
+  final bool connected;
   @override
   String toString() => 'PrintException: $message';
 }
@@ -80,20 +84,39 @@ class NetworkEscPosPrinter {
     if (!settings.thermalConfigured) {
       throw const PrintException('No thermal printer is configured.');
     }
-    final job = await buildJob(receipt);
+    await sendBytes(await buildJob(receipt));
+  }
+
+  /// Sends ready-made ESC/POS [bytes] to the configured printer (raw TCP),
+  /// unchanged. Used by [print] for the raster receipt and, since Phase 11B,
+  /// by `NetworkPrinterAdapter` for the text-mode ESC/POS receipt — the one
+  /// LAN connection path.
+  Future<void> sendBytes(List<int> bytes) async {
+    if (!settings.thermalConfigured) {
+      throw const PrintException('No thermal printer is configured.');
+    }
     final where = '${settings.host}:${settings.port}';
     PrinterConnection? conn;
     try {
       conn = await _connector(settings.host.trim(), settings.port, timeout);
-      conn.add(job);
+      conn.add(bytes);
       await conn.flush();
       await conn.close();
     } on TimeoutException {
-      throw PrintException('The printer at $where did not respond.');
+      throw PrintException(
+        'The printer at $where did not respond.',
+        connected: conn != null,
+      );
     } on SocketException {
-      throw PrintException('Cannot reach the printer at $where.');
+      throw PrintException(
+        'Cannot reach the printer at $where.',
+        connected: conn != null,
+      );
     } on IOException {
-      throw PrintException('Printing to $where failed.');
+      throw PrintException(
+        'Printing to $where failed.',
+        connected: conn != null,
+      );
     }
   }
 }

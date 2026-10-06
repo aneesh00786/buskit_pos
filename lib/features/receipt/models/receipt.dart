@@ -9,9 +9,14 @@ class ReceiptLine {
     required this.lineTotal,
     this.variant,
     this.taxNote,
+    this.barcode,
   });
 
   final String name;
+
+  /// The product's barcode when the sale line has one (Phase 11A; shown only
+  /// when a layout asks for it).
+  final String? barcode;
 
   /// Variation / unit label remembered from the cart (display only).
   final String? variant;
@@ -59,7 +64,16 @@ class ReceiptData {
     this.staffId,
     this.deviceId,
     this.footer = 'Thank you!',
+    this.headerLines = const [],
+    this.registerLabel,
   });
+
+  /// Phase 11A — optional lines under the title (e.g. the store's address,
+  /// from the store settings). Empty = nothing printed (unchanged receipts).
+  final List<String> headerLines;
+
+  /// Phase 11A — the register (e.g. its code), when the caller knows it.
+  final String? registerLabel;
 
   final String title;
   final String orderNumber;

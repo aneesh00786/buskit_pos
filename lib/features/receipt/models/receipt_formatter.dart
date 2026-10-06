@@ -15,6 +15,8 @@ class ReceiptFormatter {
     String title = 'ThriveWoo POS',
     String? staffId,
     String? deviceId,
+    List<String> headerLines = const [],
+    String? registerLabel,
   }) {
     String money(double? v) => formatMoney(v);
     return ReceiptData(
@@ -23,6 +25,8 @@ class ReceiptFormatter {
       completedAt: sale.completedAt,
       staffId: staffId,
       deviceId: deviceId,
+      headerLines: headerLines,
+      registerLabel: registerLabel,
       customerLabel: sale.customerId == null
           ? 'Guest checkout'
           : 'Customer ${sale.customerId}',
@@ -34,6 +38,7 @@ class ReceiptFormatter {
             quantity: l.quantity,
             unitPrice: money(l.unitPrice),
             lineTotal: money(l.lineTotal),
+            barcode: l.barcode,
           ),
       ],
       subtotal: money(sale.totals.subtotal),
@@ -124,16 +129,21 @@ extension ReceiptText on ReceiptData {
   }
 
   /// The receipt as lines of at most [columns] characters (default 42 = 80 mm
-  /// paper; use 32 for 58 mm).
-  List<String> toLines({int columns = 42}) {
+  /// paper; use 32 for 58 mm). [showBarcodes] (Phase 11A, off by default)
+  /// adds each line's barcode under its name.
+  List<String> toLines({int columns = 42, bool showBarcodes = false}) {
     final rule = '-' * columns;
     final out = <String>[
       _center(_ascii(title), columns),
+      for (final h in headerLines)
+        for (final w in _wrap(_ascii(h), columns)) _center(w, columns),
       '',
       _pair('Order', _ascii(orderNumber), columns),
       if (dateText != null) _pair('Date', _ascii(dateText!), columns),
       if (staffId != null) _pair('Staff', _ascii(staffId!), columns),
       if (deviceId != null) _pair('Device', _ascii(deviceId!), columns),
+      if (registerLabel != null)
+        _pair('Register', _ascii(registerLabel!), columns),
       _pair('Customer', _ascii(customerLabel), columns),
       rule,
     ];
@@ -144,6 +154,9 @@ extension ReceiptText on ReceiptData {
             : '${l.name} (${l.variant})',
       );
       out.addAll(_wrap(name, columns));
+      if (showBarcodes && l.barcode != null && l.barcode!.isNotEmpty) {
+        out.add('  ${_ascii(l.barcode!)}');
+      }
       out.add(
         _pair('  ${l.quantity} x ${l.unitPrice}', _ascii(l.lineTotal), columns),
       );
