@@ -1,4 +1,5 @@
 import '../models/receipt.dart';
+import 'escpos_commands.dart';
 import 'escpos_receipt_renderer.dart';
 import 'printer_adapter.dart';
 
@@ -40,6 +41,47 @@ class EscPosReceiptService {
   /// The job that would be sent (previews / tests). Pure.
   PrintJob render(ReceiptData receipt, {bool openDrawer = false}) =>
       renderer.render(receipt, config, openDrawer: openDrawer);
+
+  /// Phase 14A: a job that ONLY pulses the cash-drawer port (no receipt, no
+  /// paper feed or cut). Pure.
+  PrintJob renderDrawerOpen() {
+    final cmd = EscPosCommands().initialize().openCashDrawer();
+    return PrintJob(
+      bytes: cmd.bytes(),
+      reference: 'drawer',
+      paper: config.paper,
+      columns: config.columns,
+      lines: const [],
+      commands: cmd.log,
+      drawerRequested: true,
+    );
+  }
+
+  /// Phase 14A: opens the cash drawer through the printer, without printing.
+  /// Refused (never pretended) when the printer declares no drawer port;
+  /// failures are returned, never thrown.
+  Future<PrintResult> openDrawer() async {
+    if (!config.capabilities.cashDrawer) {
+      return const PrintResult(
+        PrintStatus.unsupportedCapability,
+        message: 'This printer has no cash drawer port configured.',
+      );
+    }
+    try {
+      if (!await adapter.isAvailable()) {
+        return const PrintResult(
+          PrintStatus.printerUnavailable,
+          message: 'The receipt printer is not available.',
+        );
+      }
+      return await adapter.send(renderDrawerOpen());
+    } catch (_) {
+      return const PrintResult(
+        PrintStatus.connectionFailure,
+        message: 'The cash drawer could not be reached through the printer.',
+      );
+    }
+  }
 
   Future<PrintResult> print(
     ReceiptData receipt, {

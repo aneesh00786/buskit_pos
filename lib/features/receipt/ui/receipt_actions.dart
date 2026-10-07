@@ -14,8 +14,13 @@ import '../state/receipt_services.dart';
 /// "Print Receipt", "Email / SMS" and a printer-setup shortcut, shown on the
 /// sale-complete screen.
 class ReceiptActions extends StatefulWidget {
-  const ReceiptActions({super.key, required this.receipt});
+  const ReceiptActions({super.key, required this.receipt, this.autoPrintKey});
   final ReceiptData receipt;
+
+  /// Phase 14B: set ONLY on the sale-complete screen (`sale:<id>`). When the
+  /// "Auto print receipt" setting is on, the receipt is printed once through
+  /// the same print flow as the button; the button stays for reprints.
+  final String? autoPrintKey;
 
   @override
   State<ReceiptActions> createState() => _ReceiptActionsState();
@@ -23,6 +28,31 @@ class ReceiptActions extends StatefulWidget {
 
 class _ReceiptActionsState extends State<ReceiptActions> {
   bool _printing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoPrintKey != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _autoPrint());
+    }
+  }
+
+  /// Phase 14B: after the sale is complete (this screen only exists then),
+  /// print once if the store turned auto-print on. Never awaited by checkout;
+  /// a failure is reported like a manual print and the button remains.
+  Future<void> _autoPrint() async {
+    final key = widget.autoPrintKey;
+    if (key == null || !mounted) return;
+    final services = context.read<ReceiptServices>();
+    bool enabled;
+    try {
+      enabled = (await services.settings.load()).autoPrint;
+    } catch (_) {
+      enabled = false;
+    }
+    if (!enabled || !mounted || !services.print.claimAutoPrint(key)) return;
+    await _print();
+  }
 
   void _say(String message) {
     ScaffoldMessenger.of(context)
@@ -287,6 +317,8 @@ class _PrinterSetupDialogState extends State<PrinterSetupDialog> {
   final _port = TextEditingController(text: '${PrinterSettings.defaultPort}');
   PaperWidth _paper = PaperWidth.mm80;
   ThermalMode _mode = ThermalMode.image;
+  bool _cashDrawer = false;
+  bool _autoPrint = false;
   bool _loaded = false;
   bool _busy = false;
   String? _message;
@@ -305,6 +337,8 @@ class _PrinterSetupDialogState extends State<PrinterSetupDialog> {
       _port.text = '${s.port}';
       _paper = s.paper;
       _mode = s.mode;
+      _cashDrawer = s.cashDrawer;
+      _autoPrint = s.autoPrint;
       _loaded = true;
     });
   }
@@ -321,6 +355,8 @@ class _PrinterSetupDialogState extends State<PrinterSetupDialog> {
     port: int.tryParse(_port.text.trim()) ?? PrinterSettings.defaultPort,
     paper: _paper,
     mode: _mode,
+    cashDrawer: _cashDrawer,
+    autoPrint: _autoPrint,
   );
 
   Future<void> _save() async {
@@ -433,6 +469,52 @@ class _PrinterSetupDialogState extends State<PrinterSetupDialog> {
                       onSelectionChanged: _busy
                           ? null
                           : (s) => setState(() => _mode = s.first),
+                    ),
+                    // Phase 14A: a cash drawer on this printer's drawer port
+                    // (opened after cash sales and by "no sale").
+                    const SizedBox(height: PosTokens.s8),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Cash drawer connected'),
+                              Text(
+                                'Open it after cash sales and for "no sale".',
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          key: const Key('printer-cash-drawer'),
+                          value: _cashDrawer,
+                          onChanged: _busy
+                              ? null
+                              : (v) => setState(() => _cashDrawer = v),
+                        ),
+                      ],
+                    ),
+                    // Phase 14B: print automatically after a completed sale.
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Auto print receipt'),
+                              Text('Print after every completed sale.'),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          key: const Key('printer-auto-print'),
+                          value: _autoPrint,
+                          onChanged: _busy
+                              ? null
+                              : (v) => setState(() => _autoPrint = v),
+                        ),
+                      ],
                     ),
                     if (_message != null) ...[
                       const SizedBox(height: PosTokens.s12),

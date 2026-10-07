@@ -69,6 +69,19 @@ class PrintService {
   final EscPosAdapterFactory _escPosAdapterFactory;
   final Future<dynamic> Function(ReceiptData receipt) pdfBuilder;
 
+  /// Phase 14B: sales whose receipt was already AUTO-printed (bounded). A
+  /// sale is auto-printed at most once, whatever rebuilds, retries or
+  /// repeated completion callbacks happen; manual printing is unaffected.
+  final Set<String> _autoPrinted = <String>{};
+
+  /// True the FIRST time [saleKey] is claimed for an automatic print.
+  bool claimAutoPrint(String saleKey) {
+    if (_autoPrinted.contains(saleKey)) return false;
+    if (_autoPrinted.length >= 500) _autoPrinted.remove(_autoPrinted.first);
+    _autoPrinted.add(saleKey);
+    return true;
+  }
+
   /// The adapter used for [ThermalMode.escPos] with [settings].
   PrinterAdapter escPosAdapterFor(PrinterSettings settings) =>
       _escPosAdapterFactory(settings);

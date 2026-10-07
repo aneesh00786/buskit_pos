@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:buskit_pos/features/receipt/printing/mock_printer_adapter.dart';
+import 'package:buskit_pos/features/receipt/state/cash_drawer_service.dart';
 import 'package:buskit_pos/core/network/api_exception.dart';
 import 'package:buskit_pos/features/auth/data/auth_service.dart';
 import 'package:buskit_pos/features/auth/models/pos_auth_context.dart';
@@ -854,12 +856,20 @@ class FakeReceipts {
     settings = PrinterSettingsStore(MemoryTokenStore());
     print = FakePrintService();
     delivery = FakeDelivery();
+    drawerAdapter = MockPrinterAdapter();
     services = ReceiptServices(
       print: print,
       delivery: delivery,
       settings: settings,
+      // Phase 14A: no drawer is configured unless a test saves printer
+      // settings with cashDrawer: true — existing tests send nothing.
+      drawer: CashDrawerService(
+        settings: settings,
+        adapterFactory: (_) => drawerAdapter,
+      ),
     );
   }
+  late final MockPrinterAdapter drawerAdapter;
   late final PrinterSettingsStore settings;
   late final FakePrintService print;
   late final FakeDelivery delivery;

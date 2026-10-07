@@ -1,5 +1,6 @@
 import '../data/printer_driver.dart';
 import '../data/printer_settings.dart';
+import 'escpos_commands.dart';
 import 'printer_adapter.dart';
 
 /// Phase 11B — the Phase 11A [PrinterAdapter] for the EXISTING LAN printer.
@@ -40,6 +41,8 @@ class NetworkPrinterAdapter implements PrinterAdapter {
     printerName: '${settings.host.trim()}:${settings.port}',
     cutEnabled: cutEnabled,
     columnsOverride: columnsOverride,
+    // Phase 14A: the drawer port is declared by the printer settings.
+    capabilities: EscPosCapabilities(cashDrawer: settings.cashDrawer),
   );
 
   @override

@@ -150,6 +150,25 @@ void main() {
       expect(products.barcodeCalls, isEmpty);
     });
 
+    test('Phase 14B: an AMBIGUOUS barcode (two active products) adds nothing and says why', () async {
+      products.onBarcode = (_) async => throw ApiException.fromStatus(
+        409,
+        message: 'More than one product has this barcode.',
+        errorCode: 'POS_BARCODE_AMBIGUOUS',
+        data: {'barcode': '4006381333931'},
+      );
+      final r = await handler.handle('4006381333931');
+      expect(r.outcome, ScanOutcome.error);
+      expect(
+        r.message,
+        'More than one product uses this barcode, so nothing was added. '
+        'Search for the product and add it from the list.',
+      );
+      expect(carts.addCalls, isEmpty);
+      expect(carts.createCalls, 0, reason: 'no draft opened either');
+      expect(cart.sale, isNull);
+    });
+
     test('a lookup failure is reported in plain words', () async {
       products.onBarcode = (_) async => throw netDown;
       final r = await handler.handle('123456');

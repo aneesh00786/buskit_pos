@@ -12,6 +12,7 @@ import '../../auth/state/session_controller.dart';
 import '../../cash_movements/data/cash_movement_service.dart';
 import '../../cash_movements/state/cash_movement_controller.dart';
 import '../../cash_movements/ui/cash_withdrawal_view.dart';
+import '../../cash_movements/ui/open_drawer_tile.dart';
 import '../../receipt/models/receipt.dart';
 import '../../receipt/ui/receipt_actions.dart' show PrinterSetupDialog;
 import '../data/settings_service.dart';
@@ -223,6 +224,8 @@ class _CommonSections extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const CashManagementGate(),
+        // Phase 14A: manual "open drawer / no sale" (payments.cash_drawer).
+        const OpenDrawerTile(),
         const SizedBox(height: PosTokens.s16),
         _SectionCard(
           title: 'Printer & Receipt',

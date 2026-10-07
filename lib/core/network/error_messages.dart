@@ -34,6 +34,10 @@ class PosErrorCodes {
   static const noOpenShift = 'POS_NO_OPEN_SHIFT';
   static const refundExceedsProviderRemaining = 'POS_PAYMENT_REFUND_EXCEEDS_REMAINING';
   static const paymentProviderUnavailable = 'POS_PAYMENT_PROVIDER_NOT_SUPPORTED';
+
+  /// Phase 14B: more than one active product carries the scanned barcode;
+  /// the server chose none.
+  static const barcodeAmbiguous = 'POS_BARCODE_AMBIGUOUS';
 }
 
 /// Phase C5 — 403 wording for the permissions enforced across the remaining
@@ -56,6 +60,8 @@ const _c5PermissionMessages = <String, String>{
   'payments.accept_cash': 'You do not have permission to accept cash payments.',
   'payments.accept_card': 'You do not have permission to accept card payments.',
   'payments.accept_other': 'You do not have permission to accept this payment method.',
+  // Phase 14A
+  'payments.cash_drawer': 'You do not have permission to open the cash drawer. Ask a manager.',
 };
 
 /// Turns an [ApiException] into a short, user-facing message. Codes are
@@ -88,6 +94,9 @@ String describeApiError(ApiException e) {
       return 'Stock changed while the sale was being processed. Please try again.';
     case PosErrorCodes.refundExceedsProviderRemaining:
       return 'This refund is more than what is left to refund on the customer\'s original payment.';
+    case PosErrorCodes.barcodeAmbiguous:
+      return 'More than one product uses this barcode, so nothing was added. '
+          'Search for the product and add it from the list.';
     case PosErrorCodes.paymentProviderUnavailable:
       return 'The payment provider for this payment is not available right now. Ask an administrator.';
     case PosErrorCodes.permissionDenied:

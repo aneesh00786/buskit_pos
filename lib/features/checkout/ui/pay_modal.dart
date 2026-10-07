@@ -17,6 +17,7 @@ import '../../offline/offline_payment_policy.dart';
 import '../../offline/ui/offline_sale_views.dart';
 import '../../receipt/models/receipt_formatter.dart';
 import '../../receipt/state/receipt_services.dart';
+import '../../receipt/ui/cash_drawer_auto_open.dart';
 import '../../receipt/ui/receipt_actions.dart';
 import '../data/payment_terminal_service.dart';
 import '../models/payment.dart';
@@ -354,7 +355,21 @@ class _PayModalState extends State<PayModal> {
       return _Shell(
         title: 'Sale saved offline',
         onClose: newSale,
-        child: OfflineSaleSavedView(sale: savedOffline, onNewSale: newSale),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Phase 14A: an offline CASH sale is complete on this device.
+            CashDrawerAutoOpen(
+              saleKey: 'local:${savedOffline.localSaleId}',
+              tookCash: savedOffline.payments.any(
+                (p) => p.method == 'cash' && p.amountMilli > 0,
+              ),
+            ),
+            Expanded(
+              child: OfflineSaleSavedView(sale: savedOffline, onNewSale: newSale),
+            ),
+          ],
+        ),
       );
     }
 
@@ -1100,7 +1115,17 @@ class _SuccessView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: PosTokens.s8),
+          // Phase 14A: the sale is confirmed complete here — open the cash
+          // drawer once if it took cash (never for card / QR / other only).
+          CashDrawerAutoOpen(
+            saleKey: 'sale:${sale.id}',
+            tookCash: sale.payments.any(
+              (p) => p.method == 'cash' && (p.amount ?? 0) > 0,
+            ),
+          ),
           ReceiptActions(
+            // Phase 14B: auto-print once (if turned on) — completed sales only.
+            autoPrintKey: 'sale:${sale.id}',
             receipt: ReceiptFormatter.build(
               sale: sale,
               names: names,

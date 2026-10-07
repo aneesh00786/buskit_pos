@@ -29,6 +29,7 @@ import 'features/products/ui/products_page.dart';
 import 'features/receipt/data/printer_settings.dart';
 import 'features/receipt/data/receipt_delivery.dart';
 import 'features/receipt/state/print_service.dart';
+import 'features/receipt/state/cash_drawer_service.dart';
 import 'features/receipt/state/receipt_services.dart';
 
 class PosApp extends StatefulWidget {
@@ -68,6 +69,7 @@ class _PosAppState extends State<PosApp> {
       print: PrintService(settings: printerSettings),
       delivery: const UrlLauncherDelivery(),
       settings: printerSettings,
+      drawer: CashDrawerService(settings: printerSettings),
     );
     _client = PosApiClient(
       baseUrl: widget.baseUrl ?? AppConfig.baseUrl,
