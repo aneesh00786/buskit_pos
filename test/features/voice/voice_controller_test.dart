@@ -4,6 +4,7 @@
 // recognizer: no microphone, no platform channel, no POS call.
 import 'dart:async';
 
+import 'package:buskit_pos/features/voice/models/voice_language.dart';
 import 'package:buskit_pos/features/auth/models/pos_token_scope.dart';
 import 'package:buskit_pos/features/voice/data/voice_platform.dart';
 import 'package:buskit_pos/features/voice/state/voice_controller.dart';
@@ -46,6 +47,9 @@ class FakeRecognizer implements SpeechRecognizer {
   Object? listenError;
   int initCalls = 0;
   int listenCalls = 0;
+
+  /// Phase 13G: the language each listen was asked for.
+  final languages = <VoiceLanguage>[];
   int stopCalls = 0;
   int cancelCalls = 0;
   void Function(String text, bool isFinal)? _onResult;
@@ -66,8 +70,10 @@ class FakeRecognizer implements SpeechRecognizer {
   @override
   Future<void> listen({
     required void Function(String text, bool isFinal) onResult,
+    VoiceLanguage language = VoiceLanguage.english,
   }) async {
     listenCalls++;
+    languages.add(language);
     if (listenError != null) throw listenError!;
     _onResult = onResult;
   }

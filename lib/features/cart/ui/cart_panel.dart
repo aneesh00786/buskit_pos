@@ -13,6 +13,7 @@ import '../state/cart_controller.dart';
 import '../../checkout/ui/pay_modal.dart';
 import '../../loyalty/models/loyalty_sale_info.dart';
 import '../../loyalty/ui/loyalty_picker.dart';
+import '../../voice/ui/voice_test_view.dart';
 import 'cart_item_tile.dart';
 import 'customer_dialog.dart';
 import 'discount_override_dialog.dart';
@@ -246,6 +247,15 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
+          // Phase 13C-C: speak a quick bill into an EMPTY cart; Confirm Bill
+          // then opens the existing checkout (showPay).
+          if (itemCount == 0)
+            IconButton(
+              key: const Key('cart-voice-bill'),
+              tooltip: 'Voice bill',
+              onPressed: () => startVoiceBill(context, openCheckout: showPay),
+              icon: const Icon(Icons.mic_none),
+            ),
           TextButton(
             onPressed: canClear ? () => _clear(context) : null,
             style: TextButton.styleFrom(minimumSize: const Size(48, 48)),

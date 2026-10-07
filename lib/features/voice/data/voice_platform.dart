@@ -3,6 +3,8 @@ import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
+import '../models/voice_language.dart';
+
 /// Phase 13A — the microphone permission, as the voice feature needs it.
 enum VoicePermission {
   granted,
@@ -60,9 +62,11 @@ abstract class SpeechRecognizer {
     required void Function(String status) onStatus,
   });
 
-  /// Starts listening; [onResult] receives partial and final text.
+  /// Starts listening in [language] (Phase 13G); [onResult] receives
+  /// partial and final text.
   Future<void> listen({
     required void Function(String text, bool isFinal) onResult,
+    VoiceLanguage language = VoiceLanguage.english,
   });
 
   /// Stops listening; the final result (if any) still arrives via onResult.
@@ -91,6 +95,7 @@ class SpeechToTextRecognizer implements SpeechRecognizer {
   @override
   Future<void> listen({
     required void Function(String text, bool isFinal) onResult,
+    VoiceLanguage language = VoiceLanguage.english,
   }) => _speech.listen(
     onResult: (SpeechRecognitionResult r) =>
         onResult(r.recognizedWords, r.finalResult),
@@ -98,6 +103,7 @@ class SpeechToTextRecognizer implements SpeechRecognizer {
       partialResults: true,
       cancelOnError: true,
       listenMode: stt.ListenMode.confirmation,
+      localeId: language.code, // en-US for English
     ),
   );
 

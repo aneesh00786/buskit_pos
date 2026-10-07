@@ -50,6 +50,10 @@
         <intent>
             <action android:name="android.speech.RecognitionService"/>
         </intent>
+        <!-- Voice (Phase 13F): the device's text-to-speech engine (Android 11+). -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE"/>
+        </intent>
         <!-- Email / SMS receipt hand-off. -->
         <intent>
             <action android:name="android.intent.action.SENDTO"/>
