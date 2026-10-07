@@ -87,6 +87,7 @@ class OfflineStorageService {
   List<OfflineStorageIssue> get issues => List.unmodifiable(_issues);
 
   List<OfflineProduct>? _productsMemo;
+  DateTime? _catalogueCachedAtMemo; // loaded together with _productsMemo
 
   DateTime get _now => _clock().toUtc();
 
@@ -259,8 +260,22 @@ class OfflineStorageService {
     return c;
   }
 
-  Future<List<OfflineProduct>> getProducts() async =>
-      _productsMemo ??= (await getCatalogue())?.products ?? const [];
+  Future<List<OfflineProduct>> getProducts() async {
+    if (_productsMemo == null) {
+      final c = await getCatalogue();
+      _catalogueCachedAtMemo = c?.cachedAt;
+      _productsMemo = c?.products ?? const [];
+    }
+    return _productsMemo!;
+  }
+
+  /// Phase 14G — when the cached catalogue was last refreshed from the
+  /// server (`products.json` `cached_at`, UTC); null when the catalogue is
+  /// missing or unreadable (including a missing / malformed timestamp).
+  Future<DateTime?> getCatalogueCachedAt() async {
+    await getProducts();
+    return _catalogueCachedAtMemo;
+  }
 
   Future<OfflineProduct?> getProduct(int productVariationId) async {
     for (final p in await getProducts()) {

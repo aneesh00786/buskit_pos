@@ -4,6 +4,7 @@ import '../checkout/models/payment.dart';
 import 'models/offline_catalogue.dart';
 import 'models/offline_context.dart';
 import 'models/offline_sale.dart';
+import 'offline_catalogue_freshness.dart';
 import 'offline_payment_policy.dart';
 import 'offline_storage_service.dart';
 import 'pos_tax.dart';
@@ -166,6 +167,8 @@ class OfflineCheckoutService {
       'The shift stored on this device is closed. Open a shift before making an offline sale.';
   static const scopeMismatchMessage =
       'The shift stored on this device belongs to a different store, register or device. Reconnect to continue.';
+  static const staleCatalogueMessage =
+      'Offline catalogue is too old. Connect to the internet and refresh the catalogue before starting a new offline sale.';
   static const emptyCartMessage =
       'Add at least one item before taking payment.';
   static const invalidQuantityMessage =
@@ -241,6 +244,14 @@ class OfflineCheckoutService {
     if (!shift.isOpen) throw const OfflineCheckoutRejected(shiftClosedMessage);
     if (!_sameScope(shift, scope)) {
       throw const OfflineCheckoutRejected(scopeMismatchMessage);
+    }
+
+    // Phase 14G: a NEW offline sale needs a catalogue refreshed from the
+    // server within [offlineCatalogueMaxAge] (missing / unreadable = too
+    // old). Sales already recorded are never checked again.
+    final cachedAt = await _read(storage.getCatalogueCachedAt);
+    if (!isOfflineCatalogueFresh(cachedAt, _clock())) {
+      throw const OfflineCheckoutRejected(staleCatalogueMessage);
     }
 
     if (r.lines.isEmpty) throw const OfflineCheckoutRejected(emptyCartMessage);

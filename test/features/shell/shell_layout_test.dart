@@ -7,6 +7,7 @@ import 'package:buskit_pos/core/theme/app_theme.dart';
 import 'package:buskit_pos/core/theme/pos_tokens.dart';
 import 'package:buskit_pos/features/auth/state/session_controller.dart';
 import 'package:buskit_pos/features/cart/ui/cart_panel.dart';
+import 'package:buskit_pos/features/reports/ui/reports_view.dart';
 import 'package:buskit_pos/features/shell/ui/pos_header.dart';
 import 'package:buskit_pos/features/shell/ui/pos_sidebar.dart';
 import 'package:buskit_pos/features/shell/ui/summary_panel.dart';
@@ -503,13 +504,20 @@ void main() {
           isNotNull,
         );
         expect(find.byTooltip('Scan barcode with camera'), findsOneWidget);
+        // Scoped to the header: the sidebar now also has a Reports entry.
+        Finder inHeader(Finder f) =>
+            find.descendant(of: find.byType(PosHeader), matching: f);
         for (final tip in ['Alerts', 'Reports', 'Quick settings']) {
-          expect(find.byTooltip(tip), findsOneWidget, reason: tip);
+          expect(inHeader(find.byTooltip(tip)), findsOneWidget, reason: tip);
         }
         expect(find.byTooltip('More actions'), findsNothing);
-        await tester.tap(find.byTooltip('Reports'));
-        await tester.pump();
-        expect(find.text('Reports is coming soon'), findsOneWidget);
+        // Phase 14F-C: the header's Reports action opens the real screen.
+        await tester.tap(inHeader(find.byTooltip('Reports')));
+        await tester.pumpAndSettle();
+        expect(find.byType(ReportsView), findsOneWidget);
+        expect(find.text('Reports is coming soon'), findsNothing);
+        await tester.tap(find.byTooltip('Close'));
+        await tester.pumpAndSettle();
         expect(find.text('Staff SALES1'), findsWidgets);
         expect(find.text('POS staff'), findsOneWidget);
         expect(find.byType(ClockText), findsOneWidget);
@@ -525,7 +533,11 @@ void main() {
         await tester.tap(find.byTooltip('More actions'));
         await tester.pumpAndSettle();
         expect(find.text('Alerts'), findsOneWidget);
-        expect(find.text('Reports'), findsOneWidget);
+        // The menu's own item (the sidebar now also has a Reports entry).
+        expect(
+          find.widgetWithText(PopupMenuItem<String>, 'Reports'),
+          findsOneWidget,
+        );
         expect(find.text('Quick settings'), findsOneWidget);
         await tester.tap(find.text('Alerts'));
         await tester.pumpAndSettle();

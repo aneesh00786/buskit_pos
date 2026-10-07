@@ -390,11 +390,17 @@ class VoiceController extends ChangeNotifier {
     QuickBillPreview? result;
     String? error;
     var retryable = false;
+    var foreign = false;
     try {
       result = await previewService!.previewQuickBill(req);
       if (result.voiceSessionId != req.voiceSessionId ||
           result.requestId != req.requestId) {
+        // Phase 15A: an answer carrying another session's / request's ids
+        // is discarded — never shown, never confirmable, never spoken.
+        // Retry sends a NEW request id.
         result = null;
+        foreign = true;
+        retryable = true;
         error = 'The bill preview did not match this request. Speak again.';
       }
     } on ApiException catch (e) {
@@ -414,6 +420,7 @@ class VoiceController extends ChangeNotifier {
         ? VoicePreviewState.failed
         : VoicePreviewState.loaded;
     notifyListeners();
+    if (foreign) return;
     final say = _responses;
     if (say != null) _say(say.preview(result)); // CURRENT request only
   }
@@ -427,19 +434,39 @@ class VoiceController extends ChangeNotifier {
     _ => describeApiError(e),
   };
 
-  /// Re-sends the same intent (same voice session and request ids) after a
-  /// failed preview.
+  /// Re-sends the same lines after a failed preview — Phase 15A: as a NEW
+  /// request (same voice session, new request id), so an answer to the
+  /// failed attempt can never be taken for the retry's.
   Future<void> retryPreview() async {
-    final r = _request;
-    final req = _billRequest;
+    final previous = _request;
+    final old = _billRequest;
+    final s = _session;
     if (_disposed ||
-        r == null ||
-        req == null ||
+        previous == null ||
+        old == null ||
+        s == null ||
         previewService == null ||
         _previewState != VoicePreviewState.failed ||
         !_previewRetryable) {
       return;
     }
+    if (!s.belongsTo(scope())) {
+      _billRequest = null;
+      _clearPreview();
+      _previewState = VoicePreviewState.failed;
+      _previewError = staleBillMessage;
+      notifyListeners();
+      return;
+    }
+    final r = _request = VoiceRequest.start(s)
+      ..text = previous.text
+      ..recognizedAt = previous.recognizedAt;
+    final req = _billRequest = QuickBillRequest(
+      voiceSessionId: s.voiceSessionId,
+      requestId: r.requestId,
+      recognizedText: old.recognizedText,
+      items: old.items,
+    );
     await _loadPreview(r, req);
   }
 

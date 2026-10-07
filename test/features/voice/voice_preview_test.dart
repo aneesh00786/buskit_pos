@@ -287,7 +287,7 @@ void main() {
       });
 
       test(
-        'network / timeout: a clear retry message; Retry re-sends the SAME ids',
+        'network / timeout: a clear retry message; Retry re-sends the same lines in the SAME session with a NEW request id (Phase 15A)',
         () async {
           final backend = FakeBackend(readyCoffeeWater)
             ..throwError = const SocketException('down');
@@ -305,7 +305,9 @@ void main() {
             backend.lastBody['voice_session_id'],
             first['voice_session_id'],
           );
-          expect(backend.lastBody['request_id'], first['request_id']);
+          expect(backend.lastBody['request_id'], isNot(first['request_id']));
+          expect(backend.lastBody['items'], first['items']);
+          expect(v.preview!.requestId, v.request!.requestId);
         },
       );
 

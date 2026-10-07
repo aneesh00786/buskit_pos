@@ -32,6 +32,8 @@ import '../../checkout/data/payment_recovery_service.dart';
 import '../../checkout/ui/payment_recovery_view.dart';
 import '../../promotions/ui/promotions_view.dart';
 import '../../analytics/ui/analytics_view.dart';
+import '../../reports/models/retail_report.dart';
+import '../../reports/ui/reports_view.dart';
 import '../../settings/ui/settings_view.dart';
 import '../../shell/ui/pos_header.dart';
 import '../../shell/ui/pos_scaffold.dart';
@@ -44,6 +46,7 @@ import 'product_filter_bar.dart';
 import 'product_card.dart';
 import 'variation_sheet.dart';
 import '../../shift_close/ui/shift_close_view.dart';
+import 'pos_shortcuts.dart';
 
 enum _CatalogView { grid, list }
 
@@ -59,6 +62,8 @@ class ProductsPage extends StatefulWidget {
 class _ProductsPageState extends State<ProductsPage>
     with WidgetsBindingObserver {
   final _search = TextEditingController();
+  // Phase 14E-A: F2 focuses the product search.
+  final _searchFocus = FocusNode(debugLabel: 'product-search');
   final _scroll = ScrollController();
   _CatalogView _view = _CatalogView.grid;
 
@@ -161,6 +166,7 @@ class _ProductsPageState extends State<ProductsPage>
     _reachable?.removeListener(_onReachability);
     _scroll.dispose();
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -335,7 +341,10 @@ class _ProductsPageState extends State<ProductsPage>
 
     return BarcodeKeyListener(
       onBarcode: (code) => unawaited(_onBarcode(code)),
-      child: ResponsivePosLayout(
+      // Phase 14E-A: F2 search · F4 pay · F8 new sale (keyboard tills only).
+      child: PosShortcuts(
+        searchFocus: _searchFocus,
+        child: ResponsivePosLayout(
         builder: (context, layout) {
           final staff = session.salesmanId == null
               ? null
@@ -405,6 +414,15 @@ class _ProductsPageState extends State<ProductsPage>
                 if (layout.isCompact) Navigator.of(context).pop();
                 showAnalytics(context);
               },
+              // Phase 14F-B: hidden only when every report permission is
+              // positively denied (the server enforces each report itself).
+              onOpenReports:
+                  ReportKind.values.every((k) => session.isDenied(k.permission))
+                  ? null
+                  : () {
+                      if (layout.isCompact) Navigator.of(context).pop();
+                      showReports(context);
+                    },
               onOpenSettings: () {
                 if (layout.isCompact) Navigator.of(context).pop();
                 showSettings(context);
@@ -457,10 +475,16 @@ class _ProductsPageState extends State<ProductsPage>
                     },
             ),
             header: PosHeader(
-              search: _SearchField(controller: _search),
+              search: _SearchField(controller: _search, focusNode: _searchFocus),
               staffLabel: staff,
               reachable: client?.reachable,
               onScanBarcode: onScan,
+              // Phase 14F-C: the header's Reports action opens the same
+              // screen as the sidebar (hidden rules identical).
+              onOpenReports:
+                  ReportKind.values.every((k) => session.isDenied(k.permission))
+                  ? null
+                  : () => showReports(context),
             ),
             banner: OfflineBanner(reachable: client?.reachable),
             body: _Catalog(
@@ -476,6 +500,7 @@ class _ProductsPageState extends State<ProductsPage>
             bottomBar: _CartBar(cart: cart),
           );
         },
+        ),
       ),
     );
   }
@@ -541,15 +566,18 @@ class _CartBar extends StatelessWidget {
 }
 
 class _SearchField extends StatelessWidget {
-  const _SearchField({required this.controller});
+  const _SearchField({required this.controller, this.focusNode});
   final TextEditingController controller;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
     final c = context.read<ProductListController>();
     final t = PosTokens.of(context);
     return TextField(
+      key: const Key('product-search'),
       controller: controller,
+      focusNode: focusNode,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
         hintText: 'Search products, SKU or barcode',

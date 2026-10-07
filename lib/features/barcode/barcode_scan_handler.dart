@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../core/network/api_exception.dart';
 import '../../core/network/error_messages.dart';
 import '../cart/state/cart_controller.dart';
@@ -20,14 +22,36 @@ class ScanResult {
 /// line: POS barcode lookup, then add one unit of the matched variation.
 /// Scans are processed one at a time, in order, so a quick run of scans never
 /// races the cart's single-mutation lock.
+///
+/// Phase 14E-A: a scan that arrives while the cart is busy with ANOTHER change
+/// (a quantity edit, a removal, …) waits for the cart instead of being lost.
+/// At most [maxQueued] scans wait at once; beyond that a new scan is refused
+/// (with a message) and the scans already waiting are kept.
 class BarcodeScanHandler {
-  BarcodeScanHandler({required this.products, required this.cart});
+  BarcodeScanHandler({
+    required this.products,
+    required this.cart,
+    this.cartWait = const Duration(seconds: 15),
+  });
   final ProductService products;
   final CartController cart;
 
+  /// How long one scan waits for a busy cart before it gives up.
+  final Duration cartWait;
+
   static const maxLength = 50;
 
+  /// Scans waiting or in progress at once (a scanner burst is far smaller).
+  static const maxQueued = 20;
+
+  static const queueFullMessage =
+      'Too many scans are waiting. Wait a moment and scan again.';
+
   Future<void> _tail = Future<void>.value();
+  int _pending = 0;
+
+  /// Scans queued or being processed right now.
+  int get pending => _pending;
 
   /// Trims and validates a raw code; null when unusable.
   static String? normalize(String? raw) {
@@ -37,9 +61,34 @@ class BarcodeScanHandler {
   }
 
   Future<ScanResult> handle(String? raw) {
-    final result = _tail.then((_) => _handle(raw));
+    if (_pending >= maxQueued) {
+      // Refused, never queued: the earlier scans keep their place.
+      return Future.value(
+        ScanResult(ScanOutcome.busy, queueFullMessage, code: normalize(raw)),
+      );
+    }
+    _pending++;
+    final result = _tail
+        .then((_) => _handle(raw))
+        .whenComplete(() => _pending--);
     _tail = result.then((_) {}, onError: (_) {});
     return result;
+  }
+
+  /// Completes true once no other cart change is running (false on timeout).
+  Future<bool> _cartIdle() async {
+    if (!cart.isMutating) return true;
+    final idle = Completer<bool>();
+    void listener() {
+      if (!cart.isMutating && !idle.isCompleted) idle.complete(true);
+    }
+
+    cart.addListener(listener);
+    try {
+      return await idle.future.timeout(cartWait, onTimeout: () => false);
+    } finally {
+      cart.removeListener(listener);
+    }
   }
 
   Future<ScanResult> _handle(String? raw) async {
@@ -72,13 +121,20 @@ class BarcodeScanHandler {
         item.variationName,
         item.unitType,
       ].where((x) => x != null && x.trim().isNotEmpty).join(' · ');
-      cart.clearError();
-      final ok = await cart.addItem(
-        item.id,
-        1,
-        label: label.isEmpty ? null : label,
-        imageUrl: item.imageUrl,
-      );
+      // Phase 14E-A: wait for any other cart change to finish, then add. A
+      // change that starts in the gap is waited for again (bounded).
+      var ok = false;
+      for (var attempt = 0; attempt < 3; attempt++) {
+        if (!await _cartIdle()) break;
+        cart.clearError();
+        ok = await cart.addItem(
+          item.id,
+          1,
+          label: label.isEmpty ? null : label,
+          imageUrl: item.imageUrl,
+        );
+        if (ok || cart.error != null || !cart.isMutating) break;
+      }
       if (ok) {
         return ScanResult(
           ScanOutcome.added,

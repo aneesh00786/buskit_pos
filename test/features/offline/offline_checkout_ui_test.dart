@@ -34,7 +34,8 @@ Future<void> seed() async {
     OfflineCatalogue(
       companyId: 1,
       storeId: 213,
-      cachedAt: DateTime.utc(2026, 10, 6),
+      // Phase 14G: refreshed just now (fresh for the real-clock checkout).
+      cachedAt: DateTime.now().toUtc(),
       products: const [
         OfflineProduct(
           productVariationId: 1,

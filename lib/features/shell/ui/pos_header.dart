@@ -18,6 +18,7 @@ class PosHeader extends StatelessWidget {
     this.reachable,
     this.now,
     this.onScanBarcode,
+    this.onOpenReports,
     this.scanUnavailableReason =
         'Camera scanning is not available on this device',
   });
@@ -31,6 +32,9 @@ class PosHeader extends StatelessWidget {
   final VoidCallback? onScanBarcode;
   final String scanUnavailableReason;
 
+  /// Phase 14F-C — opens the Reports screen; null keeps the placeholder.
+  final VoidCallback? onOpenReports;
+
   /// Injectable clock for tests.
   final DateTime Function()? now;
 
@@ -39,6 +43,11 @@ class PosHeader extends StatelessWidget {
     (Icons.bar_chart_outlined, 'Reports'),
     (Icons.settings_outlined, 'Quick settings'),
   ];
+
+  void _action(BuildContext context, String what) {
+    if (what == 'Reports' && onOpenReports != null) return onOpenReports!();
+    _soon(context, what);
+  }
 
   void _soon(BuildContext context, String what) {
     ScaffoldMessenger.of(context)
@@ -92,7 +101,7 @@ class PosHeader extends StatelessWidget {
                       minWidth: 48,
                       minHeight: 48,
                     ),
-                    onPressed: () => _soon(context, a.$2),
+                    onPressed: () => _action(context, a.$2),
                     icon: Icon(a.$1),
                   )
               else if (showMore)
@@ -103,7 +112,7 @@ class PosHeader extends StatelessWidget {
                     minWidth: 48,
                     minHeight: 48,
                   ),
-                  onSelected: (label) => _soon(context, label),
+                  onSelected: (label) => _action(context, label),
                   itemBuilder: (_) => [
                     for (final a in _actions)
                       PopupMenuItem<String>(

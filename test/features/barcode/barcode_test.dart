@@ -192,20 +192,115 @@ void main() {
       expect(r.message, contains('Not enough stock'));
     });
 
-    test(
-      'a cart busy with another change asks the cashier to scan again',
-      () async {
-        products.onBarcode = (_) async => item(42);
-        final gate = Completer<CartSaleLike>();
-        carts.onAdd = (_) => gate.future.then((_) => CartSaleFactory.sale());
-        final first = cart.addItem(1, 1); // holds the cart's mutation lock
-        await Future<void>.delayed(Duration.zero);
-        final r = await handler.handle('123456');
-        expect(r.outcome, ScanOutcome.busy);
-        gate.complete(CartSaleLike());
-        await first;
-      },
-    );
+    test('Phase 14E-A: a scan arriving while the cart is busy with another change WAITS and is then added (not lost)', () async {
+      products.onBarcode = (_) async => item(42);
+      final gate = Completer<CartSaleLike>();
+      var adds = 0;
+      carts.onAdd = (c) async {
+        adds++;
+        if (adds == 1) await gate.future; // the other change, still running
+        return CartSaleFactory.sale(
+          items: [lineJson(id: adds, variationId: c.variationId)],
+          total: 10,
+        );
+      };
+      final first = cart.addItem(1, 1); // holds the cart's mutation lock
+      await Future<void>.delayed(Duration.zero);
+      final pending = handler.handle('123456');
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      expect(carts.addCalls.map((c) => c.variationId), [
+        1,
+      ], reason: 'queued, not sent yet');
+      gate.complete(CartSaleLike());
+      await first;
+      final r = await pending;
+      expect(r.outcome, ScanOutcome.added);
+      expect(carts.addCalls.map((c) => c.variationId), [1, 42]);
+    });
+
+    test('Phase 14E-A: rapid scans during a busy cart are all processed, in order, each once (repeat scans add twice)', () async {
+      products.onBarcode = (code) async =>
+          code == 'NONE' ? null : item(code == 'AAAA' ? 1 : 2, name: code);
+      final gate = Completer<void>();
+      var adds = 0;
+      carts.onAdd = (c) async {
+        if (++adds == 1) await gate.future;
+        return CartSaleFactory.sale(
+          items: [lineJson(id: adds, variationId: c.variationId)],
+          total: 10,
+        );
+      };
+      final busy = cart.addItem(9, 1); // another change holds the cart
+      await Future<void>.delayed(Duration.zero);
+      final scans = [
+        handler.handle('AAAA'),
+        handler.handle('BBBB'),
+        handler.handle('AAAA'),
+        handler.handle('NONE'),
+      ];
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      expect(handler.pending, 4);
+      gate.complete();
+      await busy;
+      final results = await Future.wait(scans);
+      expect(results.map((r) => r.outcome), [
+        ScanOutcome.added,
+        ScanOutcome.added,
+        ScanOutcome.added,
+        ScanOutcome.notFound,
+      ]);
+      expect(carts.addCalls.map((c) => c.variationId), [9, 1, 2, 1]);
+      expect(products.barcodeCalls, [
+        'AAAA',
+        'BBBB',
+        'AAAA',
+        'NONE',
+      ], reason: 'each scan looked up once');
+      expect(handler.pending, 0);
+    });
+
+    test('Phase 14E-A: the queue is bounded — a scan beyond the limit is refused with a message; queued scans still complete', () async {
+      final gate = Completer<void>();
+      products.onBarcode = (code) async {
+        await gate.future;
+        return item(42);
+      };
+      final queued = [
+        for (var i = 0; i < BarcodeScanHandler.maxQueued; i++)
+          handler.handle('CODE$i'),
+      ];
+      final extra = await handler.handle('ONE-TOO-MANY');
+      expect(extra.outcome, ScanOutcome.busy);
+      expect(extra.message, BarcodeScanHandler.queueFullMessage);
+      gate.complete();
+      final results = await Future.wait(queued);
+      expect(results.every((r) => r.added), isTrue);
+      expect(carts.addCalls, hasLength(BarcodeScanHandler.maxQueued));
+      expect(products.barcodeCalls, isNot(contains('ONE-TOO-MANY')));
+      expect(
+        (await handler.handle('AFTER')).added,
+        isTrue,
+        reason: 'room again',
+      );
+    });
+
+    test('Phase 14E-A: a cart that never frees up gives a safe "busy" result after the wait (no crash, no add)', () async {
+      final h2 = BarcodeScanHandler(
+        products: products,
+        cart: cart,
+        cartWait: const Duration(milliseconds: 20),
+      );
+      products.onBarcode = (_) async => item(42);
+      final gate = Completer<CartSaleLike>();
+      carts.onAdd = (_) => gate.future.then((_) => CartSaleFactory.sale());
+      final first = cart.addItem(1, 1);
+      await Future<void>.delayed(Duration.zero);
+      final r = await h2.handle('123456');
+      expect(r.outcome, ScanOutcome.busy);
+      gate.complete(CartSaleLike());
+      await first;
+      expect(carts.addCalls.map((c) => c.variationId), [1]);
+    });
 
     test('rapid scans are processed one at a time, in order', () async {
       final order = <String>[];

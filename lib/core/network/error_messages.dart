@@ -58,6 +58,10 @@ const _c5PermissionMessages = <String, String>{
   'shifts.open': 'You do not have permission to open a shift. Ask a manager to open the shift for this register.',
   'shifts.close': 'You do not have permission to close the shift. Ask a manager.',
   'payments.accept_cash': 'You do not have permission to accept cash payments.',
+  'reports.product': 'You do not have permission to view product sales reports.',
+  'reports.cashier': 'You do not have permission to view cashier sales reports.',
+  'reports.sales': 'You do not have permission to view sales reports.',
+  'reports.tax': 'You do not have permission to view tax reports.',
   'payments.accept_card': 'You do not have permission to accept card payments.',
   'payments.accept_other': 'You do not have permission to accept this payment method.',
   // Phase 14A

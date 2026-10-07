@@ -10,6 +10,7 @@ enum PosSection {
   inventory,
   promotions,
   analytics,
+  reports,
   paymentExceptions,
   settings,
 }
@@ -65,6 +66,13 @@ const _items = [
     'Analytics',
     placeholder: false,
   ),
+  // Phase 14F-B: only shown when [PosSidebar.onOpenReports] is set.
+  _NavItem(
+    PosSection.reports,
+    Icons.assessment_outlined,
+    'Reports',
+    placeholder: false,
+  ),
   // Phase 9: only shown when [PosSidebar.onOpenPaymentExceptions] is set
   // (a manager with payments.view_store_exceptions).
   _NavItem(
@@ -100,6 +108,7 @@ class PosSidebar extends StatelessWidget {
     this.onOpenInventory,
     this.onOpenPromotions,
     this.onOpenAnalytics,
+    this.onOpenReports,
     this.onOpenSettings,
     this.onOpenPaymentExceptions,
     this.onHelp,
@@ -122,6 +131,9 @@ class PosSidebar extends StatelessWidget {
   final VoidCallback? onOpenInventory;
   final VoidCallback? onOpenPromotions;
   final VoidCallback? onOpenAnalytics;
+
+  /// Phase 14F-B — retail sales reports; null hides it.
+  final VoidCallback? onOpenReports;
   final VoidCallback? onOpenSettings;
 
   /// Phase 9 — the store-wide Payment Exceptions screen; null hides it.
@@ -163,8 +175,10 @@ class PosSidebar extends StatelessWidget {
                   children: [
                     for (final item in _items.where(
                       (i) =>
-                          i.section != PosSection.paymentExceptions ||
-                          onOpenPaymentExceptions != null,
+                          (i.section != PosSection.paymentExceptions ||
+                              onOpenPaymentExceptions != null) &&
+                          (i.section != PosSection.reports ||
+                              onOpenReports != null),
                     ))
                       _NavTile(
                         item: item,
@@ -180,6 +194,7 @@ class PosSidebar extends StatelessWidget {
                           PosSection.inventory => onOpenInventory,
                           PosSection.promotions => onOpenPromotions,
                           PosSection.analytics => onOpenAnalytics,
+                          PosSection.reports => onOpenReports,
                           PosSection.settings => onOpenSettings,
                           PosSection.paymentExceptions =>
                             onOpenPaymentExceptions,

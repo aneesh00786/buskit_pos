@@ -12,6 +12,7 @@ import '../../auth/state/session_controller.dart';
 import '../data/shift_close_service.dart';
 import '../models/shift_summary.dart';
 import '../state/shift_close_controller.dart';
+import 'shift_report_view.dart';
 
 /// Opens Shift Close (dialog on wide screens, sheet on phones). When the
 /// shift is closed and the cashier taps Done, [onClosed] runs after the
@@ -128,7 +129,12 @@ class _ShiftCloseViewState extends State<ShiftCloseView> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _Line('Expected cash', formatMoney(s.cash.expected)),
-            _Line('Counted cash', formatMilli(counted)),
+            _Line(
+              c.countingByDenomination
+                  ? 'Counted cash (notes & coins)'
+                  : 'Counted cash',
+              formatMilli(counted),
+            ),
             _Line('Variance', _signedMilli(variance), emphasise: true),
             const SizedBox(height: PosTokens.s12),
             Text(
@@ -251,6 +257,16 @@ class _SummaryForm extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         _ShiftHeader(summary: s),
+        // Phase 14C-B2: the X report of the open shift (on screen).
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const Key('shift-x-report'),
+            onPressed: () => showXReport(context, s),
+            icon: const Icon(Icons.summarize_outlined),
+            label: const Text('X Report'),
+          ),
+        ),
         _Section(
           title: 'Sales',
           children: [
@@ -289,13 +305,40 @@ class _SummaryForm extends StatelessWidget {
             ),
           ],
         ),
+        // Phase 14C-B2: count the drawer by notes and coins. Line totals and
+        // the total are exact (thousandths); the server re-checks the count
+        // and stores the authoritative figures.
+        _Section(
+          title: 'Count notes & coins',
+          children: [
+            for (final v in c.denominationsMilli)
+              _DenominationRow(controller: c, valueMilli: v),
+            const Divider(),
+            _Line(
+              'Total counted',
+              formatMilli(c.denominationTotalMilli),
+              emphasise: true,
+              valueKey: const Key('denom-total'),
+            ),
+          ],
+        ),
         _Section(
           title: 'Counted cash',
           children: [
+            if (c.countingByDenomination)
+              Padding(
+                padding: const EdgeInsets.only(bottom: PosTokens.s4),
+                child: Text(
+                  c.denominationsValid
+                      ? 'Counted from notes & coins: ${formatMilli(c.denominationTotalMilli)}'
+                      : 'Check the notes & coins quantities (whole numbers only).',
+                  key: const Key('denom-counted-note'),
+                ),
+              ),
             TextField(
               key: const Key('shift-counted-cash'),
               controller: counted,
-              enabled: !c.isClosing,
+              enabled: !c.isClosing && !c.countingByDenomination,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -403,22 +446,13 @@ class _ClosedResult extends StatelessWidget {
           ],
         ),
         const SizedBox(height: PosTokens.s12),
-        _Section(
-          title: 'Final figures',
-          children: [
-            if (r.closedAt != null) _Line('Closed', formatTimestamp(r.closedAt!)),
-            _Line('Sales (${r.salesCount})', formatMoney(r.salesTotal)),
-            _Line('Expected cash', formatMoney(r.cash.expected)),
-            _Line('Counted cash', formatMoney(r.cash.counted)),
-            _Line(
-              'Variance',
-              r.cash.variance == null
-                  ? '—'
-                  : _signedMilli(milliFromDouble(r.cash.variance!)),
-              emphasise: true,
-              valueKey: const Key('shift-final-variance'),
-            ),
-          ],
+        // Phase 14C-B2: the Z report — the server's final figures, with the
+        // stored notes & coins count when one was taken (older shifts and
+        // closes without a count show no breakdown).
+        ShiftReportView(
+          summary: r,
+          closing: true,
+          varianceKey: const Key('shift-final-variance'),
         ),
         const Text('You will be signed out so the next shift can be opened.'),
         const SizedBox(height: PosTokens.s16),
@@ -428,6 +462,69 @@ class _ClosedResult extends StatelessWidget {
           child: const Text('Done'),
         ),
       ],
+    );
+  }
+}
+
+/// One note / coin: value × quantity (whole numbers only) = line total.
+class _DenominationRow extends StatefulWidget {
+  const _DenominationRow({required this.controller, required this.valueMilli});
+  final ShiftCloseController controller;
+  final int valueMilli;
+
+  @override
+  State<_DenominationRow> createState() => _DenominationRowState();
+}
+
+class _DenominationRowState extends State<_DenominationRow> {
+  late final TextEditingController _text = TextEditingController(
+    text: widget.controller.quantityText(widget.valueMilli),
+  );
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.controller;
+    final v = widget.valueMilli;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(child: Text(formatMilli(v), key: Key('denom-value-$v'))),
+          const Text(' × '),
+          SizedBox(
+            width: 72,
+            child: TextField(
+              key: Key('denom-qty-$v'),
+              controller: _text,
+              enabled: !c.isClosing,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.end,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: '0',
+                errorText: c.quantityIsValid(v) ? null : '!',
+              ),
+              onChanged: (t) => c.setQuantity(v, t),
+            ),
+          ),
+          const Text(' = '),
+          SizedBox(
+            width: 96,
+            child: Text(
+              formatMilli(c.lineTotalMilli(v)),
+              key: Key('denom-line-$v'),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

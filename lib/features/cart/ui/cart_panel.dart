@@ -162,12 +162,9 @@ class _CartPanelState extends State<CartPanel> {
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.itemCount, required this.canClear});
-  final int itemCount;
-  final bool canClear;
-
-  Future<void> _clear(BuildContext context) async {
+/// The existing "Clear the cart?" confirmation (Clear all / Phase 14E-A F8):
+/// removes every line only after the cashier confirms.
+Future<void> confirmClearCart(BuildContext context) async {
     final cart = context.read<CartController>();
     final count = cart.sale?.itemCount ?? 0;
     final ok = await showDialog<bool>(
@@ -194,7 +191,14 @@ class _Header extends StatelessWidget {
       ),
     );
     if (ok == true) await cart.clearAll();
-  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.itemCount, required this.canClear});
+  final int itemCount;
+  final bool canClear;
+
+  Future<void> _clear(BuildContext context) => confirmClearCart(context);
 
   @override
   Widget build(BuildContext context) {

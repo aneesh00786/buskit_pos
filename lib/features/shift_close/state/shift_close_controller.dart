@@ -4,6 +4,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/network/error_messages.dart';
 import '../../../core/utils/money.dart';
 import '../data/shift_close_service.dart';
+import '../models/cash_denominations.dart';
 import '../models/shift_summary.dart';
 
 enum ShiftCloseStatus { loading, ready, noOpenShift, error, closing, closed }
@@ -14,9 +15,16 @@ enum ShiftCloseStatus { loading, ready, noOpenShift, error, closing, closed }
 /// is the variance PREVIEW while typing (counted - server expected). The
 /// final variance shown after closing is the server's.
 class ShiftCloseController extends ChangeNotifier {
-  ShiftCloseController(this._service);
+  ShiftCloseController(this._service, {List<int>? denominationsMilli})
+    : denominationsMilli = List.unmodifiable(
+        denominationsMilli ?? cashDenominationsFor(null),
+      );
 
   final ShiftCloseService _service;
+
+  /// Phase 14C-B2: the notes / coins offered for the cash count (thousandths).
+  final List<int> denominationsMilli;
+  final Map<int, String> _quantityText = {};
 
   ShiftCloseStatus _status = ShiftCloseStatus.loading;
   ShiftSummary? _summary;
@@ -35,8 +43,60 @@ class ShiftCloseController extends ChangeNotifier {
   ApiException? get closeError => _closeError;
   String get countedText => _countedText;
 
-  /// Counted cash in milli, or null while the input is empty/invalid.
-  int? get countedMilli => parseMilli(_countedText);
+  // ---- Phase 14C-B2: cash count by denomination ----
+
+  static final _wholeNumber = RegExp(r'^\d{1,6}$');
+
+  String quantityText(int valueMilli) => _quantityText[valueMilli] ?? '';
+
+  /// The entered quantity: empty = 0; null when it is not a whole number
+  /// (negative, fractional or not a number).
+  int? quantityOf(int valueMilli) {
+    final t = quantityText(valueMilli).trim();
+    if (t.isEmpty) return 0;
+    return _wholeNumber.hasMatch(t) ? int.parse(t) : null;
+  }
+
+  bool quantityIsValid(int valueMilli) => quantityOf(valueMilli) != null;
+
+  bool get denominationsValid =>
+      denominationsMilli.every((v) => quantityOf(v) != null);
+
+  /// value x quantity, in exact thousandths (0 while invalid).
+  int lineTotalMilli(int valueMilli) =>
+      valueMilli * (quantityOf(valueMilli) ?? 0);
+
+  int get denominationTotalMilli =>
+      denominationsMilli.fold(0, (sum, v) => sum + lineTotalMilli(v));
+
+  /// The cash is being counted by notes / coins (any quantity entered).
+  bool get countingByDenomination => denominationsMilli.any(
+    (v) => quantityText(v).trim().isNotEmpty && quantityOf(v) != 0,
+  );
+
+  /// The non-zero entries sent with the close.
+  List<DenominationCount> get denominationCounts => [
+    for (final v in denominationsMilli)
+      if ((quantityOf(v) ?? 0) > 0)
+        DenominationCount(valueMilli: v, quantity: quantityOf(v)!),
+  ];
+
+  void setQuantity(int valueMilli, String text) {
+    _quantityText[valueMilli] = text;
+    _closeError = null;
+    _notify();
+  }
+
+  /// Counted cash in milli, or null while the input is empty/invalid. With a
+  /// denomination count it is that count's exact total (the server computes
+  /// and stores the authoritative figure).
+  int? get countedMilli {
+    if (countingByDenomination) {
+      return denominationsValid ? denominationTotalMilli : null;
+    }
+    return parseMilli(_countedText);
+  }
+
   bool get countedIsValid => countedMilli != null;
 
   /// Preview only: counted - the server's expected cash.
@@ -94,6 +154,7 @@ class ShiftCloseController extends ChangeNotifier {
       _result = await _service.close(
         shiftId: s.shiftId,
         closingAmount: milliToJson(counted),
+        denominations: countingByDenomination ? denominationCounts : null,
       );
       _status = ShiftCloseStatus.closed;
       _notify();

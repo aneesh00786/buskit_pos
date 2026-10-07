@@ -119,7 +119,8 @@ Future<void> seed({double soapStock = 10, double oilStock = 5}) async {
     OfflineCatalogue(
       companyId: 1,
       storeId: 213,
-      cachedAt: DateTime.utc(2026, 10, 6, 8),
+      // Phase 14G: refreshed just now (fresh for the real-clock checkout).
+      cachedAt: DateTime.now().toUtc(),
       products: const [soap, oil, apples],
     ),
   );
@@ -470,7 +471,7 @@ void main() {
         OfflineCatalogue(
           companyId: 1,
           storeId: 213,
-          cachedAt: DateTime.utc(2026, 10, 7),
+          cachedAt: DateTime.now().toUtc(),
           products: const [
             OfflineProduct(
               productVariationId: 1,
