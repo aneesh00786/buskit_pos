@@ -182,6 +182,7 @@ class VoiceController extends ChangeNotifier {
   /// signed-in scope. Any request in progress is cancelled first.
   Future<void> newSession() async {
     if (_state == VoiceState.listening) await cancel();
+    _stopSpeaking(); // Phase 15B: no reply from the old session carries over
     _session = VoiceSession.start(scope(), language: language);
     _request = null;
     _intent = null;
