@@ -47,6 +47,7 @@ import 'product_card.dart';
 import 'variation_sheet.dart';
 import '../../shift_close/ui/shift_close_view.dart';
 import 'pos_shortcuts.dart';
+import '../../../core/ui/safe_insets.dart';
 
 enum _CatalogView { grid, list }
 
@@ -206,6 +207,7 @@ class _ProductsPageState extends State<ProductsPage>
         initial: 1,
         itemName: g.name,
         weight: true,
+        useScale: true,
       );
       if (w == null || !mounted) return;
       quantity = w;
@@ -535,7 +537,7 @@ class _CartBar extends StatelessWidget {
                 value: cart,
                 child: SizedBox(
                   height: MediaQuery.sizeOf(context).height * 0.85,
-                  child: const CartPanel(),
+                  child: const SheetSafeArea(child: CartPanel()),
                 ),
               ),
             ),

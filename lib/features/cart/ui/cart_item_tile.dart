@@ -73,6 +73,7 @@ class CartItemTile extends StatelessWidget {
       initial: line.quantity,
       itemName: _name,
       weight: line.isWeight,
+      useScale: true,
     );
     if (q != null) await cart.updateQuantity(line.id, q);
   }

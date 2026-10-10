@@ -17,6 +17,7 @@ import '../data/customer_service.dart';
 import '../models/customer.dart';
 import '../state/customer_list_controller.dart';
 import 'customer_form.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// Opens customer management: a wide dialog (list + detail side-by-side) on
 /// tablets, a tall bottom sheet (list, pushing to detail) on phones — same
@@ -53,7 +54,10 @@ Future<void> showCustomers(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (_) => SizedBox(height: size.height * 0.92, child: content()),
+    builder: (_) => SizedBox(
+      height: size.height * 0.92,
+      child: SheetSafeArea(child: content()),
+    ),
   ).whenComplete(controller.dispose);
 }
 

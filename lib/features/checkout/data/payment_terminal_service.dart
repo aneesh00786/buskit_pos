@@ -9,6 +9,10 @@ import '../models/terminal_payment.dart';
 /// terminal (from this register's configuration), the amount check, the
 /// currency, and the payment state. The till only asks and polls — it never
 /// talks to a payment provider and never holds provider credentials.
+/// Shown with every abandoned attempt (the server sends its own wording too).
+const abandonWarning =
+    'Abandoning does not prove that no money was taken. Check the terminal and the Pine Labs settlement for this payment, and refund the customer if a charge appears.';
+
 abstract class PaymentTerminalService {
   /// `GET /payment-providers`.
   Future<List<PaymentProviderInfo>> listProviders();
@@ -29,6 +33,16 @@ abstract class PaymentTerminalService {
 
   /// `POST /payment-attempts/:id/cancel` — confirmed by the provider or not at all.
   Future<PaymentAttempt> cancel(int attemptId);
+
+  /// Phase 18B.17 — `GET /payment-attempts/:id` WITHOUT refresh: the server's
+  /// current view (incl. provider_reference_status), read-only; the provider
+  /// is not asked.
+  Future<PaymentAttempt> current(int attemptId);
+
+  /// Phase 18B.1 — `POST /payment-attempts/:id/abandon-unconfirmed {reason}`:
+  /// a manager ends a terminal attempt that never got a provider reference,
+  /// after the auto-cancel window. The server checks permission and timing.
+  Future<AbandonResult> abandonUnconfirmed(int attemptId, String reason);
 }
 
 class ApiPaymentTerminalService implements PaymentTerminalService {
@@ -65,8 +79,20 @@ class ApiPaymentTerminalService implements PaymentTerminalService {
       _parse(await _client.get('/payment-attempts/$attemptId', query: {'refresh': 'true'}));
 
   @override
+  Future<PaymentAttempt> current(int attemptId) async => _parse(await _client.get('/payment-attempts/$attemptId'));
+
+  @override
   Future<PaymentAttempt> cancel(int attemptId) async =>
       _parse(await _client.post('/payment-attempts/$attemptId/cancel'));
+
+  @override
+  Future<AbandonResult> abandonUnconfirmed(int attemptId, String reason) async {
+    final data = asMap(await _client.post('/payment-attempts/$attemptId/abandon-unconfirmed', body: {'reason': reason}));
+    return AbandonResult(
+      attempt: _parse(data?['payment_attempt']),
+      warning: asString(data?['warning']) ?? abandonWarning,
+    );
+  }
 
   PaymentAttempt _parse(Object? data) {
     final a = PaymentAttempt.fromJson(data);

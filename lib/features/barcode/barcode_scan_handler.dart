@@ -117,6 +117,18 @@ class BarcodeScanHandler {
           code: code,
         );
       }
+      // Phase 16C: a product not configured for POS sale (REVIEW) is never
+      // added by a scan — the same rule as tapping it, checked BEFORE the
+      // cart is touched, so no empty draft is created on the server and no
+      // unsellable line enters an offline cart.
+      final notSellable = item.notSellableMessage;
+      if (notSellable != null) {
+        return ScanResult(
+          ScanOutcome.invalid,
+          '${item.productName}: $notSellable',
+          code: code,
+        );
+      }
       final label = [
         item.variationName,
         item.unitType,

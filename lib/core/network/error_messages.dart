@@ -38,6 +38,26 @@ class PosErrorCodes {
   /// Phase 14B: more than one active product carries the scanned barcode;
   /// the server chose none.
   static const barcodeAmbiguous = 'POS_BARCODE_AMBIGUOUS';
+
+  // Phase 15D — ThriveWoo POS licensing / business type (backend Phase 15C;
+  // the backend keeps its internal "JACKY" code names).
+  static const licenceNotActive = 'POS_JACKY_NOT_LICENSED';
+  static const subscriptionInactive = 'POS_JACKY_SUBSCRIPTION_INACTIVE';
+  static const businessTypeNotConfigured = 'POS_BUSINESS_TYPE_NOT_CONFIGURED';
+  static const businessTypeDisabled = 'POS_BUSINESS_TYPE_DISABLED';
+}
+
+/// Phase 15D — customer-facing wording for licensing refusals (the product
+/// is ThriveWoo POS; the server's own messages are never shown for these).
+abstract final class LicenceMessages {
+  static const notLicensed =
+      'Your ThriveWoo POS licence is not active. Please contact your business administrator.';
+  static const notActivated =
+      'ThriveWoo POS is not activated for this business. Please contact your business administrator.';
+  static const notConfigured =
+      'ThriveWoo POS is not set up for this business yet. Please contact your business administrator.';
+  static const notForBusinessType =
+      'This feature is not available for your type of business.';
 }
 
 /// Phase C5 — 403 wording for the permissions enforced across the remaining
@@ -98,6 +118,14 @@ String describeApiError(ApiException e) {
       return 'Stock changed while the sale was being processed. Please try again.';
     case PosErrorCodes.refundExceedsProviderRemaining:
       return 'This refund is more than what is left to refund on the customer\'s original payment.';
+    case PosErrorCodes.licenceNotActive:
+      return LicenceMessages.notLicensed;
+    case PosErrorCodes.subscriptionInactive:
+      return LicenceMessages.notActivated;
+    case PosErrorCodes.businessTypeNotConfigured:
+      return LicenceMessages.notConfigured;
+    case PosErrorCodes.businessTypeDisabled:
+      return LicenceMessages.notForBusinessType;
     case PosErrorCodes.barcodeAmbiguous:
       return 'More than one product uses this barcode, so nothing was added. '
           'Search for the product and add it from the list.';

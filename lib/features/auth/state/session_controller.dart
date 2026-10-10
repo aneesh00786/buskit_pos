@@ -63,6 +63,15 @@ class SessionController extends ChangeNotifier {
   /// rather than disappearing on missing data. Every permission-gated
   /// widget in the app should call this instead of re-deriving the same
   /// `authContext != null && !hasPermission(...)` check inline.
+  /// Phase 15D — the signed-in business's type, from `GET /auth/me` only
+  /// (null until loaded, or when the server reports none).
+  BusinessType? get businessType => _authContext?.businessType;
+
+  /// Phase 15D — whether the signed-in staff member holds an active
+  /// ThriveWoo POS licence. Display only: licensed features are still
+  /// checked by the server on every request.
+  bool get isLicensed => _authContext?.licensed ?? false;
+
   bool isDenied(String permission) =>
       _authContext != null && !permissions.hasPermission(permission);
 
@@ -122,6 +131,11 @@ class SessionController extends ChangeNotifier {
         _staffToken = token;
         _salesmanId = salesmanId.trim();
         _phase = SessionPhase.shiftOpen;
+        // Phase 15D: a new sign-in never inherits the previous staff
+        // member's context (business type, licence, permissions), even when
+        // the fetch below fails.
+        _authContext = null;
+        _authContextError = null;
         // Best-effort: this is a UI/UX convenience fetch, not part of the
         // authentication flow itself — a failure here must never block a
         // cashier who successfully entered a correct PIN from getting into
@@ -249,6 +263,8 @@ class SessionController extends ChangeNotifier {
     _staffToken = null;
     await _store.delete(TokenKeys.deviceToken);
     _deviceToken = null;
+    _authContext = null;
+    _authContextError = null;
     _error = null;
     _notice = null;
     _phase = SessionPhase.deviceLogin;

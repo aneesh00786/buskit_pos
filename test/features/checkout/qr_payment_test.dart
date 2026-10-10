@@ -38,6 +38,25 @@ PaymentAttempt qr(int id, String status, {String? failure, String expires = '209
     PaymentAttempt.fromJson(qrJson(id, status, failure: failure, expires: expires))!;
 
 class FakeQrService implements PaymentTerminalService {
+  // Phase 18B.17: GET /payment-attempts/:id without refresh (read-only).
+  Future<PaymentAttempt> Function(int id)? onCurrent;
+  int currents = 0;
+  @override
+  Future<PaymentAttempt> current(int attemptId) async {
+    currents++;
+    if (onCurrent == null) throw const ApiException(kind: ApiErrorKind.notFound, message: 'not stubbed');
+    return onCurrent!(attemptId);
+  }
+
+  // Phase 18B.1 (abandoning an unconfirmed terminal attempt).
+  Future<AbandonResult> Function(int id, String reason) onAbandon = (id, reason) async => throw UnimplementedError();
+  final List<(int, String)> abandonCalls = [];
+  @override
+  Future<AbandonResult> abandonUnconfirmed(int attemptId, String reason) {
+    abandonCalls.add((attemptId, reason));
+    return onAbandon(attemptId, reason);
+  }
+
   List<PaymentProviderInfo> providers = [PaymentProviderInfo.fromJson(razorpayJson)!];
   int nextId = 1;
   Future<PaymentAttempt> Function(String key) onStart = (_) async => throw UnimplementedError();

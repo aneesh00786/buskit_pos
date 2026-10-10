@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fakes.dart';
+import '../checkout/pay_modal_test.dart' show completeBtn, openPay, pumpWithCart;
 import '../../support/pump_page.dart';
 
 ProductItem item(int id, {String name = 'Tea', String? variation = '250g'}) =>
@@ -137,6 +138,34 @@ void main() {
       expect(r.outcome, ScanOutcome.notFound);
       expect(r.message, 'No product found for barcode 999999.');
       expect(carts.addCalls, isEmpty);
+    });
+
+    test('Phase 16C: a WEIGHT product is never added by a scan (no guessed weight, cart untouched)', () async {
+      products.onBarcode = (_) async => ProductItem.fromJson({
+        ...productJson(id: 61, name: 'Loose Rice'),
+        'selling_mode': 'WEIGHT',
+      });
+      final r = await handler.handle('4006381333931');
+      expect(r.outcome, ScanOutcome.invalid);
+      expect(r.message, 'Loose Rice is sold by weight: select it and enter the weight.');
+      expect(carts.addCalls, isEmpty);
+      expect(carts.createCalls, 0, reason: 'no draft sale created');
+    });
+
+    test('Phase 16C: a REVIEW product (not for POS sale) is refused before the cart is touched — no draft created', () async {
+      products.onBarcode = (_) async => ProductItem.fromJson({
+        ...productJson(id: 62, name: 'Gift Hamper'),
+        'selling_mode': 'REVIEW',
+      });
+      final r = await handler.handle('4006381333931');
+      expect(r.outcome, ScanOutcome.invalid);
+      expect(r.message, 'Gift Hamper: This product is not configured for POS sale.');
+      expect(carts.addCalls, isEmpty);
+      expect(carts.createCalls, 0, reason: 'no empty draft left on the server');
+      expect(cart.sale, isNull);
+      // A sellable scan right after still works normally.
+      products.onBarcode = (_) async => item(42);
+      expect((await handler.handle('4006381333931')).outcome, ScanOutcome.added);
     });
 
     test('empty, blank and over-long codes never reach the network', () async {
@@ -415,6 +444,31 @@ void main() {
       await tester.pumpAndSettle();
       await scan(tester, '4006381333931');
       expect(h.products.barcodeCalls, isEmpty);
+    });
+
+    testWidgets('Phase 16C: a scan while the PAYMENT sheet is open is ignored (the cart is not changed under the cashier)', (tester) async {
+      final h = await pumpWithCart(tester);
+      await openPay(tester);
+      expect(completeBtn, findsOneWidget);
+      final adds = h.carts.addCalls.length;
+      await scan(tester, '4006381333931');
+      await tester.pumpAndSettle();
+      expect(h.products.barcodeCalls, isEmpty);
+      expect(h.carts.addCalls.length, adds);
+      expect(completeBtn, findsOneWidget, reason: 'payment not submitted by the Enter suffix');
+    });
+
+    testWidgets('Phase 16C: a CR+LF suffix (two Enters) after a scan adds the item ONCE', (tester) async {
+      final h = PageHarness();
+      h.products.onBarcode = (_) async => item(42);
+      h.carts.onAdd = (_) async => CartSaleFactory.sale(items: [lineJson(id: 1, variationId: 42)], total: 10);
+      await pumpProductsPage(tester, h);
+      await scan(tester, '4006381333931');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyEvent(LogicalKeyboardKey.numpadEnter);
+      await tester.pumpAndSettle();
+      expect(h.products.barcodeCalls, ['4006381333931']);
+      expect(h.carts.addCalls, hasLength(1));
     });
 
     testWidgets('a lookup error is shown', (tester) async {

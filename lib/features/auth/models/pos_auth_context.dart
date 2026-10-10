@@ -4,6 +4,26 @@ import '../../../core/utils/json_read.dart';
 /// (the backend's `pos_staff_roles` is one row per (company, salesman_id));
 /// `null` on [PosAuthContext.role] means no role is assigned at all
 /// (deny-by-default — [PosAuthContext.permissions] is `[]` in that case).
+/// Phase 15D — the business's type, as `GET /auth/me` reports it
+/// (`business.business_type`). A BUSINESS setting stored on the server; the
+/// app never takes it from anywhere else.
+enum BusinessType {
+  retail('RETAIL'),
+  restaurant('RESTAURANT');
+
+  const BusinessType(this.wire);
+  final String wire;
+
+  /// Exactly RETAIL / RESTAURANT; anything else (missing, other case,
+  /// unknown) is null — never guessed.
+  static BusinessType? fromWire(Object? v) {
+    for (final t in values) {
+      if (v == t.wire) return t;
+    }
+    return null;
+  }
+}
+
 class StaffRole {
   const StaffRole({required this.id, required this.name});
   final int id;
@@ -45,9 +65,22 @@ class StaffInfo {
 /// this context says, and nothing in this app treats it as an authorization
 /// decision. See `PermissionService`.
 class PosAuthContext {
-  const PosAuthContext({required this.staff, required this.permissions});
+  const PosAuthContext({
+    required this.staff,
+    required this.permissions,
+    this.businessType,
+    this.licensed = false,
+  });
 
   final StaffInfo staff;
+
+  /// Phase 15D: `business.business_type` (null when missing / unknown).
+  final BusinessType? businessType;
+
+  /// Phase 15D: whether this staff member holds an active ThriveWoo POS
+  /// licence (backend field `jacky.licensed`). Display only — the server
+  /// checks the licence on every licensed request.
+  final bool licensed;
 
   /// The exact permission keys the backend currently grants this staff
   /// member (e.g. `payments.refund`) — never derived from a role NAME.
@@ -63,6 +96,10 @@ class PosAuthContext {
       permissions: asList(
         m['permissions'],
       ).map(asString).whereType<String>().toList(),
+      businessType: BusinessType.fromWire(
+        asMap(m['business'])?['business_type'],
+      ),
+      licensed: asMap(m['jacky'])?['licensed'] == true,
     );
   }
 }

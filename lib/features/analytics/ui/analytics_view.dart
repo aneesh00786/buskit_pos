@@ -10,6 +10,7 @@ import '../../../core/utils/format.dart';
 import '../data/analytics_service.dart';
 import '../models/analytics_summary.dart';
 import '../state/analytics_controller.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// Read-only sales analytics for this store, computed server-side from
 /// POS's own completed sales — no promotion/inventory administration here.
@@ -43,7 +44,10 @@ Future<void> showAnalytics(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (_) => SizedBox(height: size.height * 0.92, child: content()),
+    builder: (_) => SizedBox(
+      height: size.height * 0.92,
+      child: SheetSafeArea(child: content()),
+    ),
   ).whenComplete(controller.dispose);
 }
 

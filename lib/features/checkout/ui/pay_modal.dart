@@ -25,6 +25,7 @@ import '../models/terminal_payment.dart';
 import '../state/payment_plan.dart';
 import 'qr_payment_dialog.dart';
 import 'terminal_payment_dialog.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// Opens the payment screen for the open sale: a dialog on tablets, a tall
 /// bottom sheet on phones. It cannot be dismissed by tapping outside (that
@@ -67,7 +68,10 @@ Future<void> showPay(BuildContext context) {
     isDismissible: false,
     enableDrag: false,
     useSafeArea: true,
-    builder: (_) => SizedBox(height: size.height * 0.95, child: content()),
+    builder: (_) => SizedBox(
+      height: size.height * 0.95,
+      child: SheetSafeArea(child: content()),
+    ),
   );
 }
 
@@ -147,6 +151,10 @@ class _PayModalState extends State<PayModal> {
   PaymentProviderInfo? _qr;
   bool _providersRequested = false;
 
+  /// Phase 15G: a terminal payment is being started / is on screen — a
+  /// second "Pay on terminal" tap is ignored (one terminal transaction).
+  bool _terminalInProgress = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -207,19 +215,26 @@ class _PayModalState extends State<PayModal> {
 
   Future<void> _payOnTerminal(CartController cart, int totalMilli) async {
     if (_offline) return _showOnlineRequired();
+    if (_terminalInProgress) return;
     final service = _terminalService;
     final provider = _terminal;
     final sale = cart.sale;
     if (service == null || provider == null || sale == null) return;
-    await _rememberForRecovery(sale.id);
-    if (!mounted) return;
-    final attempt = await showTerminalPayment(
-      context,
-      service: service,
-      saleId: sale.id,
-      provider: provider,
-      amountMilli: totalMilli,
-    );
+    setState(() => _terminalInProgress = true);
+    final PaymentAttempt? attempt;
+    try {
+      await _rememberForRecovery(sale.id);
+      if (!mounted) return;
+      attempt = await showTerminalPayment(
+        context,
+        service: service,
+        saleId: sale.id,
+        provider: provider,
+        amountMilli: totalMilli,
+      );
+    } finally {
+      if (mounted) setState(() => _terminalInProgress = false);
+    }
     if (attempt == null || !mounted) return;
     // The server re-verifies the captured attempt (sale, amount, method).
     await cart.completeSale([
@@ -507,7 +522,11 @@ class _PayModalState extends State<PayModal> {
                       if (_mode == PayMode.card)
                         _TerminalPayPanel(
                           provider: _terminal!,
-                          enabled: !busy && total > 0 && !offline,
+                          enabled:
+                              !busy &&
+                              total > 0 &&
+                              !offline &&
+                              !_terminalInProgress,
                           onPressed: () => _payOnTerminal(cart, total),
                         )
                       else

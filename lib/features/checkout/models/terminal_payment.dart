@@ -15,6 +15,7 @@ class PaymentProviderInfo {
     this.currencies = const [],
     this.terminalConfigured = false,
     this.terminalName,
+    this.autoCancelMinutes,
   });
 
   final String name;
@@ -30,6 +31,24 @@ class PaymentProviderInfo {
   final List<String> currencies;
   final bool terminalConfigured;
   final String? terminalName;
+
+  /// Phase 18B.3: minutes after which the terminal cancels an unpaid
+  /// transaction by itself (server `terminal.auto_cancel_minutes`, the same
+  /// value the server sends to the terminal). Null when the server does not
+  /// say (older server) — then the server's own default applies.
+  final int? autoCancelMinutes;
+
+  /// The server's default (PINE_LABS_AUTO_CANCEL_MINUTES unset).
+  static const int defaultAutoCancelMinutes = 5;
+
+  /// Time allowed after the auto-cancel for the terminal's own cancellation
+  /// (or a last-moment approval) to be reported back by the server.
+  static const Duration autoCancelReportGrace = Duration(seconds: 30);
+
+  /// How long the till waits for a terminal payment before it says the wait
+  /// is longer than expected: the terminal's auto-cancel window + the grace.
+  Duration get terminalWaitWindow =>
+      Duration(minutes: autoCancelMinutes ?? defaultAutoCancelMinutes) + autoCancelReportGrace;
 
   /// A card terminal this register can actually use right now.
   bool get isUsableCardTerminal =>
@@ -64,6 +83,10 @@ class PaymentProviderInfo {
       currencies: asList(m['currencies']).map(asString).whereType<String>().toList(),
       terminalConfigured: terminal?['configured'] == true,
       terminalName: asString(terminal?['display_name']),
+      autoCancelMinutes: switch (asInt(terminal?['auto_cancel_minutes'])) {
+        final int m when m > 0 && m <= 120 => m,
+        _ => null,
+      },
     );
   }
 }
@@ -93,6 +116,23 @@ enum AttemptStatus {
   bool get isOpen => this == pending || this == authorized;
 }
 
+/// Phase 18B.17 — the server's `provider_reference_status` (derived from its
+/// database; never set by the till). [unknown] = missing or unrecognised
+/// (an older backend): the till then falls back to the server's refusals.
+enum ProviderReferenceStatus {
+  attached,
+  recordedUnattached,
+  notRecorded,
+  unknown;
+
+  static ProviderReferenceStatus fromWire(Object? v) => switch (v) {
+    'ATTACHED' => attached,
+    'RECORDED_UNATTACHED' => recordedUnattached,
+    'NOT_RECORDED' => notRecorded,
+    _ => unknown,
+  };
+}
+
 /// A provider payment attempt (server view). Only references and neutral
 /// texts — never card data.
 class PaymentAttempt {
@@ -103,12 +143,15 @@ class PaymentAttempt {
     this.provider,
     this.currency,
     this.providerReference,
+    this.providerPaymentId,
     this.instruction,
     this.failureCode,
     this.failureMessage,
     this.qrImageUrl,
     this.qrPayload,
     this.expiresAt,
+    this.unconfirmed = false,
+    this.referenceStatus = ProviderReferenceStatus.unknown,
   });
 
   final int id;
@@ -117,6 +160,16 @@ class PaymentAttempt {
   final String? provider;
   final String? currency;
   final String? providerReference;
+
+  /// The provider's own id for this payment (Pine Labs PTRID / Razorpay QR
+  /// id) once the server has it attached. Phase 18B.15: an attempt that has
+  /// one is checked or cancelled through the provider — never abandoned.
+  final String? providerPaymentId;
+  bool get hasProviderReference =>
+      (providerPaymentId != null && providerPaymentId!.isNotEmpty) || referenceStatus == ProviderReferenceStatus.attached;
+
+  /// Phase 18B.17: see [ProviderReferenceStatus].
+  final ProviderReferenceStatus referenceStatus;
   final String? instruction;
   final String? failureCode;
   final String? failureMessage;
@@ -132,6 +185,15 @@ class PaymentAttempt {
   /// Closed by the provider at its expiry, without payment.
   bool get isExpired => status == AttemptStatus.cancelled && failureCode == 'EXPIRED';
 
+  /// Phase 18B.1: an open terminal attempt that never got a provider
+  /// reference (server decides). Only a manager can end it, by abandoning it
+  /// after the terminal's auto-cancel window.
+  final bool unconfirmed;
+
+  /// Ended by a manager without the provider's confirmation — NOT proof that
+  /// no money was taken.
+  bool get isAbandoned => status == AttemptStatus.cancelled && failureCode == 'ABANDONED_UNCONFIRMED';
+
   static PaymentAttempt? fromJson(Object? json) {
     final m = asMap(json);
     if (m == null) return null;
@@ -146,12 +208,24 @@ class PaymentAttempt {
       provider: asString(m['provider']),
       currency: asString(m['currency']),
       providerReference: asString(m['provider_reference']),
+      providerPaymentId: asString(m['provider_payment_id']),
       instruction: asString(action?['instruction']),
       failureCode: asString(m['failure_code']),
       failureMessage: asString(m['failure_message']),
       qrImageUrl: image != null && image.startsWith('https://') ? image : null,
       qrPayload: asString(action?['qr_payload']),
       expiresAt: DateTime.tryParse(asString(m['expires_at']) ?? '')?.toUtc(),
+      unconfirmed: m['unconfirmed'] == true,
+      referenceStatus: ProviderReferenceStatus.fromWire(m['provider_reference_status']),
     );
   }
+}
+
+/// Phase 18B.1: the server's answer to abandoning an unconfirmed attempt.
+class AbandonResult {
+  const AbandonResult({required this.attempt, required this.warning});
+  final PaymentAttempt attempt;
+
+  /// The server's reconciliation warning, shown to the cashier/manager.
+  final String warning;
 }

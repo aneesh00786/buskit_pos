@@ -13,6 +13,7 @@ import '../data/shift_close_service.dart';
 import '../models/shift_summary.dart';
 import '../state/shift_close_controller.dart';
 import 'shift_report_view.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// Opens Shift Close (dialog on wide screens, sheet on phones). When the
 /// shift is closed and the cashier taps Done, [onClosed] runs after the
@@ -59,7 +60,10 @@ Future<void> showShiftClose(
       showDragHandle: true,
       isDismissible: false,
       enableDrag: false,
-      builder: (_) => SizedBox(height: size.height * 0.94, child: content()),
+      builder: (_) => SizedBox(
+      height: size.height * 0.94,
+      child: SheetSafeArea(child: content()),
+    ),
     );
   }
   final result = controller.result;

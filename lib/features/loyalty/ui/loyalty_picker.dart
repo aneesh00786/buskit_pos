@@ -5,6 +5,7 @@ import '../../../core/network/error_messages.dart';
 import '../../../core/theme/pos_tokens.dart';
 import '../../../core/utils/format.dart';
 import '../../cart/state/cart_controller.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// "Redeem Points" / "Use Wallet": reads the sale's already-computed loyalty
 /// state (`CartController.sale!.loyalty` — the same live figures the draft
@@ -22,7 +23,7 @@ Future<void> showLoyaltyPicker(BuildContext context) {
     showDragHandle: true,
     builder: (_) => ChangeNotifierProvider<CartController>.value(
       value: cart,
-      child: const _LoyaltyPicker(),
+      child: const SheetSafeArea(child: _LoyaltyPicker()),
     ),
   );
 }

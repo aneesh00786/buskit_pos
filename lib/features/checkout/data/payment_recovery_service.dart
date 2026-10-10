@@ -55,6 +55,19 @@ class RecoveryAttempt {
   /// The provider could not be reached on the last check (state unchanged).
   final String? refreshError;
 
+  /// Phase 18B.18 — the server says this OPEN attempt's provider reference is
+  /// recorded but not attached yet: a manager must attach it before the
+  /// payment can be checked or cancelled at the provider. Nothing about the
+  /// payment's outcome follows from this.
+  bool get referenceRecordedUnattached =>
+      attempt.status.isOpen &&
+      !attempt.hasProviderReference &&
+      attempt.referenceStatus == ProviderReferenceStatus.recordedUnattached;
+
+  /// Same attempt with the server's current view (Phase 18B.18).
+  RecoveryAttempt withAttempt(PaymentAttempt latest) =>
+      RecoveryAttempt(attempt: latest, method: method, cancellable: cancellable, refreshError: refreshError);
+
   static RecoveryAttempt? fromJson(Object? json) {
     final a = PaymentAttempt.fromJson(json);
     final m = asMap(json);
@@ -169,6 +182,22 @@ class RecoverableSale {
 
   String get reference => saleNumber ?? 'Draft #$saleId';
 
+  /// Same sale with updated attempts (Phase 18B.18).
+  RecoverableSale withAttempts(List<RecoveryAttempt> next) => RecoverableSale(
+    saleId: saleId,
+    state: state,
+    sale: sale,
+    attempts: next,
+    canComplete: canComplete,
+    nextAction: nextAction,
+    completionPayments: completionPayments,
+    saleNumber: saleNumber,
+    createdAt: createdAt,
+    blockedReason: blockedReason,
+    currentShift: currentShift,
+    exception: exception,
+  );
+
   static RecoverableSale? fromJson(Object? json) {
     final m = asMap(json);
     final id = asInt(m?['sale_id']);
@@ -268,6 +297,37 @@ abstract class PaymentRecoveryService {
   Future<void> cancelAttempt(int attemptId);
 }
 
+/// Phase 18B.18 — the recovery listing does not carry
+/// provider_reference_status; for each OPEN attempt without a provider
+/// reference whose status is not known, [lookup] reads the server's current
+/// view (GET /payment-attempts/:id, read-only — no provider call). A lookup
+/// that fails, or returns another attempt, leaves the attempt as listed
+/// (the existing backward-compatible behaviour).
+Future<PaymentRecoveryResult> withReferenceStatus(
+  PaymentRecoveryResult result,
+  Future<PaymentAttempt> Function(int attemptId) lookup,
+) async {
+  final sales = <RecoverableSale>[];
+  for (final s in result.recoverable) {
+    final attempts = <RecoveryAttempt>[];
+    for (final a in s.attempts) {
+      final x = a.attempt;
+      if (!x.status.isOpen || x.hasProviderReference || x.referenceStatus != ProviderReferenceStatus.unknown) {
+        attempts.add(a);
+        continue;
+      }
+      try {
+        final latest = await lookup(x.id);
+        attempts.add(latest.id == x.id ? a.withAttempt(latest) : a);
+      } on ApiException {
+        attempts.add(a);
+      }
+    }
+    sales.add(s.withAttempts(attempts));
+  }
+  return PaymentRecoveryResult(recoverable: sales, resolved: result.resolved);
+}
+
 class ApiPaymentRecoveryService implements PaymentRecoveryService {
   ApiPaymentRecoveryService(this._client);
   final PosApiClient _client;
@@ -292,7 +352,7 @@ class ApiPaymentRecoveryService implements PaymentRecoveryService {
         message: 'Unexpected response from the server.',
       );
     }
-    return PaymentRecoveryResult(
+    final listed = PaymentRecoveryResult(
       recoverable: asList(data['recoverable'])
           .map(RecoverableSale.fromJson)
           .whereType<RecoverableSale>()
@@ -302,6 +362,13 @@ class ApiPaymentRecoveryService implements PaymentRecoveryService {
           .whereType<ResolvedSale>()
           .toList(),
     );
+    return withReferenceStatus(listed, _current);
+  }
+
+  Future<PaymentAttempt> _current(int attemptId) async {
+    final a = PaymentAttempt.fromJson(await _client.get('/payment-attempts/$attemptId'));
+    if (a == null) throw const ApiException(kind: ApiErrorKind.unknown, message: 'Unexpected response from the server.');
+    return a;
   }
 
   @override

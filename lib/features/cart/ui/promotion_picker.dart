@@ -9,6 +9,7 @@ import '../../../core/utils/format.dart';
 import '../../promotions/data/promotion_service.dart';
 import '../../promotions/models/promotion.dart';
 import '../state/cart_controller.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// "Add Promotion" / "Change Promotion": only the promotions CURRENTLY
 /// eligible for this sale (`GET /sales/:id/promotions`), each already
@@ -32,7 +33,9 @@ Future<void> showPromotionPicker(BuildContext context) {
       value: cart,
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.7,
-        child: _PromotionPicker(service: service, saleId: saleId),
+        child: SheetSafeArea(
+          child: _PromotionPicker(service: service, saleId: saleId),
+        ),
       ),
     ),
   );

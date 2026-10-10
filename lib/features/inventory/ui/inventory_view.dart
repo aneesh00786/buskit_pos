@@ -15,6 +15,7 @@ import '../../product_price/ui/price_section.dart';
 import '../data/inventory_service.dart';
 import '../models/inventory_adjustment.dart';
 import '../state/inventory_controller.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// Opens Inventory (the sidebar's previously-placeholder "Inventory" entry):
 /// product search with current stock for everyone, the Increase/Decrease
@@ -69,7 +70,10 @@ Future<void> showInventory(
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (_) => SizedBox(height: size.height * 0.92, child: content()),
+    builder: (_) => SizedBox(
+      height: size.height * 0.92,
+      child: SheetSafeArea(child: content()),
+    ),
   ).whenComplete(disposeAll);
 }
 

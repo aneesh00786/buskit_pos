@@ -22,6 +22,7 @@ import '../models/provider_refund.dart';
 import '../models/sale_history_entry.dart';
 import '../state/sales_history_controller.dart';
 import 'partial_refund_view.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// Opens the completed-sales history: a wide dialog (list + detail
 /// side-by-side) on tablets, a tall bottom sheet (list, pushing to detail) on
@@ -58,7 +59,10 @@ Future<void> showSalesHistory(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (_) => SizedBox(height: size.height * 0.92, child: content()),
+    builder: (_) => SizedBox(
+      height: size.height * 0.92,
+      child: SheetSafeArea(child: content()),
+    ),
   ).whenComplete(controller.dispose);
 }
 

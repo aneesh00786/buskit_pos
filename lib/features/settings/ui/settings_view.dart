@@ -8,6 +8,7 @@ import '../../../core/network/error_messages.dart';
 import '../../../core/network/pos_api_client.dart';
 import '../../../core/theme/pos_tokens.dart';
 import '../../../core/ui/state_views.dart';
+import '../../auth/models/pos_auth_context.dart';
 import '../../auth/state/session_controller.dart';
 import '../../cash_movements/data/cash_movement_service.dart';
 import '../../cash_movements/state/cash_movement_controller.dart';
@@ -19,6 +20,7 @@ import '../data/settings_service.dart';
 import '../models/pos_device.dart';
 import '../models/pos_store.dart';
 import '../state/settings_controller.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// Store info, registers and devices for this company (all already-existing
 /// backend endpoints — see the plan), plus the existing printer/receipt
@@ -60,7 +62,10 @@ Future<void> showSettings(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (_) => SizedBox(height: size.height * 0.92, child: content()),
+    builder: (_) => SizedBox(
+      height: size.height * 0.92,
+      child: SheetSafeArea(child: content()),
+    ),
   ).whenComplete(disposeAll);
 }
 
@@ -273,7 +278,29 @@ class _CommonSections extends StatelessWidget {
         _SectionCard(
           title: 'About',
           icon: Icons.info_outline,
-          child: _KeyValue('App version', AppConfig.appVersion),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _KeyValue('App version', AppConfig.appVersion),
+              // Phase 15D: from the signed-in session (GET /auth/me) only.
+              _KeyValue(
+                'Business type',
+                switch (context.watch<SessionController>().businessType) {
+                  BusinessType.retail => 'Retail',
+                  BusinessType.restaurant => 'Restaurant',
+                  null => 'Not set',
+                },
+                key: const Key('about-business-type'),
+              ),
+              _KeyValue(
+                'ThriveWoo POS licence',
+                context.watch<SessionController>().isLicensed
+                    ? 'Active'
+                    : 'Not active',
+                key: const Key('about-licence'),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -664,7 +691,7 @@ class _StatusRow extends StatelessWidget {
 }
 
 class _KeyValue extends StatelessWidget {
-  const _KeyValue(this.label, this.value);
+  const _KeyValue(this.label, this.value, {super.key});
   final String label;
   final String value;
 

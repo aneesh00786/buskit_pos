@@ -207,7 +207,8 @@ class _PaymentRecoveryDialogState extends State<PaymentRecoveryDialog> {
   Future<void> _check() => _run(() => _reload(refresh: true));
 
   Future<void> _cancel(RecoverableSale s) => _run(() async {
-    for (final a in s.attempts.where((a) => a.cancellable)) {
+    // Phase 18B.18: never an attempt whose reference is recorded but not attached.
+    for (final a in s.attempts.where((a) => a.cancellable && !a.referenceRecordedUnattached)) {
       await widget.service.cancelAttempt(a.attempt.id);
     }
     await _reload();
@@ -444,7 +445,7 @@ class _PaymentRecoveryDialogState extends State<PaymentRecoveryDialog> {
       case RecoveryState.pending:
       case RecoveryState.authorized:
         return [
-          if (s.attempts.any((a) => a.cancellable))
+          if (s.attempts.any((a) => a.cancellable && !a.referenceRecordedUnattached))
             TextButton(
               key: const Key('recovery-cancel'),
               onPressed: busy ? null : () => _cancel(s),
@@ -492,6 +493,26 @@ class _PaymentRecoveryDialogState extends State<PaymentRecoveryDialog> {
   }
 }
 
+/// Phase 18B.18 — shown for an open attempt whose provider reference is
+/// recorded but not attached. Says nothing about whether money was taken.
+const recordedReferenceGuidance =
+    'The provider reference for this payment is recorded but not attached yet. It may still be paid at the provider — '
+    'do not take another payment. A manager must attach the recorded reference in the admin portal (Payment Reconciliation); '
+    'then use Check Payment, and the payment can be checked or cancelled normally.';
+
+/// Phase 18B.18 — the provider-reference line for an OPEN attempt; null when
+/// the server did not say (older backend) or the attempt has ended.
+String? referenceLabel(RecoveryAttempt a) {
+  if (!a.attempt.status.isOpen) return null;
+  if (a.attempt.hasProviderReference) return 'Provider reference attached';
+  return switch (a.attempt.referenceStatus) {
+    ProviderReferenceStatus.recordedUnattached => 'Provider reference recorded — waiting for a manager to attach it',
+    ProviderReferenceStatus.notRecorded => 'No provider reference',
+    ProviderReferenceStatus.attached => 'Provider reference attached',
+    ProviderReferenceStatus.unknown => null,
+  };
+}
+
 class _SaleDetail extends StatelessWidget {
   const _SaleDetail({required this.sale});
   final RecoverableSale sale;
@@ -522,7 +543,7 @@ class _SaleDetail extends StatelessWidget {
           ),
         _Line('Total', formatMoney(sale.sale.totals.grandTotal), bold: true),
         const SizedBox(height: PosTokens.s8),
-        for (final a in sale.attempts)
+        for (final a in sale.attempts) ...[
           _Line(
             '${a.attempt.provider ?? ''} · '
                 '${TenderMethod.fromWire(a.method.toLowerCase())?.label ?? (a.method == 'QR' ? 'UPI QR' : a.method)}'
@@ -530,6 +551,12 @@ class _SaleDetail extends StatelessWidget {
             '${formatMoney(a.attempt.amount)} · ${_status(a.attempt.status)}'
                 '${a.refreshError == null ? '' : ' (provider not reachable)'}',
           ),
+          // Phase 18B.18: the provider-reference state of an open attempt.
+          if (referenceLabel(a) != null)
+            Text(referenceLabel(a)!, key: Key('recovery-reference-${a.attempt.id}'), style: theme.textTheme.bodySmall),
+          if (a.referenceRecordedUnattached)
+            _Banner(text: recordedReferenceGuidance, key: Key('recovery-reference-recorded-${a.attempt.id}')),
+        ],
       ],
     );
   }

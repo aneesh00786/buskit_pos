@@ -256,6 +256,35 @@ void main() {
     );
 
     testWidgets(
+      'Phase 15G: a Pine Labs card sale (card tender with a provider attempt) does not open the drawer',
+      (tester) async {
+        final h = await pumpWithCart(tester);
+        await tester.runAsync(() => enableDrawer(h));
+        h.carts.onComplete = (c) async => CompletedSale.fromJson(
+          completedJson(
+            payments: const [
+              PaymentLine(
+                method: TenderMethod.card,
+                amountMilli: 112000,
+                paymentAttemptId: 9,
+              ),
+            ],
+          ),
+        )!;
+        await openPay(tester);
+        await typeInto(tester, 'Amount tendered', '120');
+        await tester.tap(completeBtn);
+        await tester.pumpAndSettle();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Sale complete'), findsOneWidget);
+        expect(h.receipts.drawerAdapter.jobs, isEmpty);
+      },
+    );
+
+    testWidgets(
       'a FAILED cash payment does not open the drawer; the successful retry opens it exactly once',
       (tester) async {
         final h = await pumpWithCart(tester);

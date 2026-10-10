@@ -3,6 +3,12 @@
 // (restore / complete with the captured attempt), real JSON storage for the
 // local reminders. Only the server is faked.
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:buskit_pos/core/network/pos_api_client.dart';
+import 'package:buskit_pos/features/checkout/models/terminal_payment.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'dart:io';
 
 import 'package:buskit_pos/core/network/api_exception.dart';
@@ -575,5 +581,138 @@ void main() {
     );
     await s.removePaymentRecoveryMarker(9);
     expect(await s.getPaymentRecoveryMarkers(), isEmpty);
+  });
+
+  // ---------------------------------------------------------------------
+  // Phase 18B.18 — provider_reference_status in payment recovery.
+  group('provider reference status', () {
+    /// An OPEN attempt WITHOUT a provider reference (the listing never
+    /// carries provider_reference_status; [status] simulates the server's
+    /// current view merged in by the service).
+    Map<String, dynamic> openAttempt({int id = 41, Object? status, String? ptrid, bool cancellable = true}) => {
+      ...attemptJson(id: id, status: 'PENDING', cancellable: cancellable, reference: null),
+      'provider_payment_id': ptrid,
+      'provider_reference_status': ?status,
+    };
+    PaymentRecoveryResult pendingWith(Map<String, dynamic> attempt) => FakeRecoveryService.result([
+      recoverableJson(state: 'PAYMENT_PENDING', canComplete: false, nextAction: 'CHECK_PAYMENT', attempts: [attempt]),
+    ]);
+
+    test('lookup: only OPEN attempts with no reference and an unknown status are read; failures keep the listing', () async {
+      final listed = pendingWith(openAttempt(id: 41));
+      final withRef = FakeRecoveryService.result([recoverableJson(state: 'PAYMENT_PENDING', canComplete: false, attempts: [openAttempt(id: 42, ptrid: '995001')])]);
+      final ended = FakeRecoveryService.result([recoverableJson(state: 'PAYMENT_FAILED', canComplete: false, attempts: [{...openAttempt(id: 43), 'status': 'FAILED'}])]);
+      final looked = <int>[];
+      Future<PaymentAttempt> lookup(int id) async {
+        looked.add(id);
+        return PaymentAttempt.fromJson({...openAttempt(id: id), 'provider_reference_status': 'RECORDED_UNATTACHED'})!;
+      }
+
+      final r = await withReferenceStatus(listed, lookup);
+      expect(r.recoverable.single.attempts.single.attempt.referenceStatus, ProviderReferenceStatus.recordedUnattached);
+      expect(r.recoverable.single.attempts.single.referenceRecordedUnattached, isTrue);
+      await withReferenceStatus(withRef, lookup);
+      await withReferenceStatus(ended, lookup);
+      expect(looked, [41], reason: 'never for an attempt with a reference or one that has ended');
+      final failed = await withReferenceStatus(listed, (id) async => throw const ApiException(kind: ApiErrorKind.network, message: 'x'));
+      expect(failed.recoverable.single.attempts.single.attempt.referenceStatus, ProviderReferenceStatus.unknown);
+      final other = await withReferenceStatus(listed, (id) async => PaymentAttempt.fromJson({...openAttempt(id: 99), 'provider_reference_status': 'RECORDED_UNATTACHED'})!);
+      expect(other.recoverable.single.attempts.single.attempt.referenceStatus, ProviderReferenceStatus.unknown, reason: 'another attempt never replaces this one');
+    });
+
+    test('the API service reads GET /payment-attempts/:id WITHOUT refresh (read-only), never posts', () async {
+      final requests = <http.Request>[];
+      final client = PosApiClient(
+        baseUrl: 'http://host:3000',
+        tokenProvider: () => 't',
+        onUnauthorized: (_) {},
+        httpClient: MockClient((req) async {
+          requests.add(req);
+          http.Response ok(Object data) => http.Response(jsonEncode({'status_code': 200, 'status': true, 'message': 'ok', 'data': data}), 200, headers: {'content-type': 'application/json'});
+          if (req.url.path == '/api/v1/pos/payment-recovery') {
+            return ok({'recoverable': [recoverableJson(state: 'PAYMENT_PENDING', canComplete: false, nextAction: 'CHECK_PAYMENT', attempts: [openAttempt(id: 41)])], 'resolved': []});
+          }
+          if (req.url.path == '/api/v1/pos/payment-attempts/41') {
+            return ok({...openAttempt(id: 41), 'provider_reference_status': 'RECORDED_UNATTACHED'});
+          }
+          return http.Response('{}', 404);
+        }),
+      );
+      final r = await ApiPaymentRecoveryService(client).fetch(refresh: true);
+      expect(r.recoverable.single.attempts.single.attempt.referenceStatus, ProviderReferenceStatus.recordedUnattached);
+      final attemptReq = requests.singleWhere((x) => x.url.path.endsWith('/payment-attempts/41'));
+      expect(attemptReq.method, 'GET');
+      expect(attemptReq.url.queryParameters.containsKey('refresh'), isFalse, reason: 'no provider call');
+      expect(requests.where((x) => x.method != 'GET'), isEmpty);
+    });
+
+    testWidgets('RECORDED_UNATTACHED: the manager-attach guidance, no Cancel, Check Payment kept — still "Payment pending" (never failed / cancelled / paid)', (tester) async {
+      service.current = pendingWith(openAttempt(status: 'RECORDED_UNATTACHED'));
+      await pumpHost(tester);
+      await openRecovery(tester);
+      expect(find.text('Payment pending'), findsOneWidget);
+      expect(find.byKey(const Key('recovery-reference-recorded-41')), findsOneWidget);
+      expect(find.textContaining('A manager must attach the recorded reference in the admin portal'), findsOneWidget);
+      expect(find.textContaining('do not take another payment'), findsOneWidget);
+      expect(find.text('Provider reference recorded — waiting for a manager to attach it'), findsOneWidget);
+      expect(find.byKey(const Key('recovery-cancel')), findsNothing, reason: 'the server would refuse it until attached');
+      expect(find.byKey(const Key('recovery-check')), findsOneWidget);
+      expect(find.byKey(const Key('recovery-resume')), findsNothing);
+      for (final t in ['Payment failed', 'Payment cancelled', 'Payment captured']) {
+        expect(find.text(t), findsNothing, reason: t);
+      }
+      expect(service.cancelCalls, isEmpty);
+    });
+
+    testWidgets('ATTACHED: existing recovery behaviour — Cancel and Check Payment through the server; no guidance banner', (tester) async {
+      service.current = pendingWith(openAttempt(status: 'ATTACHED', ptrid: '995001'));
+      await pumpHost(tester);
+      await openRecovery(tester);
+      expect(find.text('Provider reference attached'), findsOneWidget);
+      expect(find.byKey(const Key('recovery-reference-recorded-41')), findsNothing);
+      expect(find.byKey(const Key('recovery-cancel')), findsOneWidget);
+      expect(find.byKey(const Key('recovery-check')), findsOneWidget);
+    });
+
+    testWidgets('NOT_RECORDED: shown as such; existing actions unchanged', (tester) async {
+      service.current = pendingWith(openAttempt(status: 'NOT_RECORDED'));
+      await pumpHost(tester);
+      await openRecovery(tester);
+      expect(find.text('No provider reference'), findsOneWidget);
+      expect(find.byKey(const Key('recovery-reference-recorded-41')), findsNothing);
+      expect(find.byKey(const Key('recovery-cancel')), findsOneWidget);
+      expect(find.text('Payment pending'), findsOneWidget);
+    });
+
+    testWidgets('legacy / unknown status: no reference line, no banner, existing actions', (tester) async {
+      for (final status in [null, 'SOMETHING_NEW']) {
+        service.current = pendingWith(openAttempt(status: status));
+        await pumpHost(tester);
+        await openRecovery(tester);
+        expect(find.byKey(const Key('recovery-reference-41')), findsNothing, reason: '$status');
+        expect(find.byKey(const Key('recovery-reference-recorded-41')), findsNothing);
+        expect(find.byKey(const Key('recovery-cancel')), findsOneWidget);
+        await tester.tap(find.text('Later'));
+        await tester.pumpAndSettle();
+      }
+    });
+
+    testWidgets('after a manager attaches the reference: Check Payment re-reads from the server -> ATTACHED, Cancel back, banner gone', (tester) async {
+      service.current = pendingWith(openAttempt(status: 'RECORDED_UNATTACHED'));
+      await pumpHost(tester);
+      await openRecovery(tester);
+      expect(find.byKey(const Key('recovery-reference-recorded-41')), findsOneWidget);
+      service.queue.add(pendingWith(openAttempt(status: 'ATTACHED', ptrid: '995010')));
+      await tester.tap(find.byKey(const Key('recovery-check')));
+      await tester.pumpAndSettle();
+      expect(service.fetchCalls.last['refresh'], isTrue);
+      expect(find.byKey(const Key('recovery-reference-recorded-41')), findsNothing);
+      expect(find.text('Provider reference attached'), findsOneWidget);
+      expect(find.byKey(const Key('recovery-cancel')), findsOneWidget);
+      expect(find.text('Payment pending'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('recovery-cancel')));
+      await tester.pumpAndSettle();
+      expect(service.cancelCalls, [41], reason: 'the existing cancel API, once attached');
+    });
   });
 }

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../core/business/pos_modules.dart';
 import '../../../core/theme/pos_tokens.dart';
+import '../../auth/models/pos_auth_context.dart';
+import '../../auth/state/session_controller.dart';
 
 enum PosSection {
   sales,
@@ -13,6 +17,30 @@ enum PosSection {
   reports,
   paymentExceptions,
   settings,
+}
+
+/// Phase 15D: the module behind each sidebar section (all retail today).
+PosModule moduleOf(PosSection s) => switch (s) {
+  PosSection.sales => PosModule.sales,
+  PosSection.orders => PosModule.heldSales,
+  PosSection.history => PosModule.salesHistory,
+  PosSection.customers => PosModule.customers,
+  PosSection.inventory => PosModule.inventory,
+  PosSection.promotions => PosModule.promotions,
+  PosSection.analytics => PosModule.analytics,
+  PosSection.reports => PosModule.reports,
+  PosSection.paymentExceptions => PosModule.paymentExceptions,
+  PosSection.settings => PosModule.settings,
+};
+
+/// The signed-in business's type — from the authenticated session only
+/// (never a widget argument); null when there is no session in scope.
+BusinessType? _sessionBusinessType(BuildContext context) {
+  try {
+    return context.watch<SessionController>().businessType;
+  } on ProviderNotFoundException {
+    return null;
+  }
 }
 
 class _NavItem {
@@ -150,6 +178,7 @@ class PosSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final businessType = _sessionBusinessType(context);
     final t = PosTokens.of(context);
     return Semantics(
       container: true,
@@ -175,6 +204,10 @@ class PosSidebar extends StatelessWidget {
                   children: [
                     for (final item in _items.where(
                       (i) =>
+                          PosModules.isAvailable(
+                            moduleOf(i.section),
+                            businessType,
+                          ) &&
                           (i.section != PosSection.paymentExceptions ||
                               onOpenPaymentExceptions != null) &&
                           (i.section != PosSection.reports ||

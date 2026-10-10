@@ -1,8 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import 'core/config/app_config.dart';
+import 'features/scale/mock_scale_adapter.dart';
+import 'features/scale/scale_controller.dart';
+import 'features/scale/ui/scale_weight_panel.dart';
 import 'core/network/pos_api_client.dart';
 import 'core/storage/token_store.dart';
 import 'core/theme/app_theme.dart';
@@ -39,6 +43,7 @@ class PosApp extends StatefulWidget {
     this.baseUrl,
     this.httpClient,
     this.offlineStorage,
+    this.scale,
   });
 
   /// Overridable for tests.
@@ -50,6 +55,11 @@ class PosApp extends StatefulWidget {
   /// start-up. If it cannot be opened the POS runs online-only.
   final OfflineStorageService? offlineStorage;
 
+  /// Phase 18A: the weighing scale, if any. Null = manual weight entry only
+  /// (the default: no scale model has been chosen yet). In a non-release
+  /// build `--dart-define=POS_SCALE=mock` enables the SIMULATED scale.
+  final ScaleController? scale;
+
   @override
   State<PosApp> createState() => _PosAppState();
 }
@@ -59,6 +69,10 @@ class _PosAppState extends State<PosApp> {
   late final PosApiClient _client;
   late final ReceiptServices _receipts;
   OfflineServices? _offline;
+  ScaleController? _scale;
+  bool _ownsScale = false;
+
+  static const _scaleSetting = String.fromEnvironment('POS_SCALE');
 
   @override
   void initState() {
@@ -78,6 +92,13 @@ class _PosAppState extends State<PosApp> {
       onUnauthorized: (failedToken) => _session.handleUnauthorized(failedToken),
     );
     _session = SessionController(ApiAuthService(_client), store)..restore();
+    _scale = widget.scale;
+    if (_scale == null && !kReleaseMode && _scaleSetting == 'mock') {
+      final mock = MockScaleAdapter();
+      _scale = ScaleController(mock);
+      _ownsScale = true;
+      mock.connect().then((_) => mock.startDemo(), onError: (_) {});
+    }
     _openOffline();
   }
 
@@ -101,9 +122,20 @@ class _PosAppState extends State<PosApp> {
 
   @override
   void dispose() {
+    if (_ownsScale) {
+      final adapter = _scale!.adapter;
+      _scale!.dispose();
+      adapter.dispose();
+    }
     _session.dispose();
     _client.close();
     super.dispose();
+  }
+
+  /// Phase 18A: above the navigator so the weight dialog can find the scale.
+  Widget _withScale(Widget app) {
+    final scale = _scale;
+    return scale == null ? app : ScaleScope(controller: scale, child: app);
   }
 
   @override
@@ -115,13 +147,15 @@ class _PosAppState extends State<PosApp> {
         Provider<ReceiptServices>.value(value: _receipts),
         Provider<OfflineServices?>.value(value: _offline),
       ],
-      child: MaterialApp(
-        title: 'ThriveWoo POS',
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        themeMode: ThemeMode.system,
-        debugShowCheckedModeBanner: false,
-        home: const _AuthGate(),
+      child: _withScale(
+        MaterialApp(
+          title: 'ThriveWoo POS',
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: ThemeMode.system,
+          debugShowCheckedModeBanner: false,
+          home: const _AuthGate(),
+        ),
       ),
     );
   }

@@ -11,6 +11,7 @@ import '../../checkout/data/payment_exception_service.dart';
 import '../../checkout/ui/payment_exception_dialog.dart';
 import '../data/store_exception_service.dart';
 import '../state/store_exceptions_controller.dart';
+import '../../../core/ui/safe_insets.dart';
 
 const _filterLabels = {
   'UNRESOLVED': 'Unresolved',
@@ -71,7 +72,11 @@ Future<void> showStoreExceptions(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => SizedBox(height: size.height * 0.9, child: content()),
+    useSafeArea: true,
+    builder: (_) => SizedBox(
+      height: size.height * 0.9,
+      child: SheetSafeArea(child: content()),
+    ),
   ).whenComplete(controller.dispose);
 }
 

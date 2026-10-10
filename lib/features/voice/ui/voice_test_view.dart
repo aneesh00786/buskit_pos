@@ -132,7 +132,7 @@ class VoiceTestView extends StatelessWidget {
                     ? 'Technical test only: speech becomes text. Nothing is billed or sent to the POS.'
                     : !operator
                     ? 'Technical test only: a spoken quick bill is checked and priced by the server. Nothing is billed, paid or saved.'
-                    : 'Say the bill, for example "Jacky, bill two coffees and one water". Confirm Bill puts it in the cart; payment happens at checkout.',
+                    : 'Say the bill, for example "bill two coffees and one water". Confirm Bill puts it in the cart; payment happens at checkout.',
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: PosTokens.s12),
@@ -175,7 +175,7 @@ class VoiceTestView extends StatelessWidget {
                   ),
                 if (v.isSpeaking)
                   Text(
-                    'Jacky is speaking…',
+                    'ThriveWoo is speaking…',
                     key: const Key('voice-speaking'),
                     style: theme.textTheme.bodySmall,
                   ),

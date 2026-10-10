@@ -10,6 +10,7 @@ import '../../cart/ui/quantity_dialog.dart';
 import '../models/product_group.dart';
 import '../models/product_item.dart';
 import 'product_card.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// Lets the cashier pick a variation and a whole-number quantity, then adds
 /// it to the cart. The variation's numeric `id` is what is sent to the API.
@@ -22,7 +23,7 @@ Future<void> showVariationSheet(BuildContext context, ProductGroup group) {
     showDragHandle: true,
     builder: (_) => ChangeNotifierProvider.value(
       value: context.read<CartController>(),
-      child: VariationSheet(group: group),
+      child: SheetSafeArea(child: VariationSheet(group: group)),
     ),
   );
 }
@@ -58,6 +59,7 @@ class _VariationSheetState extends State<VariationSheet> {
         initial: 1,
         itemName: widget.group.name,
         weight: true,
+        useScale: true,
       );
       if (w == null || !mounted) return;
       quantity = w;

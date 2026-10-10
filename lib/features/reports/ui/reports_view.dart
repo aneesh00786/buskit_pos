@@ -11,6 +11,7 @@ import '../data/report_service.dart';
 import '../export/report_file_sharer.dart';
 import '../models/retail_report.dart';
 import '../state/reports_controller.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// Phase 14F-B — Retail Reports: product, cashier, register and tax sales for
 /// a period, exactly as the server reports them (rows AND totals). Opened
@@ -56,7 +57,10 @@ Future<void> showReports(
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (_) => SizedBox(height: size.height * 0.92, child: content()),
+    builder: (_) => SizedBox(
+      height: size.height * 0.92,
+      child: SheetSafeArea(child: content()),
+    ),
   ).whenComplete(controller.dispose);
 }
 

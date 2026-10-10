@@ -273,7 +273,7 @@ void main() {
   });
 
   testWidgets(
-    'screen: "Jacky is speaking…" while a reply plays; Confirm Bill still opens the existing checkout; closing the screen stops TTS',
+    'screen: "ThriveWoo is speaking…" while a reply plays; Confirm Bill still opens the existing checkout; closing the screen stops TTS',
     (tester) async {
       tts.hold = true;
       var checkout = 0;
@@ -316,7 +316,8 @@ void main() {
 
       await open();
       expect(find.byKey(const Key('voice-speaking')), findsOneWidget);
-      expect(find.text('Jacky is speaking…'), findsOneWidget);
+      expect(find.text('ThriveWoo is speaking…'), findsOneWidget);
+      expect(find.textContaining('Jacky'), findsNothing);
       // Closing the screen stops and releases TTS.
       await tester.tap(find.text('Close'));
       await tester.pumpAndSettle();

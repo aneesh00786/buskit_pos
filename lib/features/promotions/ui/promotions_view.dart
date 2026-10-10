@@ -11,6 +11,7 @@ import '../../../core/utils/server_time.dart';
 import '../data/promotion_service.dart';
 import '../models/promotion.dart';
 import '../state/promotion_list_controller.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// Opens a read-only Promotions browser: a wide dialog (list + detail
 /// side-by-side) on tablets, a tall bottom sheet on phones — same shape as
@@ -45,7 +46,10 @@ Future<void> showPromotions(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (_) => SizedBox(height: size.height * 0.92, child: content()),
+    builder: (_) => SizedBox(
+      height: size.height * 0.92,
+      child: SheetSafeArea(child: content()),
+    ),
   ).whenComplete(controller.dispose);
 }
 

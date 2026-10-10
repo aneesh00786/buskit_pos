@@ -62,6 +62,17 @@ ios/Flutter/Generated.xcconfig
 backups/
 .env
 
+# Android/iOS signing (Phase 17E): keystores, signing properties and
+# certificates never enter the repository, wherever they are placed.
+key.properties
+**/key.properties
+*.jks
+*.keystore
+*.p12
+*.pk8
+*.pem
+*.mobileprovision
+
 # Local-only dev/test notes (device identifiers, secrets, PINs, sample
 # credentials for manual testing). Never belongs in lib/ or anywhere else in
 # the repo; keep it under a *.local name or the ignored local/ folder instead.

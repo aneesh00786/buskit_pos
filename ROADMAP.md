@@ -1,4 +1,4 @@
-# Buskit POS — Roadmap
+# ThriveWoo POS — Roadmap
 
 Advanced Point-of-Sale system for retail, built phase by phase.
 

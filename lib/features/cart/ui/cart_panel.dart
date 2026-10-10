@@ -82,6 +82,7 @@ class _CartPanelState extends State<CartPanel> {
               _Header(
                 itemCount: sale?.itemCount ?? 0,
                 canClear: hasItems && editable,
+                dense: dense,
               ),
               SizedBox(
                 height: 4,
@@ -194,9 +195,17 @@ Future<void> confirmClearCart(BuildContext context) async {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.itemCount, required this.canClear});
+  const _Header({
+    required this.itemCount,
+    required this.canClear,
+    this.dense = false,
+  });
   final int itemCount;
   final bool canClear;
+
+  /// Short panels (see CartPanel's `dense`): no top padding, so a header
+  /// that had to wrap onto a second line still leaves the list its room.
+  final bool dense;
 
   Future<void> _clear(BuildContext context) => confirmClearCart(context);
 
@@ -205,17 +214,25 @@ class _Header extends StatelessWidget {
     final theme = Theme.of(context);
     final t = PosTokens.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         PosTokens.s16,
-        PosTokens.s8,
+        dense ? 0 : PosTokens.s8,
         PosTokens.s8,
         0,
       ),
-      child: Row(
+      // Phase 16A: a Wrap, not a single Row. At normal sizes the title sits
+      // left and the actions right on one line, exactly as before; when they
+      // cannot share a line (small phone, large accessibility text) the
+      // actions move to the next line — and the mic and "Clear all" may stack
+      // — instead of overflowing and squeezing the title to nothing.
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: PosTokens.s8,
         children: [
-          Expanded(
-            child: Row(
-              children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
                 Flexible(
                   child: Semantics(
                     header: true,
@@ -248,22 +265,28 @@ class _Header extends StatelessWidget {
                     ),
                   ),
                 ],
-              ],
-            ),
+            ],
           ),
-          // Phase 13C-C: speak a quick bill into an EMPTY cart; Confirm Bill
-          // then opens the existing checkout (showPay).
-          if (itemCount == 0)
-            IconButton(
-              key: const Key('cart-voice-bill'),
-              tooltip: 'Voice bill',
-              onPressed: () => startVoiceBill(context, openCheckout: showPay),
-              icon: const Icon(Icons.mic_none),
-            ),
-          TextButton(
-            onPressed: canClear ? () => _clear(context) : null,
-            style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
-            child: const Text('Clear all'),
+          Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              // Phase 13C-C: speak a quick bill into an EMPTY cart; Confirm
+              // Bill then opens the existing checkout (showPay).
+              if (itemCount == 0)
+                IconButton(
+                  key: const Key('cart-voice-bill'),
+                  tooltip: 'Voice bill',
+                  onPressed: () =>
+                      startVoiceBill(context, openCheckout: showPay),
+                  icon: const Icon(Icons.mic_none),
+                ),
+              TextButton(
+                onPressed: canClear ? () => _clear(context) : null,
+                style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                child: const Text('Clear all'),
+              ),
+            ],
           ),
         ],
       ),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/utils/json_read.dart';
 import '../../../core/utils/uuid.dart';
 import '../data/payment_terminal_service.dart';
 import '../models/terminal_payment.dart';
@@ -56,7 +57,12 @@ class TerminalPaymentController extends ChangeNotifier {
     this.pollInterval = const Duration(seconds: 3),
     this.maxWait = const Duration(minutes: 3),
     String? idempotencyKey,
-  }) : idempotencyKey = idempotencyKey ?? generateUuidV4();
+    DateTime Function()? clock,
+  }) : idempotencyKey = idempotencyKey ?? generateUuidV4(),
+       _now = clock ?? DateTime.now;
+
+  /// Wall clock for the wait deadline (injectable for tests).
+  final DateTime Function() _now;
 
   final PaymentTerminalService _service;
   final int saleId;
@@ -84,8 +90,51 @@ class TerminalPaymentController extends ChangeNotifier {
   DateTime? _deadline;
   bool _disposed = false;
 
-  bool get canCancel => _attempt != null && _attempt!.status.isOpen && _phase != TerminalPhase.cancelling;
-  bool get canCheckAgain => _phase == TerminalPhase.unknown;
+  bool get canCancel =>
+      _attempt != null && _attempt!.status.isOpen && _phase != TerminalPhase.cancelling && !isReferenceRecordedUnattached;
+
+  /// Phase 18B.1: an unconfirmed attempt (no provider reference) may be
+  /// abandoned by a manager; the server decides permission and timing.
+  /// Phase 18B.15: never when the attempt has a provider reference, or the
+  /// server said its reference is recorded (it must be checked / cancelled
+  /// through the provider instead).
+  bool get canAbandon =>
+      _attempt != null &&
+      _attempt!.unconfirmed &&
+      !_attempt!.hasProviderReference &&
+      !isReferenceRecordedUnattached &&
+      _attempt!.status.isOpen &&
+      (_phase == TerminalPhase.unknown || _phase == TerminalPhase.waitingForCard);
+
+  /// Phase 18B.15: the server refused abandon / cancel because the provider's
+  /// reference for this still-open attempt is durably recorded but not yet
+  /// attached (POS_PAYMENT_PROVIDER_REFERENCE_UNRECORDED). The payment may
+  /// still be paid on the terminal: no abandon, no cancel, no other tender
+  /// until a manager attaches it; "Check again" picks the reference up.
+  bool _referenceRecorded = false;
+  /// Phase 18B.17: an explicit provider_reference_status from the server
+  /// decides; only when it is missing / unknown (older backend) does the
+  /// earlier refusal ([_referenceRecorded]) decide.
+  bool get isReferenceRecordedUnattached {
+    final a = _attempt;
+    if (a == null || !a.status.isOpen || a.hasProviderReference) return false;
+    return switch (a.referenceStatus) {
+      ProviderReferenceStatus.recordedUnattached => true,
+      ProviderReferenceStatus.attached || ProviderReferenceStatus.notRecorded => false,
+      ProviderReferenceStatus.unknown => _referenceRecorded,
+    };
+  }
+
+  /// Ended by a manager without the provider's confirmation.
+  bool get isAbandoned => _attempt?.isAbandoned == true;
+
+  /// Phase 18B.3: the wait ([maxWait] — for a card terminal its auto-cancel
+  /// window) has passed and the payment is still not confirmed either way.
+  /// Shown as its own state; never treated as failed or cancelled.
+  bool _overdue = false;
+  bool get isOverdue => _overdue && (_attempt == null || _attempt!.status.isOpen);
+  bool get canCheckAgain =>
+      _phase == TerminalPhase.unknown || (isReferenceRecordedUnattached && _phase != TerminalPhase.processing);
   bool get isFinal =>
       _phase == TerminalPhase.approved ||
       _phase == TerminalPhase.declined ||
@@ -113,14 +162,34 @@ class TerminalPaymentController extends ChangeNotifier {
       _apply(await _service.start(saleId: saleId, provider: provider, amountMilli: amountMilli, idempotencyKey: idempotencyKey, method: method));
     } on ApiException catch (e) {
       _onError(e, starting: true);
+      await _readReferenceStatus();
+    }
+  }
+
+  /// Phase 18B.17 — for an open attempt without a provider reference, read
+  /// the server's current view (no provider call) to learn whether its
+  /// reference is recorded. A failure here changes nothing.
+  Future<void> _readReferenceStatus() async {
+    final a = _attempt;
+    if (a == null || _disposed || !a.status.isOpen || a.hasProviderReference) return;
+    try {
+      final latest = await _service.current(a.id);
+      if (_disposed || latest.id != a.id) return;
+      if (!latest.status.isOpen) return _apply(latest);
+      _attempt = latest;
+      notifyListeners();
+    } on ApiException {
+      // Keep what we know; the next check tries again.
     }
   }
 
   /// After an unknown outcome: re-ask (re-sending the SAME start request if
   /// no attempt is known yet — the server returns the same attempt).
+  /// Phase 18B.3: the wait is NOT restarted — before the deadline polling
+  /// resumes until it; after it, each Check again is one status check.
   Future<void> checkAgain() async {
     if (_attempt == null) return start();
-    _deadline = DateTime.now().add(maxWait);
+    _deadline ??= _now().add(maxWait);
     await _poll();
   }
 
@@ -140,11 +209,70 @@ class TerminalPaymentController extends ChangeNotifier {
         _schedulePoll();
       } else if (e.errorCode == 'POS_PAYMENT_ALREADY_COMPLETED') {
         await _poll(); // it was captured meanwhile
+      } else if (e.errorCode == referenceUnrecordedCode) {
+        _onReferenceRecorded(e);
       } else {
         _message = 'The cancellation could not be confirmed. Check the payment status.';
         _set(TerminalPhase.unknown, keepMessage: true);
       }
     }
+  }
+
+  /// Phase 18B.1 — asks the server to abandon this unconfirmed attempt with
+  /// [reason]. True when it is abandoned (the warning is then the message).
+  /// Refusals (no permission, too early, changed) keep the attempt as it was.
+  Future<bool> abandon(String reason) async {
+    final a = _attempt;
+    if (a == null || !canAbandon) return false;
+    _timer?.cancel();
+    _set(TerminalPhase.processing);
+    try {
+      final r = await _service.abandonUnconfirmed(a.id, reason);
+      _apply(r.attempt);
+      _message = r.warning;
+      _set(_phase, keepMessage: true);
+      return r.attempt.isAbandoned;
+    } on ApiException catch (e) {
+      if (e.errorCode == referenceUnrecordedCode) {
+        _onReferenceRecorded(e);
+        return false;
+      }
+      final latest = PaymentAttempt.fromJson(e.dataMap?['payment_attempt']);
+      if (latest != null) _attempt = latest;
+      _message = switch (e.errorCode) {
+        'POS_PAYMENT_ABANDON_TOO_EARLY' => _tooEarly(asString(e.dataMap?['available_at'])),
+        _ when e.kind == ApiErrorKind.forbidden =>
+          'Only a manager can abandon this payment. Ask a manager to sign in on this till.',
+        _ => e.message,
+      };
+      _set(TerminalPhase.unknown, keepMessage: true);
+      return false;
+    }
+  }
+
+  static const referenceUnrecordedCode = 'POS_PAYMENT_PROVIDER_REFERENCE_UNRECORDED';
+
+  /// Shown while [isReferenceRecordedUnattached]: never "failed" / "cancelled".
+  static const referenceRecordedMessage =
+      'The terminal reference for this payment is recorded but not attached yet. The customer may still be charged on the terminal — '
+      'do not take another payment. A manager must attach the reference (Payment Reconciliation in the admin portal); '
+      'then use Check again, and check or cancel the payment here.';
+
+  void _onReferenceRecorded(ApiException e) {
+    final latest = PaymentAttempt.fromJson(e.dataMap?['payment_attempt']);
+    if (latest != null) _attempt = latest;
+    _referenceRecorded = true;
+    _timer?.cancel();
+    _message = referenceRecordedMessage;
+    _set(TerminalPhase.unknown, keepMessage: true);
+  }
+
+  static String _tooEarly(String? availableAt) {
+    final at = DateTime.tryParse(availableAt ?? '')?.toLocal();
+    final when = at == null
+        ? 'later'
+        : 'after ${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    return 'The terminal may still accept this payment. It can be abandoned $when.';
   }
 
   void _apply(PaymentAttempt a) {
@@ -160,10 +288,11 @@ class TerminalPaymentController extends ChangeNotifier {
         _set(TerminalPhase.declined, keepMessage: true);
       case AttemptStatus.cancelled:
         _timer?.cancel();
-        _set(a.isExpired ? TerminalPhase.expired : TerminalPhase.cancelled);
+        if (a.isAbandoned) _message = abandonWarning;
+        _set(a.isExpired ? TerminalPhase.expired : TerminalPhase.cancelled, keepMessage: a.isAbandoned);
       case AttemptStatus.pending:
       case AttemptStatus.authorized:
-        _deadline ??= DateTime.now().add(maxWait);
+        _deadline ??= _now().add(maxWait);
         _set(TerminalPhase.waitingForCard);
         _schedulePoll();
       default:
@@ -191,7 +320,7 @@ class TerminalPaymentController extends ChangeNotifier {
       // Timeout / provider outcome unknown: the attempt exists and is still
       // open — keep watching it.
       _attempt = latest;
-      _deadline ??= DateTime.now().add(maxWait);
+      _deadline ??= _now().add(maxWait);
       _set(TerminalPhase.waitingForCard);
       _schedulePoll();
       return;
@@ -211,8 +340,11 @@ class TerminalPaymentController extends ChangeNotifier {
   void _schedulePoll() {
     _timer?.cancel();
     if (_disposed) return;
-    if (_deadline != null && DateTime.now().isAfter(_deadline!)) {
-      _message = 'The terminal has not confirmed the payment yet.';
+    if (_deadline != null && _now().isAfter(_deadline!)) {
+      _overdue = true;
+      _message =
+          'The terminal has not confirmed the payment or its cancellation within its time limit. '
+          'Do not take another payment: check the terminal, then Check again.';
       _set(TerminalPhase.unknown, keepMessage: true);
       return;
     }
@@ -229,6 +361,10 @@ class TerminalPaymentController extends ChangeNotifier {
       final latest = PaymentAttempt.fromJson(e.dataMap?['payment_attempt']);
       if (latest != null && !latest.status.isOpen) return _apply(latest);
       // A failed status check changes nothing: keep waiting until the deadline.
+      // Phase 18B.17: without a provider reference the provider cannot be
+      // asked — read whether the reference is recorded instead.
+      await _readReferenceStatus();
+      if (_disposed || !(_attempt?.status.isOpen ?? false)) return;
       _set(TerminalPhase.waitingForCard, keepMessage: true);
       _schedulePoll();
     }

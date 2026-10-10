@@ -14,6 +14,7 @@ import '../../cart/state/cart_controller.dart';
 import '../../cart/ui/cart_panel.dart' show confirmVoid;
 import '../models/held_sale_summary.dart';
 import '../state/held_sales_controller.dart';
+import '../../../core/ui/safe_insets.dart';
 
 /// Opens the held-sales list: a dialog on tablets, a tall bottom sheet on
 /// phones. The routes sit above the provider tree, so the controllers are
@@ -49,7 +50,10 @@ Future<void> showHeldSales(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (_) => SizedBox(height: size.height * 0.85, child: content()),
+    builder: (_) => SizedBox(
+      height: size.height * 0.85,
+      child: SheetSafeArea(child: content()),
+    ),
   );
 }
 

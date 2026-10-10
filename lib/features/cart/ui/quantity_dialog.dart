@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/utils/quantity.dart';
+import '../../scale/ui/scale_weight_panel.dart';
 import '../state/cart_controller.dart';
 
 /// Asks for an exact quantity. Client-side validation only checks it is a
@@ -9,16 +10,24 @@ import '../state/cart_controller.dart';
 /// Phase 12B: with [weight] it takes a weight instead — a positive decimal
 /// with at most 3 places (0.250, 1.25, 2.500) — refused, never rounded, when
 /// it has more. Returns an int for whole numbers, else the exact decimal.
+/// Phase 18A: with [weight] and [useScale], a configured scale ([ScaleScope])
+/// can fill the weight field with a stable reading; the cashier still
+/// confirms, and manual entry is unchanged.
 Future<num?> showQuantityDialog(
   BuildContext context, {
   required num initial,
   required String itemName,
   bool weight = false,
+  bool useScale = false,
 }) {
   return showDialog<num>(
     context: context,
-    builder: (_) =>
-        _QuantityDialog(initial: initial, itemName: itemName, weight: weight),
+    builder: (_) => _QuantityDialog(
+      initial: initial,
+      itemName: itemName,
+      weight: weight,
+      useScale: useScale,
+    ),
   );
 }
 
@@ -27,10 +36,12 @@ class _QuantityDialog extends StatefulWidget {
     required this.initial,
     required this.itemName,
     this.weight = false,
+    this.useScale = false,
   });
   final num initial;
   final String itemName;
   final bool weight;
+  final bool useScale;
 
   @override
   State<_QuantityDialog> createState() => _QuantityDialogState();
@@ -72,6 +83,21 @@ class _QuantityDialogState extends State<_QuantityDialog> {
     Navigator.of(context).pop(v);
   }
 
+  /// Phase 18A: the scale panel, only for a WEIGHT item when a scale is
+  /// configured. It fills the field; it never submits.
+  Widget? _scalePanel(BuildContext context) {
+    final scale = ScaleScope.maybeOf(context);
+    if (scale == null) return null;
+    return ScaleWeightPanel(
+      controller: scale,
+      onUseWeight: (text) => setState(() {
+        _c.text = text;
+        _c.selection = TextSelection.collapsed(offset: text.length);
+        _error = null;
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -108,6 +134,7 @@ class _QuantityDialogState extends State<_QuantityDialog> {
             onChanged: (_) => setState(() => _error = null),
             onSubmitted: (_) => _submit(),
           ),
+          if (widget.weight && widget.useScale) ?_scalePanel(context),
         ],
       ),
       actions: [

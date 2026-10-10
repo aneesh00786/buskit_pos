@@ -58,14 +58,21 @@ class PosScaffold extends StatelessWidget {
           actions: compactActions,
         ),
         drawer: Drawer(child: sidebarBuilder(false)),
-        body: banner == null
-            ? body
-            : Column(
-                children: [
-                  banner!,
-                  Expanded(child: body),
-                ],
-              ),
+        // Phase 16B: the AppBar already clears the status bar / notch; the
+        // body clears the side cut-outs and — when there is no bottom bar
+        // (which pads itself) — the navigation / gesture area.
+        body: SafeArea(
+          top: false,
+          bottom: bottomBar == null,
+          child: banner == null
+              ? body
+              : Column(
+                  children: [
+                    banner!,
+                    Expanded(child: body),
+                  ],
+                ),
+        ),
         bottomNavigationBar: bottomBar,
       );
     }
@@ -74,41 +81,57 @@ class PosScaffold extends StatelessWidget {
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // The sidebar keeps its own SafeArea (its dark panel still runs
+          // behind the status bar, as before).
           sidebarBuilder(!layout.hasFullSidebar),
+          // Phase 16B: header, catalogue, cart and summary stay inside the
+          // safe area — clear of the status bar / camera cut-out on top, the
+          // gesture area / home indicator below and a landscape cut-out on
+          // the right (the sidebar already covers the left edge).
           Expanded(
-            child: Column(
-              children: [
-                header,
-                ?banner,
-                Expanded(child: body),
-              ],
+            child: SafeArea(
+              left: false,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Column(
+                      children: [
+                        header,
+                        ?banner,
+                        Expanded(child: body),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: layout.sideCartWidth,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        0,
+                        PosTokens.s12,
+                        PosTokens.s12,
+                        PosTokens.s12,
+                      ),
+                      child: cart,
+                    ),
+                  ),
+                  if (layout.hasSummary && summary != null)
+                    SizedBox(
+                      width: 300,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          0,
+                          PosTokens.s12,
+                          PosTokens.s12,
+                          PosTokens.s12,
+                        ),
+                        child: summary,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-          SizedBox(
-            width: layout.sideCartWidth,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                0,
-                PosTokens.s12,
-                PosTokens.s12,
-                PosTokens.s12,
-              ),
-              child: cart,
-            ),
-          ),
-          if (layout.hasSummary && summary != null)
-            SizedBox(
-              width: 300,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  0,
-                  PosTokens.s12,
-                  PosTokens.s12,
-                  PosTokens.s12,
-                ),
-                child: summary,
-              ),
-            ),
         ],
       ),
     );
