@@ -64,7 +64,7 @@ void main() {
   );
 
   testWidgets(
-    'auto-print ON: exactly ONE print after the completed sale; rebuilds do not reprint; manual reprint still available',
+    'auto-print ON: exactly ONE print after the completed sale; rebuilds do not reprint; a manual reprint needs loaded sales.reprint',
     (tester) async {
       final h = await pumpWithCart(tester);
       await tester.runAsync(() => h.receipts.settings.save(autoOn));
@@ -83,9 +83,12 @@ void main() {
       await tester.pump();
       await settle(tester);
       expect(h.receipts.print.printed, hasLength(1), reason: 'rebuild');
-      await tester.tap(find.text('Print Receipt'));
+      // Phase P1.2: printing again is a reprint; this session has no loaded
+      // permissions, so it is refused (authorized reprints:
+      // reprint_permission_test.dart).
+      await tester.tap(find.text('Print Receipt'), warnIfMissed: false);
       await settle(tester);
-      expect(h.receipts.print.printed, hasLength(2), reason: 'manual reprint');
+      expect(h.receipts.print.printed, hasLength(1), reason: 'reprint refused');
     },
   );
 

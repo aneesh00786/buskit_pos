@@ -589,7 +589,7 @@ class _DetailBody extends StatelessWidget {
         const SizedBox(height: PosTokens.s16),
         _RefundSection(sale: sale, names: h.detailNames),
         const SizedBox(height: PosTokens.s16),
-        ReceiptActions(receipt: receipt),
+        ReceiptActions(receipt: receipt, reprint: true),
       ],
     );
   }

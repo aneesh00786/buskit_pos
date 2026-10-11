@@ -181,7 +181,24 @@ void main() {
         final products = FakeProductService()
           ..onFindById = (_) async =>
               ProductItem.fromJson(productJson(id: 42, name: 'Tea'));
-        await pumpHistory(tester, service: svc, products: products, width: 400);
+        // Phase P1.2: a history print is a reprint and needs LOADED
+        // permissions that include sales.reprint (fails closed).
+        final auth = FakeAuthService()
+          ..onAuthContext = (t) async => const PosAuthContext(
+            staff: StaffInfo(salesmanId: 'S1', role: StaffRole(id: 1, name: 'Cashier')),
+            permissions: ['sales.view', 'sales.reprint'],
+          );
+        final session = SessionController(auth, MemoryTokenStore());
+        await session.loginDevice('REG-1', 'secret');
+        await session.loginStaff('S1', '1234');
+        addTearDown(session.dispose);
+        await pumpHistory(
+          tester,
+          service: svc,
+          products: products,
+          session: session,
+          width: 400,
+        );
         await tester.tap(find.text('POS-1'));
         await tester.pumpAndSettle();
         await tester.tap(find.widgetWithText(OutlinedButton, 'Print Receipt'));

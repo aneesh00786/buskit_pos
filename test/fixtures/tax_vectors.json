@@ -1,0 +1,6866 @@
+{
+  "name": "ThriveWoo POS tax engine shared vectors",
+  "version": 1,
+  "notes": [
+    "Phase P2.1. Identical copies live in buskit-web/test/pos/fixtures/tax_vectors.json and buskit-pos/test/fixtures/tax_vectors.json; both test suites pin the same SHA-256.",
+    "legacy: expected values were produced by running the unchanged buskit-web services/pos/posTax.js computeLine. jsOnly cases use inputs the Dart port does not accept (decimal quantities, non-numeric percent).",
+    "lines / invoices: expected values were produced by an independent rational-arithmetic oracle, not by either engine. They are illustrative calculations, not verified legal rules for any jurisdiction."
+  ],
+  "legacy": {
+    "fixed": [
+      {
+        "id": "L01",
+        "unitPriceMilli": 100000,
+        "quantity": 1,
+        "percent": 18,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 18,
+          "lineSubMilli": 100000,
+          "taxMilli": 15254,
+          "totalMilli": 100000
+        }
+      },
+      {
+        "id": "L02",
+        "unitPriceMilli": 100000,
+        "quantity": 1,
+        "percent": 18,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 18,
+          "lineSubMilli": 100000,
+          "taxMilli": 18000,
+          "totalMilli": 118000
+        }
+      },
+      {
+        "id": "L03",
+        "unitPriceMilli": 100000,
+        "quantity": 3,
+        "percent": 5,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 5,
+          "lineSubMilli": 300000,
+          "taxMilli": 14286,
+          "totalMilli": 300000
+        }
+      },
+      {
+        "id": "L04",
+        "unitPriceMilli": 99990,
+        "quantity": 7,
+        "percent": 12,
+        "inclTax": null,
+        "expected": {
+          "mode": "exclusive",
+          "percent": 12,
+          "lineSubMilli": 699930,
+          "taxMilli": 83992,
+          "totalMilli": 783922
+        }
+      },
+      {
+        "id": "L05",
+        "unitPriceMilli": 12345,
+        "quantity": 3,
+        "percent": 18,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 18,
+          "lineSubMilli": 37035,
+          "taxMilli": 5649,
+          "totalMilli": 37035
+        }
+      },
+      {
+        "id": "L06",
+        "unitPriceMilli": 12345,
+        "quantity": 3,
+        "percent": 18,
+        "inclTax": "excl",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 18,
+          "lineSubMilli": 37035,
+          "taxMilli": 6666,
+          "totalMilli": 43701
+        }
+      },
+      {
+        "id": "L07",
+        "unitPriceMilli": 1,
+        "quantity": 1,
+        "percent": 18,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 18,
+          "lineSubMilli": 1,
+          "taxMilli": 0,
+          "totalMilli": 1
+        }
+      },
+      {
+        "id": "L08",
+        "unitPriceMilli": 1,
+        "quantity": 1,
+        "percent": 18,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 18,
+          "lineSubMilli": 1,
+          "taxMilli": 0,
+          "totalMilli": 1
+        }
+      },
+      {
+        "id": "L09",
+        "unitPriceMilli": 5,
+        "quantity": 1,
+        "percent": 5,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 5,
+          "lineSubMilli": 5,
+          "taxMilli": 0,
+          "totalMilli": 5
+        }
+      },
+      {
+        "id": "L10",
+        "unitPriceMilli": 333,
+        "quantity": 3,
+        "percent": 2.5,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 2.5,
+          "lineSubMilli": 999,
+          "taxMilli": 24,
+          "totalMilli": 999
+        }
+      },
+      {
+        "id": "L11",
+        "unitPriceMilli": 49999,
+        "quantity": 9,
+        "percent": 28,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 28,
+          "lineSubMilli": 449991,
+          "taxMilli": 125997,
+          "totalMilli": 575988
+        }
+      },
+      {
+        "id": "L12",
+        "unitPriceMilli": 250000,
+        "quantity": 2,
+        "percent": 0,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 0,
+          "lineSubMilli": 500000,
+          "taxMilli": 0,
+          "totalMilli": 500000
+        }
+      },
+      {
+        "id": "L13",
+        "unitPriceMilli": 250000,
+        "quantity": 2,
+        "percent": 0,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 0,
+          "lineSubMilli": 500000,
+          "taxMilli": 0,
+          "totalMilli": 500000
+        }
+      },
+      {
+        "id": "L14",
+        "unitPriceMilli": 250000,
+        "quantity": 2,
+        "percent": 18,
+        "inclTax": "N.A",
+        "expected": {
+          "mode": "none",
+          "percent": 0,
+          "lineSubMilli": 500000,
+          "taxMilli": 0,
+          "totalMilli": 500000
+        }
+      },
+      {
+        "id": "L15",
+        "unitPriceMilli": 1000,
+        "quantity": 1,
+        "percent": 1.2000000476837158,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 1.2,
+          "lineSubMilli": 1000,
+          "taxMilli": 12,
+          "totalMilli": 1012
+        }
+      },
+      {
+        "id": "L16",
+        "unitPriceMilli": 7777,
+        "quantity": 13,
+        "percent": 12.5,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 12.5,
+          "lineSubMilli": 101101,
+          "taxMilli": 11233,
+          "totalMilli": 101101
+        }
+      },
+      {
+        "id": "L17",
+        "unitPriceMilli": 10,
+        "quantity": 1,
+        "percent": 5,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 5,
+          "lineSubMilli": 10,
+          "taxMilli": 0,
+          "totalMilli": 10
+        }
+      },
+      {
+        "id": "L18",
+        "unitPriceMilli": 15,
+        "quantity": 1,
+        "percent": 5,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 5,
+          "lineSubMilli": 15,
+          "taxMilli": 1,
+          "totalMilli": 16
+        }
+      },
+      {
+        "id": "L19",
+        "unitPriceMilli": 1050,
+        "quantity": 1,
+        "percent": 5,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 5,
+          "lineSubMilli": 1050,
+          "taxMilli": 50,
+          "totalMilli": 1050
+        }
+      },
+      {
+        "id": "L20",
+        "unitPriceMilli": 105,
+        "quantity": 1,
+        "percent": 5,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 5,
+          "lineSubMilli": 105,
+          "taxMilli": 5,
+          "totalMilli": 105
+        }
+      },
+      {
+        "id": "L21",
+        "unitPriceMilli": 21,
+        "quantity": 1,
+        "percent": 5,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 5,
+          "lineSubMilli": 21,
+          "taxMilli": 1,
+          "totalMilli": 22
+        }
+      },
+      {
+        "id": "L22",
+        "unitPriceMilli": 1234567,
+        "quantity": 4,
+        "percent": 18,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 18,
+          "lineSubMilli": 4938268,
+          "taxMilli": 753295,
+          "totalMilli": 4938268
+        }
+      },
+      {
+        "id": "L23",
+        "unitPriceMilli": 1234567,
+        "quantity": 4,
+        "percent": 18,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 18,
+          "lineSubMilli": 4938268,
+          "taxMilli": 888888,
+          "totalMilli": 5827156
+        }
+      },
+      {
+        "id": "L24",
+        "unitPriceMilli": 3,
+        "quantity": 1,
+        "percent": 50,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 50,
+          "lineSubMilli": 3,
+          "taxMilli": 2,
+          "totalMilli": 5
+        }
+      },
+      {
+        "id": "L25",
+        "unitPriceMilli": 3,
+        "quantity": 1,
+        "percent": 50,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 50,
+          "lineSubMilli": 3,
+          "taxMilli": 1,
+          "totalMilli": 3
+        }
+      },
+      {
+        "id": "L26",
+        "unitPriceMilli": 9999999,
+        "quantity": 9999,
+        "percent": 28,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 28,
+          "lineSubMilli": 99989990001,
+          "taxMilli": 27997197200,
+          "totalMilli": 127987187201
+        }
+      },
+      {
+        "id": "L27",
+        "unitPriceMilli": 9999999,
+        "quantity": 9999,
+        "percent": 28,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 28,
+          "lineSubMilli": 99989990001,
+          "taxMilli": 21872810313,
+          "totalMilli": 99989990001
+        }
+      },
+      {
+        "id": "L28",
+        "unitPriceMilli": 2,
+        "quantity": 1,
+        "percent": 25,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 25,
+          "lineSubMilli": 2,
+          "taxMilli": 1,
+          "totalMilli": 3
+        }
+      },
+      {
+        "id": "L29",
+        "unitPriceMilli": 6,
+        "quantity": 1,
+        "percent": 25,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 25,
+          "lineSubMilli": 6,
+          "taxMilli": 2,
+          "totalMilli": 8
+        }
+      },
+      {
+        "id": "L30",
+        "unitPriceMilli": 42,
+        "quantity": 1,
+        "percent": 16.6667,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 16.6667,
+          "lineSubMilli": 42,
+          "taxMilli": 6,
+          "totalMilli": 42
+        }
+      },
+      {
+        "id": "L31",
+        "unitPriceMilli": 1000,
+        "quantity": 1,
+        "percent": -5,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 0,
+          "lineSubMilli": 1000,
+          "taxMilli": 0,
+          "totalMilli": 1000
+        }
+      },
+      {
+        "id": "L32",
+        "unitPriceMilli": 1000,
+        "quantity": 1,
+        "percent": null,
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 0,
+          "lineSubMilli": 1000,
+          "taxMilli": 0,
+          "totalMilli": 1000
+        },
+        "jsOnly": true
+      },
+      {
+        "id": "L33",
+        "unitPriceMilli": 1000,
+        "quantity": 1,
+        "percent": "abc",
+        "inclTax": "",
+        "expected": {
+          "mode": "exclusive",
+          "percent": 0,
+          "lineSubMilli": 1000,
+          "taxMilli": 0,
+          "totalMilli": 1000
+        },
+        "jsOnly": true
+      },
+      {
+        "id": "L34",
+        "unitPriceMilli": 1000,
+        "quantity": 1,
+        "percent": 3.333333,
+        "inclTax": "incl_tax",
+        "expected": {
+          "mode": "inclusive",
+          "percent": 3.3333,
+          "lineSubMilli": 1000,
+          "taxMilli": 32,
+          "totalMilli": 1000
+        }
+      },
+      {
+        "id": "L35",
+        "unitPriceMilli": 1000,
+        "quantity": 1,
+        "percent": 18,
+        "inclTax": null,
+        "expected": {
+          "mode": "exclusive",
+          "percent": 18,
+          "lineSubMilli": 1000,
+          "taxMilli": 180,
+          "totalMilli": 1180
+        }
+      }
+    ],
+    "weightedJsOnly": [
+      {
+        "id": "LW1",
+        "unitPriceMilli": 120000,
+        "quantity": "0.5",
+        "percent": 5,
+        "inclTax": "",
+        "jsOnly": true,
+        "expected": {
+          "mode": "exclusive",
+          "percent": 5,
+          "lineSubMilli": 60000,
+          "taxMilli": 3000,
+          "totalMilli": 63000
+        }
+      },
+      {
+        "id": "LW2",
+        "unitPriceMilli": 120000,
+        "quantity": "1.234",
+        "percent": 18,
+        "inclTax": "incl_tax",
+        "jsOnly": true,
+        "expected": {
+          "mode": "inclusive",
+          "percent": 18,
+          "lineSubMilli": 148080,
+          "taxMilli": 22588,
+          "totalMilli": 148080
+        }
+      },
+      {
+        "id": "LW3",
+        "unitPriceMilli": 99999,
+        "quantity": "0.001",
+        "percent": 12,
+        "inclTax": "",
+        "jsOnly": true,
+        "expected": {
+          "mode": "exclusive",
+          "percent": 12,
+          "lineSubMilli": 100,
+          "taxMilli": 12,
+          "totalMilli": 112
+        }
+      },
+      {
+        "id": "LW4",
+        "unitPriceMilli": 45500,
+        "quantity": "2.75",
+        "percent": 0,
+        "inclTax": "N.A",
+        "jsOnly": true,
+        "expected": {
+          "mode": "none",
+          "percent": 0,
+          "lineSubMilli": 125125,
+          "taxMilli": 0,
+          "totalMilli": 125125
+        }
+      }
+    ],
+    "random": {
+      "generator": "mulberry32",
+      "seed": 20261010,
+      "count": 300,
+      "cases": [
+        {
+          "unitPriceMilli": 5924400,
+          "quantity": 34,
+          "percent": 28,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 28,
+            "lineSubMilli": 201429600,
+            "taxMilli": 44062725,
+            "totalMilli": 201429600
+          }
+        },
+        {
+          "unitPriceMilli": 8642911,
+          "quantity": 44,
+          "percent": 18,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 380288084,
+            "taxMilli": 68451855,
+            "totalMilli": 448739939
+          }
+        },
+        {
+          "unitPriceMilli": 2744772,
+          "quantity": 1,
+          "percent": 16.6667,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 2744772,
+            "taxMilli": 392111,
+            "totalMilli": 2744772
+          }
+        },
+        {
+          "unitPriceMilli": 7042261,
+          "quantity": 6,
+          "percent": 3.333333,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 42253566,
+            "taxMilli": 1408438,
+            "totalMilli": 43662004
+          }
+        },
+        {
+          "unitPriceMilli": 460604,
+          "quantity": 16,
+          "percent": 12,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 7369664,
+            "taxMilli": 0,
+            "totalMilli": 7369664
+          }
+        },
+        {
+          "unitPriceMilli": 4738464,
+          "quantity": 35,
+          "percent": 18,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 165846240,
+            "taxMilli": 29852323,
+            "totalMilli": 195698563
+          }
+        },
+        {
+          "unitPriceMilli": 6538212,
+          "quantity": 50,
+          "percent": 18,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 326910600,
+            "taxMilli": 58843908,
+            "totalMilli": 385754508
+          }
+        },
+        {
+          "unitPriceMilli": 6781263,
+          "quantity": 48,
+          "percent": 0.1,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0.1,
+            "lineSubMilli": 325500624,
+            "taxMilli": 325501,
+            "totalMilli": 325826125
+          }
+        },
+        {
+          "unitPriceMilli": 1483154,
+          "quantity": 30,
+          "percent": 3.333333,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 44494620,
+            "taxMilli": 1483139,
+            "totalMilli": 45977759
+          }
+        },
+        {
+          "unitPriceMilli": 3539994,
+          "quantity": 48,
+          "percent": 16.6667,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 169919712,
+            "taxMilli": 0,
+            "totalMilli": 169919712
+          }
+        },
+        {
+          "unitPriceMilli": 5956365,
+          "quantity": 11,
+          "percent": 40,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 40,
+            "lineSubMilli": 65520015,
+            "taxMilli": 18720004,
+            "totalMilli": 65520015
+          }
+        },
+        {
+          "unitPriceMilli": 5997378,
+          "quantity": 37,
+          "percent": 12.5,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 221902986,
+            "taxMilli": 0,
+            "totalMilli": 221902986
+          }
+        },
+        {
+          "unitPriceMilli": 2797648,
+          "quantity": 46,
+          "percent": 0.1,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 0.1,
+            "lineSubMilli": 128691808,
+            "taxMilli": 128563,
+            "totalMilli": 128691808
+          }
+        },
+        {
+          "unitPriceMilli": 7460068,
+          "quantity": 39,
+          "percent": 1.2000000476837158,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 1.2,
+            "lineSubMilli": 290942652,
+            "taxMilli": 3449913,
+            "totalMilli": 290942652
+          }
+        },
+        {
+          "unitPriceMilli": 8641551,
+          "quantity": 1,
+          "percent": 28,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 8641551,
+            "taxMilli": 0,
+            "totalMilli": 8641551
+          }
+        },
+        {
+          "unitPriceMilli": 3302448,
+          "quantity": 14,
+          "percent": 18,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 46234272,
+            "taxMilli": 8322169,
+            "totalMilli": 54556441
+          }
+        },
+        {
+          "unitPriceMilli": 7465424,
+          "quantity": 34,
+          "percent": 7.25,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 7.25,
+            "lineSubMilli": 253824416,
+            "taxMilli": 18402270,
+            "totalMilli": 272226686
+          }
+        },
+        {
+          "unitPriceMilli": 6096241,
+          "quantity": 24,
+          "percent": 18,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 146309784,
+            "taxMilli": 0,
+            "totalMilli": 146309784
+          }
+        },
+        {
+          "unitPriceMilli": 6425749,
+          "quantity": 30,
+          "percent": 28,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 28,
+            "lineSubMilli": 192772470,
+            "taxMilli": 42168978,
+            "totalMilli": 192772470
+          }
+        },
+        {
+          "unitPriceMilli": 4942123,
+          "quantity": 22,
+          "percent": 28,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 28,
+            "lineSubMilli": 108726706,
+            "taxMilli": 23783967,
+            "totalMilli": 108726706
+          }
+        },
+        {
+          "unitPriceMilli": 6015073,
+          "quantity": 16,
+          "percent": 40,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 40,
+            "lineSubMilli": 96241168,
+            "taxMilli": 27497477,
+            "totalMilli": 96241168
+          }
+        },
+        {
+          "unitPriceMilli": 9410632,
+          "quantity": 25,
+          "percent": 7.25,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 235265800,
+            "taxMilli": 0,
+            "totalMilli": 235265800
+          }
+        },
+        {
+          "unitPriceMilli": 430415,
+          "quantity": 15,
+          "percent": 2.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 6456225,
+            "taxMilli": 161406,
+            "totalMilli": 6617631
+          }
+        },
+        {
+          "unitPriceMilli": 5317870,
+          "quantity": 10,
+          "percent": 5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 5,
+            "lineSubMilli": 53178700,
+            "taxMilli": 2532319,
+            "totalMilli": 53178700
+          }
+        },
+        {
+          "unitPriceMilli": 1890344,
+          "quantity": 42,
+          "percent": 1.2000000476837158,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 1.2,
+            "lineSubMilli": 79394448,
+            "taxMilli": 952733,
+            "totalMilli": 80347181
+          }
+        },
+        {
+          "unitPriceMilli": 3085368,
+          "quantity": 19,
+          "percent": 0,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 58621992,
+            "taxMilli": 0,
+            "totalMilli": 58621992
+          }
+        },
+        {
+          "unitPriceMilli": 4008038,
+          "quantity": 50,
+          "percent": 3.333333,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 200401900,
+            "taxMilli": 6464515,
+            "totalMilli": 200401900
+          }
+        },
+        {
+          "unitPriceMilli": 2532654,
+          "quantity": 40,
+          "percent": 12.5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 101306160,
+            "taxMilli": 12663270,
+            "totalMilli": 113969430
+          }
+        },
+        {
+          "unitPriceMilli": 5107629,
+          "quantity": 12,
+          "percent": 0,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 61291548,
+            "taxMilli": 0,
+            "totalMilli": 61291548
+          }
+        },
+        {
+          "unitPriceMilli": 2259499,
+          "quantity": 38,
+          "percent": 2.5,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 85860962,
+            "taxMilli": 2146524,
+            "totalMilli": 88007486
+          }
+        },
+        {
+          "unitPriceMilli": 2156332,
+          "quantity": 47,
+          "percent": 16.6667,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 101347604,
+            "taxMilli": 16891301,
+            "totalMilli": 118238905
+          }
+        },
+        {
+          "unitPriceMilli": 7916561,
+          "quantity": 34,
+          "percent": 5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 5,
+            "lineSubMilli": 269163074,
+            "taxMilli": 12817289,
+            "totalMilli": 269163074
+          }
+        },
+        {
+          "unitPriceMilli": 9203057,
+          "quantity": 22,
+          "percent": 1.2000000476837158,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 202467254,
+            "taxMilli": 0,
+            "totalMilli": 202467254
+          }
+        },
+        {
+          "unitPriceMilli": 8480286,
+          "quantity": 1,
+          "percent": 12.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 8480286,
+            "taxMilli": 1060036,
+            "totalMilli": 9540322
+          }
+        },
+        {
+          "unitPriceMilli": 1909745,
+          "quantity": 43,
+          "percent": 0,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 0,
+            "lineSubMilli": 82119035,
+            "taxMilli": 0,
+            "totalMilli": 82119035
+          }
+        },
+        {
+          "unitPriceMilli": 2166800,
+          "quantity": 35,
+          "percent": 5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 5,
+            "lineSubMilli": 75838000,
+            "taxMilli": 3791900,
+            "totalMilli": 79629900
+          }
+        },
+        {
+          "unitPriceMilli": 716362,
+          "quantity": 24,
+          "percent": 1.2000000476837158,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 1.2,
+            "lineSubMilli": 17192688,
+            "taxMilli": 206312,
+            "totalMilli": 17399000
+          }
+        },
+        {
+          "unitPriceMilli": 3813417,
+          "quantity": 5,
+          "percent": 12.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 19067085,
+            "taxMilli": 2383386,
+            "totalMilli": 21450471
+          }
+        },
+        {
+          "unitPriceMilli": 293090,
+          "quantity": 50,
+          "percent": 28,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 28,
+            "lineSubMilli": 14654500,
+            "taxMilli": 3205672,
+            "totalMilli": 14654500
+          }
+        },
+        {
+          "unitPriceMilli": 8177761,
+          "quantity": 2,
+          "percent": 12.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 16355522,
+            "taxMilli": 2044440,
+            "totalMilli": 18399962
+          }
+        },
+        {
+          "unitPriceMilli": 7883302,
+          "quantity": 18,
+          "percent": 2.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 141899436,
+            "taxMilli": 3547486,
+            "totalMilli": 145446922
+          }
+        },
+        {
+          "unitPriceMilli": 5595841,
+          "quantity": 24,
+          "percent": 2.5,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 134300184,
+            "taxMilli": 0,
+            "totalMilli": 134300184
+          }
+        },
+        {
+          "unitPriceMilli": 7955460,
+          "quantity": 6,
+          "percent": 40,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 47732760,
+            "taxMilli": 19093104,
+            "totalMilli": 66825864
+          }
+        },
+        {
+          "unitPriceMilli": 6693175,
+          "quantity": 50,
+          "percent": 1.2000000476837158,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 1.2,
+            "lineSubMilli": 334658750,
+            "taxMilli": 4015905,
+            "totalMilli": 338674655
+          }
+        },
+        {
+          "unitPriceMilli": 1395263,
+          "quantity": 15,
+          "percent": 0,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 0,
+            "lineSubMilli": 20928945,
+            "taxMilli": 0,
+            "totalMilli": 20928945
+          }
+        },
+        {
+          "unitPriceMilli": 4280873,
+          "quantity": 26,
+          "percent": 5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 5,
+            "lineSubMilli": 111302698,
+            "taxMilli": 5300128,
+            "totalMilli": 111302698
+          }
+        },
+        {
+          "unitPriceMilli": 8516977,
+          "quantity": 14,
+          "percent": 3.333333,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 119237678,
+            "taxMilli": 3974550,
+            "totalMilli": 123212228
+          }
+        },
+        {
+          "unitPriceMilli": 4875990,
+          "quantity": 16,
+          "percent": 7.25,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 7.25,
+            "lineSubMilli": 78015840,
+            "taxMilli": 5656148,
+            "totalMilli": 83671988
+          }
+        },
+        {
+          "unitPriceMilli": 5374060,
+          "quantity": 22,
+          "percent": 1.2000000476837158,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 118229320,
+            "taxMilli": 0,
+            "totalMilli": 118229320
+          }
+        },
+        {
+          "unitPriceMilli": 253951,
+          "quantity": 12,
+          "percent": 0,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 3047412,
+            "taxMilli": 0,
+            "totalMilli": 3047412
+          }
+        },
+        {
+          "unitPriceMilli": 8044553,
+          "quantity": 30,
+          "percent": 0,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 241336590,
+            "taxMilli": 0,
+            "totalMilli": 241336590
+          }
+        },
+        {
+          "unitPriceMilli": 4407815,
+          "quantity": 40,
+          "percent": 12,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12,
+            "lineSubMilli": 176312600,
+            "taxMilli": 21157512,
+            "totalMilli": 197470112
+          }
+        },
+        {
+          "unitPriceMilli": 1052418,
+          "quantity": 31,
+          "percent": 0,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 0,
+            "lineSubMilli": 32624958,
+            "taxMilli": 0,
+            "totalMilli": 32624958
+          }
+        },
+        {
+          "unitPriceMilli": 9666400,
+          "quantity": 41,
+          "percent": 18,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 396322400,
+            "taxMilli": 71338032,
+            "totalMilli": 467660432
+          }
+        },
+        {
+          "unitPriceMilli": 770477,
+          "quantity": 44,
+          "percent": 7.25,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 7.25,
+            "lineSubMilli": 33900988,
+            "taxMilli": 2457822,
+            "totalMilli": 36358810
+          }
+        },
+        {
+          "unitPriceMilli": 8734308,
+          "quantity": 3,
+          "percent": 0.1,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 26202924,
+            "taxMilli": 0,
+            "totalMilli": 26202924
+          }
+        },
+        {
+          "unitPriceMilli": 1514167,
+          "quantity": 2,
+          "percent": 16.6667,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 3028334,
+            "taxMilli": 504723,
+            "totalMilli": 3533057
+          }
+        },
+        {
+          "unitPriceMilli": 1004121,
+          "quantity": 10,
+          "percent": 40,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 10041210,
+            "taxMilli": 4016484,
+            "totalMilli": 14057694
+          }
+        },
+        {
+          "unitPriceMilli": 4826852,
+          "quantity": 33,
+          "percent": 16.6667,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 159286116,
+            "taxMilli": 0,
+            "totalMilli": 159286116
+          }
+        },
+        {
+          "unitPriceMilli": 6690066,
+          "quantity": 25,
+          "percent": 18,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 167251650,
+            "taxMilli": 30105297,
+            "totalMilli": 197356947
+          }
+        },
+        {
+          "unitPriceMilli": 6933773,
+          "quantity": 5,
+          "percent": 5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 5,
+            "lineSubMilli": 34668865,
+            "taxMilli": 1650898,
+            "totalMilli": 34668865
+          }
+        },
+        {
+          "unitPriceMilli": 8115247,
+          "quantity": 22,
+          "percent": 2.5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 2.5,
+            "lineSubMilli": 178535434,
+            "taxMilli": 4354523,
+            "totalMilli": 178535434
+          }
+        },
+        {
+          "unitPriceMilli": 6417968,
+          "quantity": 38,
+          "percent": 3.333333,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 243882784,
+            "taxMilli": 8129345,
+            "totalMilli": 252012129
+          }
+        },
+        {
+          "unitPriceMilli": 4988861,
+          "quantity": 43,
+          "percent": 18,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 214521023,
+            "taxMilli": 38613784,
+            "totalMilli": 253134807
+          }
+        },
+        {
+          "unitPriceMilli": 408753,
+          "quantity": 45,
+          "percent": 3.333333,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 18393885,
+            "taxMilli": 613123,
+            "totalMilli": 19007008
+          }
+        },
+        {
+          "unitPriceMilli": 7309624,
+          "quantity": 47,
+          "percent": 0,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 343552328,
+            "taxMilli": 0,
+            "totalMilli": 343552328
+          }
+        },
+        {
+          "unitPriceMilli": 8438563,
+          "quantity": 42,
+          "percent": 1.2000000476837158,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 1.2,
+            "lineSubMilli": 354419646,
+            "taxMilli": 4253036,
+            "totalMilli": 358672682
+          }
+        },
+        {
+          "unitPriceMilli": 4593504,
+          "quantity": 10,
+          "percent": 28,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 45935040,
+            "taxMilli": 0,
+            "totalMilli": 45935040
+          }
+        },
+        {
+          "unitPriceMilli": 7271155,
+          "quantity": 21,
+          "percent": 3.333333,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 152694255,
+            "taxMilli": 5089758,
+            "totalMilli": 157784013
+          }
+        },
+        {
+          "unitPriceMilli": 4418118,
+          "quantity": 15,
+          "percent": 28,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 66271770,
+            "taxMilli": 18556096,
+            "totalMilli": 84827866
+          }
+        },
+        {
+          "unitPriceMilli": 5544403,
+          "quantity": 15,
+          "percent": 2.5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 83166045,
+            "taxMilli": 2079151,
+            "totalMilli": 85245196
+          }
+        },
+        {
+          "unitPriceMilli": 4533666,
+          "quantity": 14,
+          "percent": 16.6667,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 63471324,
+            "taxMilli": 10578575,
+            "totalMilli": 74049899
+          }
+        },
+        {
+          "unitPriceMilli": 6622289,
+          "quantity": 9,
+          "percent": 3.333333,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 59600601,
+            "taxMilli": 1986667,
+            "totalMilli": 61587268
+          }
+        },
+        {
+          "unitPriceMilli": 9007436,
+          "quantity": 20,
+          "percent": 5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 5,
+            "lineSubMilli": 180148720,
+            "taxMilli": 8578510,
+            "totalMilli": 180148720
+          }
+        },
+        {
+          "unitPriceMilli": 7328470,
+          "quantity": 42,
+          "percent": 18,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 307795740,
+            "taxMilli": 55403233,
+            "totalMilli": 363198973
+          }
+        },
+        {
+          "unitPriceMilli": 480548,
+          "quantity": 23,
+          "percent": 18,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 11052604,
+            "taxMilli": 1989469,
+            "totalMilli": 13042073
+          }
+        },
+        {
+          "unitPriceMilli": 3908958,
+          "quantity": 19,
+          "percent": 12,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12,
+            "lineSubMilli": 74270202,
+            "taxMilli": 8912424,
+            "totalMilli": 83182626
+          }
+        },
+        {
+          "unitPriceMilli": 1404456,
+          "quantity": 39,
+          "percent": 1.2000000476837158,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 1.2,
+            "lineSubMilli": 54773784,
+            "taxMilli": 657285,
+            "totalMilli": 55431069
+          }
+        },
+        {
+          "unitPriceMilli": 8308390,
+          "quantity": 49,
+          "percent": 2.5,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 407111110,
+            "taxMilli": 10177778,
+            "totalMilli": 417288888
+          }
+        },
+        {
+          "unitPriceMilli": 1538724,
+          "quantity": 7,
+          "percent": 0.1,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 10771068,
+            "taxMilli": 0,
+            "totalMilli": 10771068
+          }
+        },
+        {
+          "unitPriceMilli": 6563096,
+          "quantity": 30,
+          "percent": 7.25,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 7.25,
+            "lineSubMilli": 196892880,
+            "taxMilli": 14274734,
+            "totalMilli": 211167614
+          }
+        },
+        {
+          "unitPriceMilli": 9277033,
+          "quantity": 27,
+          "percent": 28,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 28,
+            "lineSubMilli": 250479891,
+            "taxMilli": 54792476,
+            "totalMilli": 250479891
+          }
+        },
+        {
+          "unitPriceMilli": 4413958,
+          "quantity": 5,
+          "percent": 0.1,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0.1,
+            "lineSubMilli": 22069790,
+            "taxMilli": 22070,
+            "totalMilli": 22091860
+          }
+        },
+        {
+          "unitPriceMilli": 3017182,
+          "quantity": 36,
+          "percent": 3.333333,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 108618552,
+            "taxMilli": 0,
+            "totalMilli": 108618552
+          }
+        },
+        {
+          "unitPriceMilli": 1595117,
+          "quantity": 18,
+          "percent": 1.2000000476837158,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 1.2,
+            "lineSubMilli": 28712106,
+            "taxMilli": 344545,
+            "totalMilli": 29056651
+          }
+        },
+        {
+          "unitPriceMilli": 50534,
+          "quantity": 42,
+          "percent": 40,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 2122428,
+            "taxMilli": 848971,
+            "totalMilli": 2971399
+          }
+        },
+        {
+          "unitPriceMilli": 4151327,
+          "quantity": 8,
+          "percent": 3.333333,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 33210616,
+            "taxMilli": 1107009,
+            "totalMilli": 34317625
+          }
+        },
+        {
+          "unitPriceMilli": 5482501,
+          "quantity": 27,
+          "percent": 16.6667,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 148027527,
+            "taxMilli": 24671304,
+            "totalMilli": 172698831
+          }
+        },
+        {
+          "unitPriceMilli": 3403657,
+          "quantity": 8,
+          "percent": 0,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 27229256,
+            "taxMilli": 0,
+            "totalMilli": 27229256
+          }
+        },
+        {
+          "unitPriceMilli": 8205421,
+          "quantity": 40,
+          "percent": 16.6667,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 328216840,
+            "taxMilli": 54702916,
+            "totalMilli": 382919756
+          }
+        },
+        {
+          "unitPriceMilli": 5936326,
+          "quantity": 32,
+          "percent": 40,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 189962432,
+            "taxMilli": 75984973,
+            "totalMilli": 265947405
+          }
+        },
+        {
+          "unitPriceMilli": 8767730,
+          "quantity": 31,
+          "percent": 40,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 271799630,
+            "taxMilli": 108719852,
+            "totalMilli": 380519482
+          }
+        },
+        {
+          "unitPriceMilli": 6742755,
+          "quantity": 43,
+          "percent": 1.2000000476837158,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 1.2,
+            "lineSubMilli": 289938465,
+            "taxMilli": 3438006,
+            "totalMilli": 289938465
+          }
+        },
+        {
+          "unitPriceMilli": 426753,
+          "quantity": 29,
+          "percent": 12,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12,
+            "lineSubMilli": 12375837,
+            "taxMilli": 1485100,
+            "totalMilli": 13860937
+          }
+        },
+        {
+          "unitPriceMilli": 1229711,
+          "quantity": 32,
+          "percent": 28,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 39350752,
+            "taxMilli": 11018211,
+            "totalMilli": 50368963
+          }
+        },
+        {
+          "unitPriceMilli": 1849184,
+          "quantity": 21,
+          "percent": 12.5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 12.5,
+            "lineSubMilli": 38832864,
+            "taxMilli": 4314763,
+            "totalMilli": 38832864
+          }
+        },
+        {
+          "unitPriceMilli": 7527245,
+          "quantity": 45,
+          "percent": 0,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 338726025,
+            "taxMilli": 0,
+            "totalMilli": 338726025
+          }
+        },
+        {
+          "unitPriceMilli": 1173183,
+          "quantity": 24,
+          "percent": 7.25,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 28156392,
+            "taxMilli": 0,
+            "totalMilli": 28156392
+          }
+        },
+        {
+          "unitPriceMilli": 2155441,
+          "quantity": 38,
+          "percent": 7.25,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 7.25,
+            "lineSubMilli": 81906758,
+            "taxMilli": 5938240,
+            "totalMilli": 87844998
+          }
+        },
+        {
+          "unitPriceMilli": 1007533,
+          "quantity": 43,
+          "percent": 5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 5,
+            "lineSubMilli": 43323919,
+            "taxMilli": 2166196,
+            "totalMilli": 45490115
+          }
+        },
+        {
+          "unitPriceMilli": 5995719,
+          "quantity": 46,
+          "percent": 28,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 28,
+            "lineSubMilli": 275803074,
+            "taxMilli": 60331922,
+            "totalMilli": 275803074
+          }
+        },
+        {
+          "unitPriceMilli": 7990272,
+          "quantity": 42,
+          "percent": 3.333333,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 335591424,
+            "taxMilli": 11186269,
+            "totalMilli": 346777693
+          }
+        },
+        {
+          "unitPriceMilli": 3332067,
+          "quantity": 49,
+          "percent": 0.1,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0.1,
+            "lineSubMilli": 163271283,
+            "taxMilli": 163271,
+            "totalMilli": 163434554
+          }
+        },
+        {
+          "unitPriceMilli": 3786028,
+          "quantity": 14,
+          "percent": 12.5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 12.5,
+            "lineSubMilli": 53004392,
+            "taxMilli": 5889377,
+            "totalMilli": 53004392
+          }
+        },
+        {
+          "unitPriceMilli": 6024481,
+          "quantity": 12,
+          "percent": 28,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 72293772,
+            "taxMilli": 20242256,
+            "totalMilli": 92536028
+          }
+        },
+        {
+          "unitPriceMilli": 6287160,
+          "quantity": 36,
+          "percent": 28,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 226337760,
+            "taxMilli": 63374573,
+            "totalMilli": 289712333
+          }
+        },
+        {
+          "unitPriceMilli": 9306935,
+          "quantity": 11,
+          "percent": 3.333333,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 102376285,
+            "taxMilli": 3412509,
+            "totalMilli": 105788794
+          }
+        },
+        {
+          "unitPriceMilli": 3170121,
+          "quantity": 29,
+          "percent": 3.333333,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 91933509,
+            "taxMilli": 3064420,
+            "totalMilli": 94997929
+          }
+        },
+        {
+          "unitPriceMilli": 729458,
+          "quantity": 27,
+          "percent": 40,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 19695366,
+            "taxMilli": 7878146,
+            "totalMilli": 27573512
+          }
+        },
+        {
+          "unitPriceMilli": 423008,
+          "quantity": 2,
+          "percent": 28,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 846016,
+            "taxMilli": 236884,
+            "totalMilli": 1082900
+          }
+        },
+        {
+          "unitPriceMilli": 5293959,
+          "quantity": 48,
+          "percent": 16.6667,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 254110032,
+            "taxMilli": 42351757,
+            "totalMilli": 296461789
+          }
+        },
+        {
+          "unitPriceMilli": 9449816,
+          "quantity": 32,
+          "percent": 28,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 302394112,
+            "taxMilli": 84670351,
+            "totalMilli": 387064463
+          }
+        },
+        {
+          "unitPriceMilli": 2352336,
+          "quantity": 29,
+          "percent": 5,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 5,
+            "lineSubMilli": 68217744,
+            "taxMilli": 3410887,
+            "totalMilli": 71628631
+          }
+        },
+        {
+          "unitPriceMilli": 1064808,
+          "quantity": 36,
+          "percent": 5,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 38333088,
+            "taxMilli": 0,
+            "totalMilli": 38333088
+          }
+        },
+        {
+          "unitPriceMilli": 7359850,
+          "quantity": 10,
+          "percent": 0,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 73598500,
+            "taxMilli": 0,
+            "totalMilli": 73598500
+          }
+        },
+        {
+          "unitPriceMilli": 6672971,
+          "quantity": 39,
+          "percent": 16.6667,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 260245869,
+            "taxMilli": 43374398,
+            "totalMilli": 303620267
+          }
+        },
+        {
+          "unitPriceMilli": 6968068,
+          "quantity": 37,
+          "percent": 12.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 257818516,
+            "taxMilli": 32227315,
+            "totalMilli": 290045831
+          }
+        },
+        {
+          "unitPriceMilli": 8703256,
+          "quantity": 39,
+          "percent": 18,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 339426984,
+            "taxMilli": 61096857,
+            "totalMilli": 400523841
+          }
+        },
+        {
+          "unitPriceMilli": 8402508,
+          "quantity": 37,
+          "percent": 28,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 310892796,
+            "taxMilli": 87049983,
+            "totalMilli": 397942779
+          }
+        },
+        {
+          "unitPriceMilli": 9229435,
+          "quantity": 47,
+          "percent": 12,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12,
+            "lineSubMilli": 433783445,
+            "taxMilli": 52054013,
+            "totalMilli": 485837458
+          }
+        },
+        {
+          "unitPriceMilli": 8129833,
+          "quantity": 6,
+          "percent": 12,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 12,
+            "lineSubMilli": 48778998,
+            "taxMilli": 5226321,
+            "totalMilli": 48778998
+          }
+        },
+        {
+          "unitPriceMilli": 3681719,
+          "quantity": 18,
+          "percent": 12.5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 66270942,
+            "taxMilli": 8283868,
+            "totalMilli": 74554810
+          }
+        },
+        {
+          "unitPriceMilli": 4630306,
+          "quantity": 43,
+          "percent": 7.25,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 7.25,
+            "lineSubMilli": 199103158,
+            "taxMilli": 14434979,
+            "totalMilli": 213538137
+          }
+        },
+        {
+          "unitPriceMilli": 2520910,
+          "quantity": 8,
+          "percent": 12.5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 20167280,
+            "taxMilli": 2520910,
+            "totalMilli": 22688190
+          }
+        },
+        {
+          "unitPriceMilli": 2969575,
+          "quantity": 28,
+          "percent": 0,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 83148100,
+            "taxMilli": 0,
+            "totalMilli": 83148100
+          }
+        },
+        {
+          "unitPriceMilli": 6569657,
+          "quantity": 13,
+          "percent": 0,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 85405541,
+            "taxMilli": 0,
+            "totalMilli": 85405541
+          }
+        },
+        {
+          "unitPriceMilli": 5290185,
+          "quantity": 42,
+          "percent": 12,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12,
+            "lineSubMilli": 222187770,
+            "taxMilli": 26662532,
+            "totalMilli": 248850302
+          }
+        },
+        {
+          "unitPriceMilli": 288397,
+          "quantity": 4,
+          "percent": 2.5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 2.5,
+            "lineSubMilli": 1153588,
+            "taxMilli": 28136,
+            "totalMilli": 1153588
+          }
+        },
+        {
+          "unitPriceMilli": 8298020,
+          "quantity": 24,
+          "percent": 1.2000000476837158,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 199152480,
+            "taxMilli": 0,
+            "totalMilli": 199152480
+          }
+        },
+        {
+          "unitPriceMilli": 1460312,
+          "quantity": 44,
+          "percent": 12,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 64253728,
+            "taxMilli": 0,
+            "totalMilli": 64253728
+          }
+        },
+        {
+          "unitPriceMilli": 2413915,
+          "quantity": 36,
+          "percent": 7.25,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 7.25,
+            "lineSubMilli": 86900940,
+            "taxMilli": 5874423,
+            "totalMilli": 86900940
+          }
+        },
+        {
+          "unitPriceMilli": 4316724,
+          "quantity": 4,
+          "percent": 12,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12,
+            "lineSubMilli": 17266896,
+            "taxMilli": 2072028,
+            "totalMilli": 19338924
+          }
+        },
+        {
+          "unitPriceMilli": 3934594,
+          "quantity": 8,
+          "percent": 28,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 31476752,
+            "taxMilli": 8813491,
+            "totalMilli": 40290243
+          }
+        },
+        {
+          "unitPriceMilli": 4232219,
+          "quantity": 43,
+          "percent": 40,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 181985417,
+            "taxMilli": 72794167,
+            "totalMilli": 254779584
+          }
+        },
+        {
+          "unitPriceMilli": 493711,
+          "quantity": 11,
+          "percent": 5,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 5430821,
+            "taxMilli": 0,
+            "totalMilli": 5430821
+          }
+        },
+        {
+          "unitPriceMilli": 6961988,
+          "quantity": 42,
+          "percent": 16.6667,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 292403496,
+            "taxMilli": 48734013,
+            "totalMilli": 341137509
+          }
+        },
+        {
+          "unitPriceMilli": 9789695,
+          "quantity": 13,
+          "percent": 0,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 0,
+            "lineSubMilli": 127266035,
+            "taxMilli": 0,
+            "totalMilli": 127266035
+          }
+        },
+        {
+          "unitPriceMilli": 7164596,
+          "quantity": 27,
+          "percent": 16.6667,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 193444092,
+            "taxMilli": 0,
+            "totalMilli": 193444092
+          }
+        },
+        {
+          "unitPriceMilli": 6523174,
+          "quantity": 3,
+          "percent": 0,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 19569522,
+            "taxMilli": 0,
+            "totalMilli": 19569522
+          }
+        },
+        {
+          "unitPriceMilli": 242421,
+          "quantity": 10,
+          "percent": 12.5,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 2424210,
+            "taxMilli": 0,
+            "totalMilli": 2424210
+          }
+        },
+        {
+          "unitPriceMilli": 6080269,
+          "quantity": 12,
+          "percent": 28,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 72963228,
+            "taxMilli": 0,
+            "totalMilli": 72963228
+          }
+        },
+        {
+          "unitPriceMilli": 7119041,
+          "quantity": 45,
+          "percent": 40,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 40,
+            "lineSubMilli": 320356845,
+            "taxMilli": 91530527,
+            "totalMilli": 320356845
+          }
+        },
+        {
+          "unitPriceMilli": 2519125,
+          "quantity": 20,
+          "percent": 12.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 50382500,
+            "taxMilli": 6297813,
+            "totalMilli": 56680313
+          }
+        },
+        {
+          "unitPriceMilli": 2634825,
+          "quantity": 35,
+          "percent": 40,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 92218875,
+            "taxMilli": 0,
+            "totalMilli": 92218875
+          }
+        },
+        {
+          "unitPriceMilli": 2661288,
+          "quantity": 41,
+          "percent": 18,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 18,
+            "lineSubMilli": 109112808,
+            "taxMilli": 16644327,
+            "totalMilli": 109112808
+          }
+        },
+        {
+          "unitPriceMilli": 8870355,
+          "quantity": 29,
+          "percent": 12,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12,
+            "lineSubMilli": 257240295,
+            "taxMilli": 30868835,
+            "totalMilli": 288109130
+          }
+        },
+        {
+          "unitPriceMilli": 2137252,
+          "quantity": 26,
+          "percent": 5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 5,
+            "lineSubMilli": 55568552,
+            "taxMilli": 2778428,
+            "totalMilli": 58346980
+          }
+        },
+        {
+          "unitPriceMilli": 1628681,
+          "quantity": 6,
+          "percent": 5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 5,
+            "lineSubMilli": 9772086,
+            "taxMilli": 465337,
+            "totalMilli": 9772086
+          }
+        },
+        {
+          "unitPriceMilli": 4970126,
+          "quantity": 17,
+          "percent": 7.25,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 7.25,
+            "lineSubMilli": 84492142,
+            "taxMilli": 6125680,
+            "totalMilli": 90617822
+          }
+        },
+        {
+          "unitPriceMilli": 7914651,
+          "quantity": 42,
+          "percent": 3.333333,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 332415342,
+            "taxMilli": 10722972,
+            "totalMilli": 332415342
+          }
+        },
+        {
+          "unitPriceMilli": 2942184,
+          "quantity": 36,
+          "percent": 2.5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 105918624,
+            "taxMilli": 2647966,
+            "totalMilli": 108566590
+          }
+        },
+        {
+          "unitPriceMilli": 8676526,
+          "quantity": 1,
+          "percent": 0.1,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0.1,
+            "lineSubMilli": 8676526,
+            "taxMilli": 8677,
+            "totalMilli": 8685203
+          }
+        },
+        {
+          "unitPriceMilli": 7142349,
+          "quantity": 4,
+          "percent": 16.6667,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 28569396,
+            "taxMilli": 4761576,
+            "totalMilli": 33330972
+          }
+        },
+        {
+          "unitPriceMilli": 9331048,
+          "quantity": 40,
+          "percent": 12.5,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 373241920,
+            "taxMilli": 0,
+            "totalMilli": 373241920
+          }
+        },
+        {
+          "unitPriceMilli": 2197628,
+          "quantity": 42,
+          "percent": 3.333333,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 92300376,
+            "taxMilli": 3076648,
+            "totalMilli": 95377024
+          }
+        },
+        {
+          "unitPriceMilli": 1481261,
+          "quantity": 23,
+          "percent": 0.1,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0.1,
+            "lineSubMilli": 34069003,
+            "taxMilli": 34069,
+            "totalMilli": 34103072
+          }
+        },
+        {
+          "unitPriceMilli": 3450581,
+          "quantity": 26,
+          "percent": 7.25,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 89715106,
+            "taxMilli": 0,
+            "totalMilli": 89715106
+          }
+        },
+        {
+          "unitPriceMilli": 1535703,
+          "quantity": 39,
+          "percent": 12.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 59892417,
+            "taxMilli": 7486552,
+            "totalMilli": 67378969
+          }
+        },
+        {
+          "unitPriceMilli": 5161882,
+          "quantity": 47,
+          "percent": 28,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 28,
+            "lineSubMilli": 242608454,
+            "taxMilli": 53070599,
+            "totalMilli": 242608454
+          }
+        },
+        {
+          "unitPriceMilli": 5970800,
+          "quantity": 31,
+          "percent": 2.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 185094800,
+            "taxMilli": 4627370,
+            "totalMilli": 189722170
+          }
+        },
+        {
+          "unitPriceMilli": 2450901,
+          "quantity": 20,
+          "percent": 28,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 28,
+            "lineSubMilli": 49018020,
+            "taxMilli": 10722692,
+            "totalMilli": 49018020
+          }
+        },
+        {
+          "unitPriceMilli": 5819102,
+          "quantity": 24,
+          "percent": 3.333333,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 139658448,
+            "taxMilli": 0,
+            "totalMilli": 139658448
+          }
+        },
+        {
+          "unitPriceMilli": 8715069,
+          "quantity": 38,
+          "percent": 5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 5,
+            "lineSubMilli": 331172622,
+            "taxMilli": 16558631,
+            "totalMilli": 347731253
+          }
+        },
+        {
+          "unitPriceMilli": 6595382,
+          "quantity": 9,
+          "percent": 3.333333,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 59358438,
+            "taxMilli": 1978595,
+            "totalMilli": 61337033
+          }
+        },
+        {
+          "unitPriceMilli": 7872819,
+          "quantity": 18,
+          "percent": 16.6667,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 141710742,
+            "taxMilli": 23618504,
+            "totalMilli": 165329246
+          }
+        },
+        {
+          "unitPriceMilli": 1286240,
+          "quantity": 33,
+          "percent": 1.2000000476837158,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 1.2,
+            "lineSubMilli": 42445920,
+            "taxMilli": 509351,
+            "totalMilli": 42955271
+          }
+        },
+        {
+          "unitPriceMilli": 5033549,
+          "quantity": 8,
+          "percent": 5,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 40268392,
+            "taxMilli": 0,
+            "totalMilli": 40268392
+          }
+        },
+        {
+          "unitPriceMilli": 7491301,
+          "quantity": 29,
+          "percent": 28,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 217247729,
+            "taxMilli": 60829364,
+            "totalMilli": 278077093
+          }
+        },
+        {
+          "unitPriceMilli": 811202,
+          "quantity": 42,
+          "percent": 28,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 34070484,
+            "taxMilli": 0,
+            "totalMilli": 34070484
+          }
+        },
+        {
+          "unitPriceMilli": 325006,
+          "quantity": 15,
+          "percent": 12.5,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 4875090,
+            "taxMilli": 609386,
+            "totalMilli": 5484476
+          }
+        },
+        {
+          "unitPriceMilli": 9456340,
+          "quantity": 29,
+          "percent": 7.25,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 7.25,
+            "lineSubMilli": 274233860,
+            "taxMilli": 19881955,
+            "totalMilli": 294115815
+          }
+        },
+        {
+          "unitPriceMilli": 4960700,
+          "quantity": 46,
+          "percent": 0.1,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0.1,
+            "lineSubMilli": 228192200,
+            "taxMilli": 228192,
+            "totalMilli": 228420392
+          }
+        },
+        {
+          "unitPriceMilli": 8714770,
+          "quantity": 37,
+          "percent": 0.1,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0.1,
+            "lineSubMilli": 322446490,
+            "taxMilli": 322446,
+            "totalMilli": 322768936
+          }
+        },
+        {
+          "unitPriceMilli": 4009080,
+          "quantity": 41,
+          "percent": 18,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 164372280,
+            "taxMilli": 0,
+            "totalMilli": 164372280
+          }
+        },
+        {
+          "unitPriceMilli": 1909464,
+          "quantity": 44,
+          "percent": 16.6667,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 84016416,
+            "taxMilli": 14002764,
+            "totalMilli": 98019180
+          }
+        },
+        {
+          "unitPriceMilli": 1313085,
+          "quantity": 10,
+          "percent": 12,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12,
+            "lineSubMilli": 13130850,
+            "taxMilli": 1575702,
+            "totalMilli": 14706552
+          }
+        },
+        {
+          "unitPriceMilli": 8336193,
+          "quantity": 30,
+          "percent": 40,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 250085790,
+            "taxMilli": 100034316,
+            "totalMilli": 350120106
+          }
+        },
+        {
+          "unitPriceMilli": 5891790,
+          "quantity": 49,
+          "percent": 3.333333,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 288697710,
+            "taxMilli": 0,
+            "totalMilli": 288697710
+          }
+        },
+        {
+          "unitPriceMilli": 6821252,
+          "quantity": 45,
+          "percent": 1.2000000476837158,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 1.2,
+            "lineSubMilli": 306956340,
+            "taxMilli": 3639798,
+            "totalMilli": 306956340
+          }
+        },
+        {
+          "unitPriceMilli": 4158524,
+          "quantity": 3,
+          "percent": 12.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 12475572,
+            "taxMilli": 1559447,
+            "totalMilli": 14035019
+          }
+        },
+        {
+          "unitPriceMilli": 1090634,
+          "quantity": 49,
+          "percent": 0,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 53441066,
+            "taxMilli": 0,
+            "totalMilli": 53441066
+          }
+        },
+        {
+          "unitPriceMilli": 3961688,
+          "quantity": 20,
+          "percent": 40,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 40,
+            "lineSubMilli": 79233760,
+            "taxMilli": 22638217,
+            "totalMilli": 79233760
+          }
+        },
+        {
+          "unitPriceMilli": 3575093,
+          "quantity": 39,
+          "percent": 28,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 139428627,
+            "taxMilli": 39040016,
+            "totalMilli": 178468643
+          }
+        },
+        {
+          "unitPriceMilli": 7002142,
+          "quantity": 21,
+          "percent": 28,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 147044982,
+            "taxMilli": 0,
+            "totalMilli": 147044982
+          }
+        },
+        {
+          "unitPriceMilli": 6231651,
+          "quantity": 3,
+          "percent": 1.2000000476837158,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 18694953,
+            "taxMilli": 0,
+            "totalMilli": 18694953
+          }
+        },
+        {
+          "unitPriceMilli": 3572416,
+          "quantity": 27,
+          "percent": 40,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 96455232,
+            "taxMilli": 38582093,
+            "totalMilli": 135037325
+          }
+        },
+        {
+          "unitPriceMilli": 7473372,
+          "quantity": 30,
+          "percent": 0.1,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0.1,
+            "lineSubMilli": 224201160,
+            "taxMilli": 224201,
+            "totalMilli": 224425361
+          }
+        },
+        {
+          "unitPriceMilli": 6627053,
+          "quantity": 17,
+          "percent": 0.1,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 112659901,
+            "taxMilli": 0,
+            "totalMilli": 112659901
+          }
+        },
+        {
+          "unitPriceMilli": 8015645,
+          "quantity": 4,
+          "percent": 3.333333,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 32062580,
+            "taxMilli": 1068742,
+            "totalMilli": 33131322
+          }
+        },
+        {
+          "unitPriceMilli": 1997524,
+          "quantity": 50,
+          "percent": 1.2000000476837158,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 1.2,
+            "lineSubMilli": 99876200,
+            "taxMilli": 1198514,
+            "totalMilli": 101074714
+          }
+        },
+        {
+          "unitPriceMilli": 8946326,
+          "quantity": 19,
+          "percent": 3.333333,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 169980194,
+            "taxMilli": 5483179,
+            "totalMilli": 169980194
+          }
+        },
+        {
+          "unitPriceMilli": 3885637,
+          "quantity": 20,
+          "percent": 28,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 28,
+            "lineSubMilli": 77712740,
+            "taxMilli": 16999662,
+            "totalMilli": 77712740
+          }
+        },
+        {
+          "unitPriceMilli": 2601299,
+          "quantity": 13,
+          "percent": 1.2000000476837158,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 33816887,
+            "taxMilli": 0,
+            "totalMilli": 33816887
+          }
+        },
+        {
+          "unitPriceMilli": 4296222,
+          "quantity": 47,
+          "percent": 28,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 201922434,
+            "taxMilli": 56538282,
+            "totalMilli": 258460716
+          }
+        },
+        {
+          "unitPriceMilli": 734060,
+          "quantity": 5,
+          "percent": 1.2000000476837158,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 1.2,
+            "lineSubMilli": 3670300,
+            "taxMilli": 44044,
+            "totalMilli": 3714344
+          }
+        },
+        {
+          "unitPriceMilli": 3807750,
+          "quantity": 15,
+          "percent": 18,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 57116250,
+            "taxMilli": 10280925,
+            "totalMilli": 67397175
+          }
+        },
+        {
+          "unitPriceMilli": 7094407,
+          "quantity": 3,
+          "percent": 1.2000000476837158,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 21283221,
+            "taxMilli": 0,
+            "totalMilli": 21283221
+          }
+        },
+        {
+          "unitPriceMilli": 7323248,
+          "quantity": 1,
+          "percent": 2.5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 7323248,
+            "taxMilli": 183081,
+            "totalMilli": 7506329
+          }
+        },
+        {
+          "unitPriceMilli": 6510175,
+          "quantity": 24,
+          "percent": 0.1,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0.1,
+            "lineSubMilli": 156244200,
+            "taxMilli": 156244,
+            "totalMilli": 156400444
+          }
+        },
+        {
+          "unitPriceMilli": 9056746,
+          "quantity": 28,
+          "percent": 28,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 253588888,
+            "taxMilli": 71004889,
+            "totalMilli": 324593777
+          }
+        },
+        {
+          "unitPriceMilli": 3529564,
+          "quantity": 12,
+          "percent": 5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 5,
+            "lineSubMilli": 42354768,
+            "taxMilli": 2117738,
+            "totalMilli": 44472506
+          }
+        },
+        {
+          "unitPriceMilli": 9768264,
+          "quantity": 18,
+          "percent": 7.25,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 7.25,
+            "lineSubMilli": 175828752,
+            "taxMilli": 11885860,
+            "totalMilli": 175828752
+          }
+        },
+        {
+          "unitPriceMilli": 5655763,
+          "quantity": 20,
+          "percent": 28,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 113115260,
+            "taxMilli": 31672273,
+            "totalMilli": 144787533
+          }
+        },
+        {
+          "unitPriceMilli": 9468676,
+          "quantity": 26,
+          "percent": 0,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 246185576,
+            "taxMilli": 0,
+            "totalMilli": 246185576
+          }
+        },
+        {
+          "unitPriceMilli": 1128290,
+          "quantity": 46,
+          "percent": 5,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 51901340,
+            "taxMilli": 0,
+            "totalMilli": 51901340
+          }
+        },
+        {
+          "unitPriceMilli": 1882445,
+          "quantity": 17,
+          "percent": 0,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 32001565,
+            "taxMilli": 0,
+            "totalMilli": 32001565
+          }
+        },
+        {
+          "unitPriceMilli": 1703451,
+          "quantity": 36,
+          "percent": 7.25,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 7.25,
+            "lineSubMilli": 61324236,
+            "taxMilli": 4446007,
+            "totalMilli": 65770243
+          }
+        },
+        {
+          "unitPriceMilli": 5009646,
+          "quantity": 33,
+          "percent": 12,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 12,
+            "lineSubMilli": 165318318,
+            "taxMilli": 17712677,
+            "totalMilli": 165318318
+          }
+        },
+        {
+          "unitPriceMilli": 4278264,
+          "quantity": 43,
+          "percent": 12.5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 12.5,
+            "lineSubMilli": 183965352,
+            "taxMilli": 20440595,
+            "totalMilli": 183965352
+          }
+        },
+        {
+          "unitPriceMilli": 25296,
+          "quantity": 22,
+          "percent": 2.5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 556512,
+            "taxMilli": 13913,
+            "totalMilli": 570425
+          }
+        },
+        {
+          "unitPriceMilli": 9754743,
+          "quantity": 48,
+          "percent": 12,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 468227664,
+            "taxMilli": 0,
+            "totalMilli": 468227664
+          }
+        },
+        {
+          "unitPriceMilli": 6350171,
+          "quantity": 14,
+          "percent": 3.333333,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 88902394,
+            "taxMilli": 2963383,
+            "totalMilli": 91865777
+          }
+        },
+        {
+          "unitPriceMilli": 1948327,
+          "quantity": 21,
+          "percent": 12.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 40914867,
+            "taxMilli": 5114358,
+            "totalMilli": 46029225
+          }
+        },
+        {
+          "unitPriceMilli": 204497,
+          "quantity": 22,
+          "percent": 2.5,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 4498934,
+            "taxMilli": 112473,
+            "totalMilli": 4611407
+          }
+        },
+        {
+          "unitPriceMilli": 9700793,
+          "quantity": 23,
+          "percent": 40,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 223118239,
+            "taxMilli": 89247296,
+            "totalMilli": 312365535
+          }
+        },
+        {
+          "unitPriceMilli": 9059071,
+          "quantity": 49,
+          "percent": 12,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 443894479,
+            "taxMilli": 0,
+            "totalMilli": 443894479
+          }
+        },
+        {
+          "unitPriceMilli": 4780283,
+          "quantity": 46,
+          "percent": 2.5,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 219893018,
+            "taxMilli": 0,
+            "totalMilli": 219893018
+          }
+        },
+        {
+          "unitPriceMilli": 1235828,
+          "quantity": 15,
+          "percent": 5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 5,
+            "lineSubMilli": 18537420,
+            "taxMilli": 882734,
+            "totalMilli": 18537420
+          }
+        },
+        {
+          "unitPriceMilli": 1418319,
+          "quantity": 38,
+          "percent": 28,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 53896122,
+            "taxMilli": 15090914,
+            "totalMilli": 68987036
+          }
+        },
+        {
+          "unitPriceMilli": 6525480,
+          "quantity": 46,
+          "percent": 0,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 300172080,
+            "taxMilli": 0,
+            "totalMilli": 300172080
+          }
+        },
+        {
+          "unitPriceMilli": 9245459,
+          "quantity": 18,
+          "percent": 28,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 166418262,
+            "taxMilli": 46597113,
+            "totalMilli": 213015375
+          }
+        },
+        {
+          "unitPriceMilli": 4683976,
+          "quantity": 33,
+          "percent": 28,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 154571208,
+            "taxMilli": 43279938,
+            "totalMilli": 197851146
+          }
+        },
+        {
+          "unitPriceMilli": 1928413,
+          "quantity": 41,
+          "percent": 16.6667,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 79064933,
+            "taxMilli": 13177515,
+            "totalMilli": 92242448
+          }
+        },
+        {
+          "unitPriceMilli": 8526675,
+          "quantity": 24,
+          "percent": 40,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 40,
+            "lineSubMilli": 204640200,
+            "taxMilli": 58468629,
+            "totalMilli": 204640200
+          }
+        },
+        {
+          "unitPriceMilli": 3921048,
+          "quantity": 41,
+          "percent": 0,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 160762968,
+            "taxMilli": 0,
+            "totalMilli": 160762968
+          }
+        },
+        {
+          "unitPriceMilli": 8973625,
+          "quantity": 3,
+          "percent": 12,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12,
+            "lineSubMilli": 26920875,
+            "taxMilli": 3230505,
+            "totalMilli": 30151380
+          }
+        },
+        {
+          "unitPriceMilli": 2771324,
+          "quantity": 8,
+          "percent": 0,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 22170592,
+            "taxMilli": 0,
+            "totalMilli": 22170592
+          }
+        },
+        {
+          "unitPriceMilli": 8902290,
+          "quantity": 26,
+          "percent": 3.333333,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 231459540,
+            "taxMilli": 0,
+            "totalMilli": 231459540
+          }
+        },
+        {
+          "unitPriceMilli": 8092928,
+          "quantity": 11,
+          "percent": 3.333333,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 89022208,
+            "taxMilli": 2967377,
+            "totalMilli": 91989585
+          }
+        },
+        {
+          "unitPriceMilli": 5804922,
+          "quantity": 21,
+          "percent": 18,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 121903362,
+            "taxMilli": 21942605,
+            "totalMilli": 143845967
+          }
+        },
+        {
+          "unitPriceMilli": 4388625,
+          "quantity": 26,
+          "percent": 0,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 114104250,
+            "taxMilli": 0,
+            "totalMilli": 114104250
+          }
+        },
+        {
+          "unitPriceMilli": 4241773,
+          "quantity": 43,
+          "percent": 5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 5,
+            "lineSubMilli": 182396239,
+            "taxMilli": 9119812,
+            "totalMilli": 191516051
+          }
+        },
+        {
+          "unitPriceMilli": 5774841,
+          "quantity": 15,
+          "percent": 12,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 86622615,
+            "taxMilli": 0,
+            "totalMilli": 86622615
+          }
+        },
+        {
+          "unitPriceMilli": 5457037,
+          "quantity": 36,
+          "percent": 12,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12,
+            "lineSubMilli": 196453332,
+            "taxMilli": 23574400,
+            "totalMilli": 220027732
+          }
+        },
+        {
+          "unitPriceMilli": 9480599,
+          "quantity": 49,
+          "percent": 0,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 464549351,
+            "taxMilli": 0,
+            "totalMilli": 464549351
+          }
+        },
+        {
+          "unitPriceMilli": 9148047,
+          "quantity": 9,
+          "percent": 0,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 82332423,
+            "taxMilli": 0,
+            "totalMilli": 82332423
+          }
+        },
+        {
+          "unitPriceMilli": 6066633,
+          "quantity": 5,
+          "percent": 0,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 30333165,
+            "taxMilli": 0,
+            "totalMilli": 30333165
+          }
+        },
+        {
+          "unitPriceMilli": 7629963,
+          "quantity": 38,
+          "percent": 28,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 289938594,
+            "taxMilli": 0,
+            "totalMilli": 289938594
+          }
+        },
+        {
+          "unitPriceMilli": 5367360,
+          "quantity": 28,
+          "percent": 40,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 150286080,
+            "taxMilli": 60114432,
+            "totalMilli": 210400512
+          }
+        },
+        {
+          "unitPriceMilli": 9055572,
+          "quantity": 22,
+          "percent": 16.6667,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 199222584,
+            "taxMilli": 33203830,
+            "totalMilli": 232426414
+          }
+        },
+        {
+          "unitPriceMilli": 9564171,
+          "quantity": 41,
+          "percent": 40,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 40,
+            "lineSubMilli": 392131011,
+            "taxMilli": 112037432,
+            "totalMilli": 392131011
+          }
+        },
+        {
+          "unitPriceMilli": 7458086,
+          "quantity": 11,
+          "percent": 18,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 82038946,
+            "taxMilli": 14767010,
+            "totalMilli": 96805956
+          }
+        },
+        {
+          "unitPriceMilli": 7037085,
+          "quantity": 11,
+          "percent": 1.2000000476837158,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 77407935,
+            "taxMilli": 0,
+            "totalMilli": 77407935
+          }
+        },
+        {
+          "unitPriceMilli": 6774157,
+          "quantity": 7,
+          "percent": 0.1,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0.1,
+            "lineSubMilli": 47419099,
+            "taxMilli": 47419,
+            "totalMilli": 47466518
+          }
+        },
+        {
+          "unitPriceMilli": 1075216,
+          "quantity": 23,
+          "percent": 2.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 24729968,
+            "taxMilli": 618249,
+            "totalMilli": 25348217
+          }
+        },
+        {
+          "unitPriceMilli": 7105002,
+          "quantity": 17,
+          "percent": 0,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0,
+            "lineSubMilli": 120785034,
+            "taxMilli": 0,
+            "totalMilli": 120785034
+          }
+        },
+        {
+          "unitPriceMilli": 9222386,
+          "quantity": 12,
+          "percent": 0.1,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0.1,
+            "lineSubMilli": 110668632,
+            "taxMilli": 110669,
+            "totalMilli": 110779301
+          }
+        },
+        {
+          "unitPriceMilli": 7897853,
+          "quantity": 44,
+          "percent": 2.5,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 347505532,
+            "taxMilli": 8687638,
+            "totalMilli": 356193170
+          }
+        },
+        {
+          "unitPriceMilli": 5536959,
+          "quantity": 39,
+          "percent": 0.1,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 215941401,
+            "taxMilli": 0,
+            "totalMilli": 215941401
+          }
+        },
+        {
+          "unitPriceMilli": 9302290,
+          "quantity": 29,
+          "percent": 40,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 269766410,
+            "taxMilli": 107906564,
+            "totalMilli": 377672974
+          }
+        },
+        {
+          "unitPriceMilli": 3306794,
+          "quantity": 43,
+          "percent": 12.5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 142192142,
+            "taxMilli": 17774018,
+            "totalMilli": 159966160
+          }
+        },
+        {
+          "unitPriceMilli": 4438291,
+          "quantity": 6,
+          "percent": 5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 5,
+            "lineSubMilli": 26629746,
+            "taxMilli": 1331487,
+            "totalMilli": 27961233
+          }
+        },
+        {
+          "unitPriceMilli": 8156636,
+          "quantity": 14,
+          "percent": 1.2000000476837158,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 1.2,
+            "lineSubMilli": 114192904,
+            "taxMilli": 1370315,
+            "totalMilli": 115563219
+          }
+        },
+        {
+          "unitPriceMilli": 3937375,
+          "quantity": 1,
+          "percent": 40,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 40,
+            "lineSubMilli": 3937375,
+            "taxMilli": 1124964,
+            "totalMilli": 3937375
+          }
+        },
+        {
+          "unitPriceMilli": 1541729,
+          "quantity": 19,
+          "percent": 18,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 29292851,
+            "taxMilli": 5272713,
+            "totalMilli": 34565564
+          }
+        },
+        {
+          "unitPriceMilli": 5440931,
+          "quantity": 29,
+          "percent": 12.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12.5,
+            "lineSubMilli": 157786999,
+            "taxMilli": 19723375,
+            "totalMilli": 177510374
+          }
+        },
+        {
+          "unitPriceMilli": 9514506,
+          "quantity": 47,
+          "percent": 28,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 447181782,
+            "taxMilli": 125210899,
+            "totalMilli": 572392681
+          }
+        },
+        {
+          "unitPriceMilli": 6168778,
+          "quantity": 22,
+          "percent": 40,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 135713116,
+            "taxMilli": 0,
+            "totalMilli": 135713116
+          }
+        },
+        {
+          "unitPriceMilli": 8684787,
+          "quantity": 7,
+          "percent": 40,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 60793509,
+            "taxMilli": 24317404,
+            "totalMilli": 85110913
+          }
+        },
+        {
+          "unitPriceMilli": 9359495,
+          "quantity": 4,
+          "percent": 7.25,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 7.25,
+            "lineSubMilli": 37437980,
+            "taxMilli": 2530773,
+            "totalMilli": 37437980
+          }
+        },
+        {
+          "unitPriceMilli": 3865875,
+          "quantity": 1,
+          "percent": 0.1,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 0.1,
+            "lineSubMilli": 3865875,
+            "taxMilli": 3866,
+            "totalMilli": 3869741
+          }
+        },
+        {
+          "unitPriceMilli": 7250630,
+          "quantity": 49,
+          "percent": 3.333333,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 3.3333,
+            "lineSubMilli": 355280870,
+            "taxMilli": 11842577,
+            "totalMilli": 367123447
+          }
+        },
+        {
+          "unitPriceMilli": 6748671,
+          "quantity": 14,
+          "percent": 1.2000000476837158,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 94481394,
+            "taxMilli": 0,
+            "totalMilli": 94481394
+          }
+        },
+        {
+          "unitPriceMilli": 6400609,
+          "quantity": 46,
+          "percent": 28,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 294428014,
+            "taxMilli": 82439844,
+            "totalMilli": 376867858
+          }
+        },
+        {
+          "unitPriceMilli": 7398675,
+          "quantity": 5,
+          "percent": 12.5,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 36993375,
+            "taxMilli": 0,
+            "totalMilli": 36993375
+          }
+        },
+        {
+          "unitPriceMilli": 3201067,
+          "quantity": 4,
+          "percent": 12,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12,
+            "lineSubMilli": 12804268,
+            "taxMilli": 1536512,
+            "totalMilli": 14340780
+          }
+        },
+        {
+          "unitPriceMilli": 3595985,
+          "quantity": 22,
+          "percent": 18,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 18,
+            "lineSubMilli": 79111670,
+            "taxMilli": 14240101,
+            "totalMilli": 93351771
+          }
+        },
+        {
+          "unitPriceMilli": 9521200,
+          "quantity": 36,
+          "percent": 16.6667,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 342763200,
+            "taxMilli": 57127314,
+            "totalMilli": 399890514
+          }
+        },
+        {
+          "unitPriceMilli": 7723619,
+          "quantity": 3,
+          "percent": 2.5,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 23170857,
+            "taxMilli": 0,
+            "totalMilli": 23170857
+          }
+        },
+        {
+          "unitPriceMilli": 272847,
+          "quantity": 24,
+          "percent": 40,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 6548328,
+            "taxMilli": 2619331,
+            "totalMilli": 9167659
+          }
+        },
+        {
+          "unitPriceMilli": 5604546,
+          "quantity": 48,
+          "percent": 0,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 0,
+            "lineSubMilli": 269018208,
+            "taxMilli": 0,
+            "totalMilli": 269018208
+          }
+        },
+        {
+          "unitPriceMilli": 801067,
+          "quantity": 41,
+          "percent": 0,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 0,
+            "lineSubMilli": 32843747,
+            "taxMilli": 0,
+            "totalMilli": 32843747
+          }
+        },
+        {
+          "unitPriceMilli": 5076011,
+          "quantity": 33,
+          "percent": 1.2000000476837158,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 1.2,
+            "lineSubMilli": 167508363,
+            "taxMilli": 2010100,
+            "totalMilli": 169518463
+          }
+        },
+        {
+          "unitPriceMilli": 2821846,
+          "quantity": 37,
+          "percent": 28,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 104408302,
+            "taxMilli": 0,
+            "totalMilli": 104408302
+          }
+        },
+        {
+          "unitPriceMilli": 1789408,
+          "quantity": 12,
+          "percent": 18,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 18,
+            "lineSubMilli": 21472896,
+            "taxMilli": 3275527,
+            "totalMilli": 21472896
+          }
+        },
+        {
+          "unitPriceMilli": 1549693,
+          "quantity": 6,
+          "percent": 28,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 9298158,
+            "taxMilli": 2603484,
+            "totalMilli": 11901642
+          }
+        },
+        {
+          "unitPriceMilli": 3753730,
+          "quantity": 2,
+          "percent": 40,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 40,
+            "lineSubMilli": 7507460,
+            "taxMilli": 3002984,
+            "totalMilli": 10510444
+          }
+        },
+        {
+          "unitPriceMilli": 3761630,
+          "quantity": 2,
+          "percent": 5,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 5,
+            "lineSubMilli": 7523260,
+            "taxMilli": 376163,
+            "totalMilli": 7899423
+          }
+        },
+        {
+          "unitPriceMilli": 5929765,
+          "quantity": 2,
+          "percent": 16.6667,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 11859530,
+            "taxMilli": 0,
+            "totalMilli": 11859530
+          }
+        },
+        {
+          "unitPriceMilli": 1111848,
+          "quantity": 21,
+          "percent": 28,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 23348808,
+            "taxMilli": 6537666,
+            "totalMilli": 29886474
+          }
+        },
+        {
+          "unitPriceMilli": 2505974,
+          "quantity": 43,
+          "percent": 1.2000000476837158,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 1.2,
+            "lineSubMilli": 107756882,
+            "taxMilli": 1293083,
+            "totalMilli": 109049965
+          }
+        },
+        {
+          "unitPriceMilli": 8996493,
+          "quantity": 17,
+          "percent": 5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 5,
+            "lineSubMilli": 152940381,
+            "taxMilli": 7282875,
+            "totalMilli": 152940381
+          }
+        },
+        {
+          "unitPriceMilli": 8365025,
+          "quantity": 50,
+          "percent": 16.6667,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 418251250,
+            "taxMilli": 69708681,
+            "totalMilli": 487959931
+          }
+        },
+        {
+          "unitPriceMilli": 3139909,
+          "quantity": 48,
+          "percent": 28,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 150715632,
+            "taxMilli": 42200377,
+            "totalMilli": 192916009
+          }
+        },
+        {
+          "unitPriceMilli": 3395682,
+          "quantity": 2,
+          "percent": 0,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 0,
+            "lineSubMilli": 6791364,
+            "taxMilli": 0,
+            "totalMilli": 6791364
+          }
+        },
+        {
+          "unitPriceMilli": 5786320,
+          "quantity": 22,
+          "percent": 12,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 12,
+            "lineSubMilli": 127299040,
+            "taxMilli": 15275885,
+            "totalMilli": 142574925
+          }
+        },
+        {
+          "unitPriceMilli": 4845048,
+          "quantity": 21,
+          "percent": 3.333333,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 101746008,
+            "taxMilli": 0,
+            "totalMilli": 101746008
+          }
+        },
+        {
+          "unitPriceMilli": 3625083,
+          "quantity": 38,
+          "percent": 3.333333,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 137753154,
+            "taxMilli": 0,
+            "totalMilli": 137753154
+          }
+        },
+        {
+          "unitPriceMilli": 9656020,
+          "quantity": 13,
+          "percent": 7.25,
+          "inclTax": null,
+          "expected": {
+            "mode": "exclusive",
+            "percent": 7.25,
+            "lineSubMilli": 125528260,
+            "taxMilli": 9100799,
+            "totalMilli": 134629059
+          }
+        },
+        {
+          "unitPriceMilli": 1697687,
+          "quantity": 46,
+          "percent": 12.5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 12.5,
+            "lineSubMilli": 78093602,
+            "taxMilli": 8677067,
+            "totalMilli": 78093602
+          }
+        },
+        {
+          "unitPriceMilli": 5734592,
+          "quantity": 5,
+          "percent": 2.5,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 28672960,
+            "taxMilli": 716824,
+            "totalMilli": 29389784
+          }
+        },
+        {
+          "unitPriceMilli": 2568533,
+          "quantity": 3,
+          "percent": 1.2000000476837158,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 1.2,
+            "lineSubMilli": 7705599,
+            "taxMilli": 91371,
+            "totalMilli": 7705599
+          }
+        },
+        {
+          "unitPriceMilli": 5220502,
+          "quantity": 43,
+          "percent": 5,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 5,
+            "lineSubMilli": 224481586,
+            "taxMilli": 11224079,
+            "totalMilli": 235705665
+          }
+        },
+        {
+          "unitPriceMilli": 1241171,
+          "quantity": 25,
+          "percent": 28,
+          "inclTax": "excl",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 28,
+            "lineSubMilli": 31029275,
+            "taxMilli": 8688197,
+            "totalMilli": 39717472
+          }
+        },
+        {
+          "unitPriceMilli": 3613388,
+          "quantity": 1,
+          "percent": 5,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 5,
+            "lineSubMilli": 3613388,
+            "taxMilli": 180669,
+            "totalMilli": 3794057
+          }
+        },
+        {
+          "unitPriceMilli": 5132897,
+          "quantity": 4,
+          "percent": 7.25,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 7.25,
+            "lineSubMilli": 20531588,
+            "taxMilli": 1488540,
+            "totalMilli": 22020128
+          }
+        },
+        {
+          "unitPriceMilli": 4118157,
+          "quantity": 39,
+          "percent": 3.333333,
+          "inclTax": "N.A",
+          "expected": {
+            "mode": "none",
+            "percent": 0,
+            "lineSubMilli": 160608123,
+            "taxMilli": 0,
+            "totalMilli": 160608123
+          }
+        },
+        {
+          "unitPriceMilli": 6405057,
+          "quantity": 12,
+          "percent": 2.5,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 2.5,
+            "lineSubMilli": 76860684,
+            "taxMilli": 1921517,
+            "totalMilli": 78782201
+          }
+        },
+        {
+          "unitPriceMilli": 3263369,
+          "quantity": 26,
+          "percent": 12.5,
+          "inclTax": "incl_tax",
+          "expected": {
+            "mode": "inclusive",
+            "percent": 12.5,
+            "lineSubMilli": 84847594,
+            "taxMilli": 9427510,
+            "totalMilli": 84847594
+          }
+        },
+        {
+          "unitPriceMilli": 3114164,
+          "quantity": 1,
+          "percent": 16.6667,
+          "inclTax": "",
+          "expected": {
+            "mode": "exclusive",
+            "percent": 16.6667,
+            "lineSubMilli": 3114164,
+            "taxMilli": 519028,
+            "totalMilli": 3633192
+          }
+        }
+      ]
+    }
+  },
+  "lines": [
+    {
+      "id": "E01",
+      "description": "INR exclusive single 18%: 17.9982 rounds to 18.00",
+      "input": {
+        "currency": "INR",
+        "amount": "99.99",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "expected": {
+        "base": "99.99",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18",
+            "tax": "18.00"
+          }
+        ],
+        "taxTotal": "18.00",
+        "total": "117.99",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E02",
+      "description": "INR exclusive CGST 9 + SGST 9: 7.6275 each",
+      "input": {
+        "currency": "INR",
+        "amount": "84.75",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9"
+          },
+          {
+            "code": "SGST",
+            "rate": "9"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "expected": {
+        "base": "84.75",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9",
+            "tax": "7.63"
+          },
+          {
+            "code": "SGST",
+            "rate": "9",
+            "tax": "7.63"
+          }
+        ],
+        "taxTotal": "15.26",
+        "total": "100.01",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E03",
+      "description": "INR inclusive single 18% from gross",
+      "input": {
+        "currency": "INR",
+        "amount": "100.00",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "COMPONENT_FROM_GROSS"
+        }
+      },
+      "expected": {
+        "base": "84.75",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18",
+            "tax": "15.25"
+          }
+        ],
+        "taxTotal": "15.25",
+        "total": "100.00",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E04",
+      "description": "INR inclusive 9+9 COMPONENT_FROM_GROSS: base absorbs the residue",
+      "input": {
+        "currency": "INR",
+        "amount": "100.00",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9"
+          },
+          {
+            "code": "SGST",
+            "rate": "9"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "COMPONENT_FROM_GROSS"
+        }
+      },
+      "expected": {
+        "base": "84.74",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9",
+            "tax": "7.63"
+          },
+          {
+            "code": "SGST",
+            "rate": "9",
+            "tax": "7.63"
+          }
+        ],
+        "taxTotal": "15.26",
+        "total": "100.00",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E05",
+      "description": "INR inclusive 9+9 BASE_FIRST, residue -0.01 to BASE",
+      "input": {
+        "currency": "INR",
+        "amount": "100.00",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9"
+          },
+          {
+            "code": "SGST",
+            "rate": "9"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "BASE_FIRST",
+          "residueTarget": "BASE"
+        }
+      },
+      "expected": {
+        "base": "84.74",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9",
+            "tax": "7.63"
+          },
+          {
+            "code": "SGST",
+            "rate": "9",
+            "tax": "7.63"
+          }
+        ],
+        "taxTotal": "15.26",
+        "total": "100.00",
+        "residue": "-0.01",
+        "residueAppliedTo": "BASE"
+      }
+    },
+    {
+      "id": "E06",
+      "description": "INR inclusive 9+9 BASE_FIRST, residue to LARGEST_COMPONENT (tie: first)",
+      "input": {
+        "currency": "INR",
+        "amount": "100.00",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9"
+          },
+          {
+            "code": "SGST",
+            "rate": "9"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "BASE_FIRST",
+          "residueTarget": "LARGEST_COMPONENT"
+        }
+      },
+      "expected": {
+        "base": "84.75",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9",
+            "tax": "7.62"
+          },
+          {
+            "code": "SGST",
+            "rate": "9",
+            "tax": "7.63"
+          }
+        ],
+        "taxTotal": "15.25",
+        "total": "100.00",
+        "residue": "-0.01",
+        "residueAppliedTo": "LARGEST_COMPONENT"
+      }
+    },
+    {
+      "id": "E07",
+      "description": "INR inclusive 9+9 BASE_FIRST, residue COMPONENTS_PROPORTIONAL",
+      "input": {
+        "currency": "INR",
+        "amount": "100.00",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9"
+          },
+          {
+            "code": "SGST",
+            "rate": "9"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "BASE_FIRST",
+          "residueTarget": "COMPONENTS_PROPORTIONAL"
+        }
+      },
+      "expected": {
+        "base": "84.75",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9",
+            "tax": "7.62"
+          },
+          {
+            "code": "SGST",
+            "rate": "9",
+            "tax": "7.63"
+          }
+        ],
+        "taxTotal": "15.25",
+        "total": "100.00",
+        "residue": "-0.01",
+        "residueAppliedTo": "COMPONENTS_PROPORTIONAL"
+      }
+    },
+    {
+      "id": "E08",
+      "description": "INR inclusive three components BASE_FIRST: +0.01 residue allocated proportionally (largest remainder)",
+      "input": {
+        "currency": "INR",
+        "amount": "10.04",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "X",
+            "rate": "7"
+          },
+          {
+            "code": "Y",
+            "rate": "3.5"
+          },
+          {
+            "code": "Z",
+            "rate": "1.25"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "BASE_FIRST",
+          "residueTarget": "COMPONENTS_PROPORTIONAL"
+        }
+      },
+      "expected": {
+        "base": "8.98",
+        "components": [
+          {
+            "code": "X",
+            "rate": "7",
+            "tax": "0.64"
+          },
+          {
+            "code": "Y",
+            "rate": "3.5",
+            "tax": "0.31"
+          },
+          {
+            "code": "Z",
+            "rate": "1.25",
+            "tax": "0.11"
+          }
+        ],
+        "taxTotal": "1.06",
+        "total": "10.04",
+        "residue": "0.01",
+        "residueAppliedTo": "COMPONENTS_PROPORTIONAL"
+      }
+    },
+    {
+      "id": "E09",
+      "description": "compound exclusive ROUNDED_PRIOR",
+      "input": {
+        "currency": "INR",
+        "amount": "10.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5"
+          },
+          {
+            "code": "B",
+            "rate": "9.975",
+            "basis": "BASE_PLUS_PRIOR"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "compoundBasis": "ROUNDED_PRIOR"
+        }
+      },
+      "expected": {
+        "base": "10.00",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5",
+            "tax": "0.50"
+          },
+          {
+            "code": "B",
+            "rate": "9.975",
+            "tax": "1.05"
+          }
+        ],
+        "taxTotal": "1.55",
+        "total": "11.55",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E10",
+      "description": "compound exclusive UNROUNDED_PRIOR",
+      "input": {
+        "currency": "INR",
+        "amount": "10.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5"
+          },
+          {
+            "code": "B",
+            "rate": "9.975",
+            "basis": "BASE_PLUS_PRIOR"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "compoundBasis": "UNROUNDED_PRIOR"
+        }
+      },
+      "expected": {
+        "base": "10.00",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5",
+            "tax": "0.50"
+          },
+          {
+            "code": "B",
+            "rate": "9.975",
+            "tax": "1.05"
+          }
+        ],
+        "taxTotal": "1.55",
+        "total": "11.55",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E11",
+      "description": "compound exclusive: ROUNDED vs UNROUNDED prior differ (rounded)",
+      "input": {
+        "currency": "INR",
+        "amount": "0.10",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5"
+          },
+          {
+            "code": "B",
+            "rate": "90",
+            "basis": "BASE_PLUS_PRIOR"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "compoundBasis": "ROUNDED_PRIOR"
+        }
+      },
+      "expected": {
+        "base": "0.10",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5",
+            "tax": "0.01"
+          },
+          {
+            "code": "B",
+            "rate": "90",
+            "tax": "0.10"
+          }
+        ],
+        "taxTotal": "0.11",
+        "total": "0.21",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E12",
+      "description": "compound exclusive: ROUNDED vs UNROUNDED prior differ (unrounded)",
+      "input": {
+        "currency": "INR",
+        "amount": "0.10",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5"
+          },
+          {
+            "code": "B",
+            "rate": "90",
+            "basis": "BASE_PLUS_PRIOR"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "compoundBasis": "UNROUNDED_PRIOR"
+        }
+      },
+      "expected": {
+        "base": "0.10",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5",
+            "tax": "0.01"
+          },
+          {
+            "code": "B",
+            "rate": "90",
+            "tax": "0.09"
+          }
+        ],
+        "taxTotal": "0.10",
+        "total": "0.20",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E13",
+      "description": "compound inclusive COMPONENT_FROM_GROSS (unrounded prior)",
+      "input": {
+        "currency": "INR",
+        "amount": "11.55",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5"
+          },
+          {
+            "code": "B",
+            "rate": "9.975",
+            "basis": "BASE_PLUS_PRIOR"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "COMPONENT_FROM_GROSS",
+          "compoundBasis": "UNROUNDED_PRIOR"
+        }
+      },
+      "expected": {
+        "base": "10.00",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5",
+            "tax": "0.50"
+          },
+          {
+            "code": "B",
+            "rate": "9.975",
+            "tax": "1.05"
+          }
+        ],
+        "taxTotal": "1.55",
+        "total": "11.55",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E14",
+      "description": "compound inclusive COMPONENT_FROM_GROSS with ROUNDED_PRIOR is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "11.55",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5"
+          },
+          {
+            "code": "B",
+            "rate": "9.975",
+            "basis": "BASE_PLUS_PRIOR"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "COMPONENT_FROM_GROSS",
+          "compoundBasis": "ROUNDED_PRIOR"
+        }
+      },
+      "errorCode": "UNSUPPORTED_COMBINATION"
+    },
+    {
+      "id": "E15",
+      "description": "compound inclusive BASE_FIRST ROUNDED_PRIOR residue to BASE",
+      "input": {
+        "currency": "INR",
+        "amount": "11.55",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5"
+          },
+          {
+            "code": "B",
+            "rate": "9.975",
+            "basis": "BASE_PLUS_PRIOR"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "BASE_FIRST",
+          "residueTarget": "BASE",
+          "compoundBasis": "ROUNDED_PRIOR"
+        }
+      },
+      "expected": {
+        "base": "10.00",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5",
+            "tax": "0.50"
+          },
+          {
+            "code": "B",
+            "rate": "9.975",
+            "tax": "1.05"
+          }
+        ],
+        "taxTotal": "1.55",
+        "total": "11.55",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E16",
+      "description": "compound without compoundBasis is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "10.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "A",
+            "rate": "5"
+          },
+          {
+            "code": "B",
+            "rate": "9.975",
+            "basis": "BASE_PLUS_PRIOR"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "INVALID_POLICY"
+    },
+    {
+      "id": "E17",
+      "description": "zero-rated exclusive",
+      "input": {
+        "currency": "INR",
+        "amount": "50.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "ZERO_RATED",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "0"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "expected": {
+        "base": "50.00",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "0",
+            "tax": "0.00"
+          }
+        ],
+        "taxTotal": "0.00",
+        "total": "50.00",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E18",
+      "description": "zero-rated inclusive",
+      "input": {
+        "currency": "INR",
+        "amount": "50.00",
+        "pricing": "INCLUSIVE",
+        "classKind": "ZERO_RATED",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "0.000"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "COMPONENT_FROM_GROSS"
+        }
+      },
+      "expected": {
+        "base": "50.00",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "0.000",
+            "tax": "0.00"
+          }
+        ],
+        "taxTotal": "0.00",
+        "total": "50.00",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E19",
+      "description": "exempt: no components",
+      "input": {
+        "currency": "INR",
+        "amount": "50.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "EXEMPT",
+        "components": [],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "expected": {
+        "base": "50.00",
+        "components": [],
+        "taxTotal": "0.00",
+        "total": "50.00",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E20",
+      "description": "out of scope: no components",
+      "input": {
+        "currency": "INR",
+        "amount": "50.00",
+        "pricing": "INCLUSIVE",
+        "classKind": "OUT_OF_SCOPE",
+        "components": [],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "COMPONENT_FROM_GROSS"
+        }
+      },
+      "expected": {
+        "base": "50.00",
+        "components": [],
+        "taxTotal": "0.00",
+        "total": "50.00",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E21",
+      "description": "exempt with components is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "50.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "EXEMPT",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "INVALID_COMPONENTS"
+    },
+    {
+      "id": "E22",
+      "description": "zero-rated with a non-zero rate is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "50.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "ZERO_RATED",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "INVALID_COMPONENTS"
+    },
+    {
+      "id": "E23",
+      "description": "taxable without components is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "50.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "INVALID_COMPONENTS"
+    },
+    {
+      "id": "E24",
+      "description": "HALF_UP at exactly half (0.025)",
+      "input": {
+        "currency": "INR",
+        "amount": "0.50",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "T",
+            "rate": "5"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "expected": {
+        "base": "0.50",
+        "components": [
+          {
+            "code": "T",
+            "rate": "5",
+            "tax": "0.03"
+          }
+        ],
+        "taxTotal": "0.03",
+        "total": "0.53",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E25",
+      "description": "HALF_EVEN at exactly half (0.025 -> 0.02)",
+      "input": {
+        "currency": "INR",
+        "amount": "0.50",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "T",
+            "rate": "5"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_EVEN"
+        }
+      },
+      "expected": {
+        "base": "0.50",
+        "components": [
+          {
+            "code": "T",
+            "rate": "5",
+            "tax": "0.02"
+          }
+        ],
+        "taxTotal": "0.02",
+        "total": "0.52",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E26",
+      "description": "DOWN at exactly half",
+      "input": {
+        "currency": "INR",
+        "amount": "0.50",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "T",
+            "rate": "5"
+          }
+        ],
+        "policy": {
+          "roundingMode": "DOWN"
+        }
+      },
+      "expected": {
+        "base": "0.50",
+        "components": [
+          {
+            "code": "T",
+            "rate": "5",
+            "tax": "0.02"
+          }
+        ],
+        "taxTotal": "0.02",
+        "total": "0.52",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E27",
+      "description": "HALF_EVEN at half with odd quotient (0.035 -> 0.04)",
+      "input": {
+        "currency": "INR",
+        "amount": "0.70",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "T",
+            "rate": "5"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_EVEN"
+        }
+      },
+      "expected": {
+        "base": "0.70",
+        "components": [
+          {
+            "code": "T",
+            "rate": "5",
+            "tax": "0.04"
+          }
+        ],
+        "taxTotal": "0.04",
+        "total": "0.74",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E28",
+      "description": "DOWN below half",
+      "input": {
+        "currency": "INR",
+        "amount": "0.70",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "T",
+            "rate": "5"
+          }
+        ],
+        "policy": {
+          "roundingMode": "DOWN"
+        }
+      },
+      "expected": {
+        "base": "0.70",
+        "components": [
+          {
+            "code": "T",
+            "rate": "5",
+            "tax": "0.03"
+          }
+        ],
+        "taxTotal": "0.03",
+        "total": "0.73",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E29",
+      "description": "JPY exclusive 10%",
+      "input": {
+        "currency": "JPY",
+        "amount": "1000",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CT",
+            "rate": "10"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "expected": {
+        "base": "1000",
+        "components": [
+          {
+            "code": "CT",
+            "rate": "10",
+            "tax": "100"
+          }
+        ],
+        "taxTotal": "100",
+        "total": "1100",
+        "residue": "0",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E30",
+      "description": "JPY inclusive 10% from gross",
+      "input": {
+        "currency": "JPY",
+        "amount": "333",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CT",
+            "rate": "10"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "COMPONENT_FROM_GROSS"
+        }
+      },
+      "expected": {
+        "base": "303",
+        "components": [
+          {
+            "code": "CT",
+            "rate": "10",
+            "tax": "30"
+          }
+        ],
+        "taxTotal": "30",
+        "total": "333",
+        "residue": "0",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E31",
+      "description": "JPY HALF_UP at half (0.5 -> 1)",
+      "input": {
+        "currency": "JPY",
+        "amount": "5",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CT",
+            "rate": "10"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "expected": {
+        "base": "5",
+        "components": [
+          {
+            "code": "CT",
+            "rate": "10",
+            "tax": "1"
+          }
+        ],
+        "taxTotal": "1",
+        "total": "6",
+        "residue": "0",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E32",
+      "description": "JPY HALF_EVEN at half (0.5 -> 0)",
+      "input": {
+        "currency": "JPY",
+        "amount": "5",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CT",
+            "rate": "10"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_EVEN"
+        }
+      },
+      "expected": {
+        "base": "5",
+        "components": [
+          {
+            "code": "CT",
+            "rate": "10",
+            "tax": "0"
+          }
+        ],
+        "taxTotal": "0",
+        "total": "5",
+        "residue": "0",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E33",
+      "description": "JPY fractional amount is refused",
+      "input": {
+        "currency": "JPY",
+        "amount": "1000.5",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CT",
+            "rate": "10"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "AMOUNT_NOT_REPRESENTABLE"
+    },
+    {
+      "id": "E34",
+      "description": "KWD 3 decimals HALF_UP (0.1875 -> 0.188)",
+      "input": {
+        "currency": "KWD",
+        "amount": "3.750",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "VAT",
+            "rate": "5"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "expected": {
+        "base": "3.750",
+        "components": [
+          {
+            "code": "VAT",
+            "rate": "5",
+            "tax": "0.188"
+          }
+        ],
+        "taxTotal": "0.188",
+        "total": "3.938",
+        "residue": "0.000",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E35",
+      "description": "KWD HALF_EVEN (0.1875 -> 0.188, odd quotient)",
+      "input": {
+        "currency": "KWD",
+        "amount": "3.750",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "VAT",
+            "rate": "5"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_EVEN"
+        }
+      },
+      "expected": {
+        "base": "3.750",
+        "components": [
+          {
+            "code": "VAT",
+            "rate": "5",
+            "tax": "0.188"
+          }
+        ],
+        "taxTotal": "0.188",
+        "total": "3.938",
+        "residue": "0.000",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E36",
+      "description": "KWD DOWN (0.1875 -> 0.187)",
+      "input": {
+        "currency": "KWD",
+        "amount": "3.750",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "VAT",
+            "rate": "5"
+          }
+        ],
+        "policy": {
+          "roundingMode": "DOWN"
+        }
+      },
+      "expected": {
+        "base": "3.750",
+        "components": [
+          {
+            "code": "VAT",
+            "rate": "5",
+            "tax": "0.187"
+          }
+        ],
+        "taxTotal": "0.187",
+        "total": "3.937",
+        "residue": "0.000",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E37",
+      "description": "KWD HALF_EVEN (0.1125 -> 0.112, even quotient)",
+      "input": {
+        "currency": "KWD",
+        "amount": "2.25",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "VAT",
+            "rate": "5"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_EVEN"
+        }
+      },
+      "expected": {
+        "base": "2.250",
+        "components": [
+          {
+            "code": "VAT",
+            "rate": "5",
+            "tax": "0.112"
+          }
+        ],
+        "taxTotal": "0.112",
+        "total": "2.362",
+        "residue": "0.000",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E38",
+      "description": "INR amount with more than 2 decimals is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "1.005",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "AMOUNT_NOT_REPRESENTABLE"
+    },
+    {
+      "id": "E39",
+      "description": "amount given as a number (float) is refused",
+      "input": {
+        "currency": "INR",
+        "amount": 1.5,
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "INVALID_AMOUNT"
+    },
+    {
+      "id": "E40",
+      "description": "negative amount is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "-1.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "INVALID_AMOUNT"
+    },
+    {
+      "id": "E41",
+      "description": "rate given as a number is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "1.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": 18
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "INVALID_RATE"
+    },
+    {
+      "id": "E42",
+      "description": "negative rate is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "1.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "-5"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "INVALID_RATE"
+    },
+    {
+      "id": "E43",
+      "description": "rate with 7 decimals is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "1.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "1.2345678"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "INVALID_RATE"
+    },
+    {
+      "id": "E44",
+      "description": "unknown currency is refused",
+      "input": {
+        "currency": "XYZ",
+        "amount": "1.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "UNKNOWN_CURRENCY"
+    },
+    {
+      "id": "E45",
+      "description": "missing rounding mode is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "1.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18"
+          }
+        ],
+        "policy": {}
+      },
+      "errorCode": "INVALID_POLICY"
+    },
+    {
+      "id": "E46",
+      "description": "inclusive without inclusiveMethod is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "1.00",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "INVALID_POLICY"
+    },
+    {
+      "id": "E47",
+      "description": "BASE_FIRST without residueTarget is refused",
+      "input": {
+        "currency": "INR",
+        "amount": "1.00",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "BASE_FIRST"
+        }
+      },
+      "errorCode": "INVALID_POLICY"
+    },
+    {
+      "id": "E48",
+      "description": "duplicate component codes are refused",
+      "input": {
+        "currency": "INR",
+        "amount": "1.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "9"
+          },
+          {
+            "code": "GST",
+            "rate": "9"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "errorCode": "INVALID_COMPONENTS"
+    },
+    {
+      "id": "E49",
+      "description": "smallest amount: tax rounds to zero",
+      "input": {
+        "currency": "INR",
+        "amount": "0.01",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "expected": {
+        "base": "0.01",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "18",
+            "tax": "0.00"
+          }
+        ],
+        "taxTotal": "0.00",
+        "total": "0.01",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E50",
+      "description": "smallest inclusive amount 9+9: components 0, base 0.01",
+      "input": {
+        "currency": "INR",
+        "amount": "0.01",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9"
+          },
+          {
+            "code": "SGST",
+            "rate": "9"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "COMPONENT_FROM_GROSS"
+        }
+      },
+      "expected": {
+        "base": "0.01",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9",
+            "tax": "0.00"
+          },
+          {
+            "code": "SGST",
+            "rate": "9",
+            "tax": "0.00"
+          }
+        ],
+        "taxTotal": "0.00",
+        "total": "0.01",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E51",
+      "description": "large amount, exact (no float drift)",
+      "input": {
+        "currency": "INR",
+        "amount": "99999999.99",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "28"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "expected": {
+        "base": "99999999.99",
+        "components": [
+          {
+            "code": "GST",
+            "rate": "28",
+            "tax": "28000000.00"
+          }
+        ],
+        "taxTotal": "28000000.00",
+        "total": "127999999.99",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E52",
+      "description": "zero amount",
+      "input": {
+        "currency": "INR",
+        "amount": "0.00",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9"
+          },
+          {
+            "code": "SGST",
+            "rate": "9"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "COMPONENT_FROM_GROSS"
+        }
+      },
+      "expected": {
+        "base": "0.00",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9",
+            "tax": "0.00"
+          },
+          {
+            "code": "SGST",
+            "rate": "9",
+            "tax": "0.00"
+          }
+        ],
+        "taxTotal": "0.00",
+        "total": "0.00",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E53",
+      "description": "BASE_FIRST DOWN: all component taxes zero, residue falls back to BASE",
+      "input": {
+        "currency": "INR",
+        "amount": "0.02",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "T",
+            "rate": "50"
+          }
+        ],
+        "policy": {
+          "roundingMode": "DOWN",
+          "inclusiveMethod": "BASE_FIRST",
+          "residueTarget": "COMPONENTS_PROPORTIONAL"
+        }
+      },
+      "expected": {
+        "base": "0.02",
+        "components": [
+          {
+            "code": "T",
+            "rate": "50",
+            "tax": "0.00"
+          }
+        ],
+        "taxTotal": "0.00",
+        "total": "0.02",
+        "residue": "0.01",
+        "residueAppliedTo": "BASE"
+      }
+    },
+    {
+      "id": "E54",
+      "description": "rate with 6 decimals (exact)",
+      "input": {
+        "currency": "INR",
+        "amount": "1000.00",
+        "pricing": "EXCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "T",
+            "rate": "7.123456"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_UP"
+        }
+      },
+      "expected": {
+        "base": "1000.00",
+        "components": [
+          {
+            "code": "T",
+            "rate": "7.123456",
+            "tax": "71.23"
+          }
+        ],
+        "taxTotal": "71.23",
+        "total": "1071.23",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    },
+    {
+      "id": "E55",
+      "description": "inclusive 9+9 on 0.99 HALF_EVEN",
+      "input": {
+        "currency": "INR",
+        "amount": "0.99",
+        "pricing": "INCLUSIVE",
+        "classKind": "TAXABLE",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9"
+          },
+          {
+            "code": "SGST",
+            "rate": "9"
+          }
+        ],
+        "policy": {
+          "roundingMode": "HALF_EVEN",
+          "inclusiveMethod": "COMPONENT_FROM_GROSS"
+        }
+      },
+      "expected": {
+        "base": "0.83",
+        "components": [
+          {
+            "code": "CGST",
+            "rate": "9",
+            "tax": "0.08"
+          },
+          {
+            "code": "SGST",
+            "rate": "9",
+            "tax": "0.08"
+          }
+        ],
+        "taxTotal": "0.16",
+        "total": "0.99",
+        "residue": "0.00",
+        "residueAppliedTo": null
+      }
+    }
+  ],
+  "invoices": [
+    {
+      "id": "V01",
+      "description": "LINE level: 3 x 0.99 at 7.5% rounds each line (0.07 each)",
+      "input": {
+        "currency": "INR",
+        "pricing": "EXCLUSIVE",
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "roundingLevel": "LINE"
+        },
+        "lines": [
+          {
+            "amount": "0.99",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5"
+              }
+            ]
+          },
+          {
+            "amount": "0.99",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5"
+              }
+            ]
+          },
+          {
+            "amount": "0.99",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "base": "0.99",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5",
+                "tax": "0.07"
+              }
+            ],
+            "taxTotal": "0.07",
+            "total": "1.06"
+          },
+          {
+            "base": "0.99",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5",
+                "tax": "0.07"
+              }
+            ],
+            "taxTotal": "0.07",
+            "total": "1.06"
+          },
+          {
+            "base": "0.99",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5",
+                "tax": "0.07"
+              }
+            ],
+            "taxTotal": "0.07",
+            "total": "1.06"
+          }
+        ],
+        "componentTotals": [
+          {
+            "code": "T",
+            "rate": "7.5",
+            "tax": "0.21"
+          }
+        ],
+        "baseTotal": "2.97",
+        "taxTotal": "0.21",
+        "total": "3.18"
+      }
+    },
+    {
+      "id": "V02",
+      "description": "INVOICE level: the same lines round once (0.22) and allocate by largest remainder",
+      "input": {
+        "currency": "INR",
+        "pricing": "EXCLUSIVE",
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "roundingLevel": "INVOICE"
+        },
+        "lines": [
+          {
+            "amount": "0.99",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5"
+              }
+            ]
+          },
+          {
+            "amount": "0.99",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5"
+              }
+            ]
+          },
+          {
+            "amount": "0.99",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "base": "0.99",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5",
+                "tax": "0.08"
+              }
+            ],
+            "taxTotal": "0.08",
+            "total": "1.07"
+          },
+          {
+            "base": "0.99",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5",
+                "tax": "0.07"
+              }
+            ],
+            "taxTotal": "0.07",
+            "total": "1.06"
+          },
+          {
+            "base": "0.99",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5",
+                "tax": "0.07"
+              }
+            ],
+            "taxTotal": "0.07",
+            "total": "1.06"
+          }
+        ],
+        "componentTotals": [
+          {
+            "code": "T",
+            "rate": "7.5",
+            "tax": "0.22"
+          }
+        ],
+        "baseTotal": "2.97",
+        "taxTotal": "0.22",
+        "total": "3.19"
+      }
+    },
+    {
+      "id": "V03",
+      "description": "INVOICE level inclusive 9+9 COMPONENT_FROM_GROSS",
+      "input": {
+        "currency": "INR",
+        "pricing": "INCLUSIVE",
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "COMPONENT_FROM_GROSS",
+          "roundingLevel": "INVOICE"
+        },
+        "lines": [
+          {
+            "amount": "100.00",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "CGST",
+                "rate": "9"
+              },
+              {
+                "code": "SGST",
+                "rate": "9"
+              }
+            ]
+          },
+          {
+            "amount": "50.00",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "CGST",
+                "rate": "9"
+              },
+              {
+                "code": "SGST",
+                "rate": "9"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "base": "84.74",
+            "components": [
+              {
+                "code": "CGST",
+                "rate": "9",
+                "tax": "7.63"
+              },
+              {
+                "code": "SGST",
+                "rate": "9",
+                "tax": "7.63"
+              }
+            ],
+            "taxTotal": "15.26",
+            "total": "100.00"
+          },
+          {
+            "base": "42.38",
+            "components": [
+              {
+                "code": "CGST",
+                "rate": "9",
+                "tax": "3.81"
+              },
+              {
+                "code": "SGST",
+                "rate": "9",
+                "tax": "3.81"
+              }
+            ],
+            "taxTotal": "7.62",
+            "total": "50.00"
+          }
+        ],
+        "componentTotals": [
+          {
+            "code": "CGST",
+            "rate": "9",
+            "tax": "11.44"
+          },
+          {
+            "code": "SGST",
+            "rate": "9",
+            "tax": "11.44"
+          }
+        ],
+        "baseTotal": "127.12",
+        "taxTotal": "22.88",
+        "total": "150.00"
+      }
+    },
+    {
+      "id": "V04",
+      "description": "INVOICE level with a compound component is refused",
+      "input": {
+        "currency": "INR",
+        "pricing": "EXCLUSIVE",
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "compoundBasis": "ROUNDED_PRIOR",
+          "roundingLevel": "INVOICE"
+        },
+        "lines": [
+          {
+            "amount": "10.00",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "A",
+                "rate": "5"
+              },
+              {
+                "code": "B",
+                "rate": "9.975",
+                "basis": "BASE_PLUS_PRIOR"
+              }
+            ]
+          }
+        ]
+      },
+      "errorCode": "UNSUPPORTED_COMBINATION"
+    },
+    {
+      "id": "V05",
+      "description": "INVOICE level inclusive BASE_FIRST is refused",
+      "input": {
+        "currency": "INR",
+        "pricing": "INCLUSIVE",
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "inclusiveMethod": "BASE_FIRST",
+          "residueTarget": "BASE",
+          "roundingLevel": "INVOICE"
+        },
+        "lines": [
+          {
+            "amount": "10.00",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "GST",
+                "rate": "18"
+              }
+            ]
+          }
+        ]
+      },
+      "errorCode": "UNSUPPORTED_COMBINATION"
+    },
+    {
+      "id": "V06",
+      "description": "mixed classes: exempt and zero-rated lines add no tax (LINE)",
+      "input": {
+        "currency": "INR",
+        "pricing": "EXCLUSIVE",
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "roundingLevel": "LINE"
+        },
+        "lines": [
+          {
+            "amount": "100.00",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "GST",
+                "rate": "18"
+              }
+            ]
+          },
+          {
+            "amount": "40.00",
+            "classKind": "EXEMPT",
+            "components": []
+          },
+          {
+            "amount": "60.00",
+            "classKind": "ZERO_RATED",
+            "components": [
+              {
+                "code": "GST",
+                "rate": "0"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "base": "100.00",
+            "components": [
+              {
+                "code": "GST",
+                "rate": "18",
+                "tax": "18.00"
+              }
+            ],
+            "taxTotal": "18.00",
+            "total": "118.00"
+          },
+          {
+            "base": "40.00",
+            "components": [],
+            "taxTotal": "0.00",
+            "total": "40.00"
+          },
+          {
+            "base": "60.00",
+            "components": [
+              {
+                "code": "GST",
+                "rate": "0",
+                "tax": "0.00"
+              }
+            ],
+            "taxTotal": "0.00",
+            "total": "60.00"
+          }
+        ],
+        "componentTotals": [
+          {
+            "code": "GST",
+            "rate": "18",
+            "tax": "18.00"
+          },
+          {
+            "code": "GST",
+            "rate": "0",
+            "tax": "0.00"
+          }
+        ],
+        "baseTotal": "200.00",
+        "taxTotal": "18.00",
+        "total": "218.00"
+      }
+    },
+    {
+      "id": "V07",
+      "description": "mixed classes at INVOICE level, equal rate strings grouped once",
+      "input": {
+        "currency": "INR",
+        "pricing": "EXCLUSIVE",
+        "policy": {
+          "roundingMode": "HALF_UP",
+          "roundingLevel": "INVOICE"
+        },
+        "lines": [
+          {
+            "amount": "33.33",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "GST",
+                "rate": "18"
+              }
+            ]
+          },
+          {
+            "amount": "33.33",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "GST",
+                "rate": "18.0"
+              }
+            ]
+          },
+          {
+            "amount": "10.00",
+            "classKind": "EXEMPT",
+            "components": []
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "base": "33.33",
+            "components": [
+              {
+                "code": "GST",
+                "rate": "18",
+                "tax": "6.00"
+              }
+            ],
+            "taxTotal": "6.00",
+            "total": "39.33"
+          },
+          {
+            "base": "33.33",
+            "components": [
+              {
+                "code": "GST",
+                "rate": "18.0",
+                "tax": "6.00"
+              }
+            ],
+            "taxTotal": "6.00",
+            "total": "39.33"
+          },
+          {
+            "base": "10.00",
+            "components": [],
+            "taxTotal": "0.00",
+            "total": "10.00"
+          }
+        ],
+        "componentTotals": [
+          {
+            "code": "GST",
+            "rate": "18",
+            "tax": "12.00"
+          }
+        ],
+        "baseTotal": "76.66",
+        "taxTotal": "12.00",
+        "total": "88.66"
+      }
+    },
+    {
+      "id": "V08",
+      "description": "missing roundingLevel is refused",
+      "input": {
+        "currency": "INR",
+        "pricing": "EXCLUSIVE",
+        "policy": {
+          "roundingMode": "HALF_UP"
+        },
+        "lines": [
+          {
+            "amount": "0.99",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5"
+              }
+            ]
+          },
+          {
+            "amount": "0.99",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5"
+              }
+            ]
+          },
+          {
+            "amount": "0.99",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "T",
+                "rate": "7.5"
+              }
+            ]
+          }
+        ]
+      },
+      "errorCode": "INVALID_POLICY"
+    },
+    {
+      "id": "V09",
+      "description": "KWD INVOICE level HALF_EVEN",
+      "input": {
+        "currency": "KWD",
+        "pricing": "EXCLUSIVE",
+        "policy": {
+          "roundingMode": "HALF_EVEN",
+          "roundingLevel": "INVOICE"
+        },
+        "lines": [
+          {
+            "amount": "1.125",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "VAT",
+                "rate": "5"
+              }
+            ]
+          },
+          {
+            "amount": "1.125",
+            "classKind": "TAXABLE",
+            "components": [
+              {
+                "code": "VAT",
+                "rate": "5"
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "base": "1.125",
+            "components": [
+              {
+                "code": "VAT",
+                "rate": "5",
+                "tax": "0.056"
+              }
+            ],
+            "taxTotal": "0.056",
+            "total": "1.181"
+          },
+          {
+            "base": "1.125",
+            "components": [
+              {
+                "code": "VAT",
+                "rate": "5",
+                "tax": "0.056"
+              }
+            ],
+            "taxTotal": "0.056",
+            "total": "1.181"
+          }
+        ],
+        "componentTotals": [
+          {
+            "code": "VAT",
+            "rate": "5",
+            "tax": "0.112"
+          }
+        ],
+        "baseTotal": "2.250",
+        "taxTotal": "0.112",
+        "total": "2.362"
+      }
+    }
+  ]
+}

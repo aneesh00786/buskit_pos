@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/pos_tokens.dart';
+import '../../auth/state/session_controller.dart';
 import '../data/printer_driver.dart';
 import '../data/printer_settings.dart';
 import '../data/receipt_delivery.dart';
@@ -11,11 +12,50 @@ import '../printing/network_printer_adapter.dart';
 import '../state/print_service.dart';
 import '../state/receipt_services.dart';
 
+/// The permission a staff member needs to print a receipt AGAIN.
+const reprintPermission = 'sales.reprint';
+const reprintDeniedMessage = 'You do not have permission to reprint receipts.';
+const reprintUnverifiedMessage =
+    'Reprinting is unavailable until your permissions have loaded.';
+
+/// Printed by "Test print" instead of a sale's receipt when reprinting is not
+/// permitted, so the printer can still be tested without a copy of the sale.
+const testPrintReceipt = ReceiptData(
+  title: 'ThriveWoo POS',
+  orderNumber: 'TEST-PRINT',
+  customerLabel: 'Test print',
+  lines: [],
+  subtotal: '0.00',
+  tax: '0.00',
+  total: '0.00',
+  payments: [],
+);
+
 /// "Print Receipt", "Email / SMS" and a printer-setup shortcut, shown on the
-/// sale-complete screen.
+/// sale-complete screen and in sales history.
+///
+/// Phase P1.1: printing a receipt that was already printed is a REPRINT and
+/// needs `sales.reprint` — every print from sales history ([reprint]), and
+/// any print after the first successful one on the sale-complete screen. The
+/// first print of a new sale (manual or auto) is always allowed. Printing is
+/// local only (no server call re-checks it), so the check is made here, on
+/// the button AND in the print action itself.
+///
+/// Phase P1.2: unlike controls whose action the server re-checks, a reprint
+/// FAILS CLOSED — it is allowed only once the permissions have loaded and
+/// include `sales.reprint` (not loaded, failed to load, or no session = no
+/// reprint).
 class ReceiptActions extends StatefulWidget {
-  const ReceiptActions({super.key, required this.receipt, this.autoPrintKey});
+  const ReceiptActions({
+    super.key,
+    required this.receipt,
+    this.autoPrintKey,
+    this.reprint = false,
+  });
   final ReceiptData receipt;
+
+  /// True where the receipt is a copy of an earlier sale (sales history).
+  final bool reprint;
 
   /// Phase 14B: set ONLY on the sale-complete screen (`sale:<id>`). When the
   /// "Auto print receipt" setting is on, the receipt is printed once through
@@ -23,11 +63,35 @@ class ReceiptActions extends StatefulWidget {
   final String? autoPrintKey;
 
   @override
-  State<ReceiptActions> createState() => _ReceiptActionsState();
+  State<ReceiptActions> createState() => ReceiptActionsState();
 }
 
-class _ReceiptActionsState extends State<ReceiptActions> {
+/// Why a reprint is refused, or null when it is allowed (permissions loaded
+/// and granting `sales.reprint`).
+String? reprintRefusal(SessionController? session) {
+  if (session?.authContext == null) return reprintUnverifiedMessage;
+  if (!session!.permissions.hasPermission(reprintPermission)) {
+    return reprintDeniedMessage;
+  }
+  return null;
+}
+
+class ReceiptActionsState extends State<ReceiptActions> {
   bool _printing = false;
+
+  /// Set once this screen printed the receipt; later prints are reprints.
+  bool _printed = false;
+
+  bool get _isReprint => widget.reprint || _printed;
+
+  /// Read at the moment of the action, never from the last build.
+  String? get _reprintRefusal =>
+      _isReprint ? reprintRefusal(context.read<SessionController?>()) : null;
+
+  /// The print action itself, as the button calls it — for tests that must
+  /// show it refuses an unauthorized reprint even with the button bypassed.
+  @visibleForTesting
+  Future<void> printReceipt() => _print();
 
   @override
   void initState() {
@@ -62,11 +126,17 @@ class _ReceiptActionsState extends State<ReceiptActions> {
 
   Future<void> _print() async {
     if (_printing) return;
+    final refusal = _reprintRefusal;
+    if (refusal != null) {
+      _say(refusal);
+      return;
+    }
     final services = context.read<ReceiptServices>();
     setState(() => _printing = true);
     String message;
     try {
       final out = await services.print.print(widget.receipt);
+      if (!out.cancelled) _printed = true;
       if (out.cancelled) {
         message = 'Printing cancelled.';
       } else if (out.fellBack) {
@@ -100,11 +170,17 @@ class _ReceiptActionsState extends State<ReceiptActions> {
   }
 
   Future<void> _setup() async {
+    // "Test print" prints the receipt it is given: without reprint
+    // permission it gets the test receipt, never a copy of this sale.
+    final receipt =
+        reprintRefusal(context.read<SessionController?>()) == null
+        ? widget.receipt
+        : testPrintReceipt;
     final saved = await showDialog<bool>(
       context: context,
       builder: (_) => Provider<ReceiptServices>.value(
         value: context.read<ReceiptServices>(),
-        child: PrinterSetupDialog(receipt: widget.receipt),
+        child: PrinterSetupDialog(receipt: receipt),
       ),
     );
     if (saved == true && mounted) _say('Printer settings saved.');
@@ -112,12 +188,17 @@ class _ReceiptActionsState extends State<ReceiptActions> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final refusal = _isReprint
+        ? reprintRefusal(context.watch<SessionController?>())
+        : null;
+    final denied = refusal != null;
+    final actions = Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: _printing ? null : _print,
+            key: const Key('receipt-print'),
+            onPressed: _printing || denied ? null : _print,
             icon: _printing
                 ? const SizedBox(
                     width: 18,
@@ -147,6 +228,19 @@ class _ReceiptActionsState extends State<ReceiptActions> {
           tooltip: 'Printer setup',
           onPressed: _setup,
           icon: const Icon(Icons.settings_outlined),
+        ),
+      ],
+    );
+    if (!denied) return actions;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        actions,
+        const SizedBox(height: PosTokens.s4),
+        Text(
+          refusal,
+          key: const Key('receipt-reprint-denied'),
+          style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
     );

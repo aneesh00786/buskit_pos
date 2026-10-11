@@ -85,6 +85,13 @@ void main() {
       'plain system print and cancelled system print have their own messages',
       (tester) async {
         final h = await pumpSuccess(tester);
+        // Phase P1.2: cancelled first — a cancelled print is not a print, so
+        // the second one is still the first print (no reprint permission).
+        h.receipts.print.onPrint = (_) async =>
+            const PrintOutcome(channel: PrintChannel.system, cancelled: true);
+        await tester.tap(printBtn);
+        await tester.pumpAndSettle();
+        expect(find.text('Printing cancelled.'), findsOneWidget);
         h.receipts.print.onPrint = (_) async =>
             const PrintOutcome(channel: PrintChannel.system);
         await tester.tap(printBtn);
@@ -93,11 +100,6 @@ void main() {
           find.text('Receipt sent to the device printer.'),
           findsOneWidget,
         );
-        h.receipts.print.onPrint = (_) async =>
-            const PrintOutcome(channel: PrintChannel.system, cancelled: true);
-        await tester.tap(printBtn);
-        await tester.pumpAndSettle();
-        expect(find.text('Printing cancelled.'), findsOneWidget);
       },
     );
 
