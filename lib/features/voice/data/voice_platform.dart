@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
@@ -15,6 +16,12 @@ enum VoicePermission {
 
   /// Not available on this device / platform (e.g. restricted).
   unavailable,
+
+  /// Phase 6ZA/6ZB: voice input is not offered on this platform at all (the
+  /// desktop apps: `permission_handler` has no macOS implementation, and the
+  /// Windows speech plugin is unvalidated) — nothing is asked and no
+  /// microphone is opened.
+  unsupportedPlatform,
 }
 
 /// Microphone permission. Asked ONLY when voice is first used (never at
@@ -28,6 +35,33 @@ abstract class MicrophonePermission {
 
   /// Opens the app's system settings (for [VoicePermission.permanentlyDenied]).
   Future<bool> openSettings();
+}
+
+/// Phase 6ZA/6ZB — the microphone permission for the platform the app runs
+/// on: [PermissionHandlerMicrophone] on Android / iOS (unchanged), and
+/// [UnsupportedPlatformMicrophone] on the desktop apps (macOS: no
+/// `permission_handler` implementation; Windows / Linux: speech input not
+/// validated), so no unsupported or untested plugin path is ever called.
+MicrophonePermission defaultMicrophonePermission([TargetPlatform? platform]) {
+  final p = platform ?? defaultTargetPlatform;
+  const desktop = {TargetPlatform.macOS, TargetPlatform.windows, TargetPlatform.linux};
+  if (!kIsWeb && desktop.contains(p)) return const UnsupportedPlatformMicrophone();
+  return const PermissionHandlerMicrophone();
+}
+
+/// Phase 6ZA — voice input is not offered on this platform: nothing is asked,
+/// no plugin is called, no microphone is opened.
+class UnsupportedPlatformMicrophone implements MicrophonePermission {
+  const UnsupportedPlatformMicrophone();
+
+  @override
+  Future<VoicePermission> status() async => VoicePermission.unsupportedPlatform;
+
+  @override
+  Future<VoicePermission> request() async => VoicePermission.unsupportedPlatform;
+
+  @override
+  Future<bool> openSettings() async => false;
 }
 
 class PermissionHandlerMicrophone implements MicrophonePermission {

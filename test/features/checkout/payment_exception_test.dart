@@ -198,6 +198,23 @@ void main() {
   );
 
   testWidgets(
+    'Phase 6T. captured payment on a draft whose cart already synced offline (server BUSINESS_RULE): manager instruction, NO Resume Sale, no new payment, exception action offered',
+    (tester) async {
+      await openWith(tester, [exceptionJson(reason: 'BUSINESS_RULE')]);
+      expect(find.byKey(const Key('recovery-blocked')), findsOneWidget);
+      expect(
+        find.textContaining('A sale rule prevents completing it. A manager must handle the payment.'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('recovery-resume')), findsNothing);
+      expect(find.byKey(const Key('recovery-restore')), findsNothing, reason: 'never presented as unpaid');
+      expect(find.text('Start Payment Again'), findsNothing);
+      expect(resolveButton, findsOneWidget);
+      expect(cart.sale, isNull, reason: 'nothing restored into the cart, nothing completed');
+    },
+  );
+
+  testWidgets(
     '22. action visibility: staff without the permission see "Manager approval required." and no action',
     (tester) async {
       await openWith(tester, [

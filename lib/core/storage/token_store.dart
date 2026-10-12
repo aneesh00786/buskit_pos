@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Minimal key/value persistence for the device credentials. Only the device
@@ -14,9 +15,24 @@ class TokenKeys {
   static const deviceIdentifier = 'pos_device_identifier';
 }
 
+/// Phase 6ZA — the secure storage for the platform the app runs on. macOS
+/// uses the legacy (non data-protection) Keychain, as the plugin documents
+/// for apps without Keychain Sharing: no `keychain-access-groups`
+/// entitlement and no provisioning profile tying the build to one Mac.
+/// Android / iOS keep the plugin defaults (unchanged).
+FlutterSecureStorage platformSecureStorage([TargetPlatform? platform]) {
+  final p = platform ?? defaultTargetPlatform;
+  if (!kIsWeb && p == TargetPlatform.macOS) {
+    return const FlutterSecureStorage(
+      mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+    );
+  }
+  return const FlutterSecureStorage();
+}
+
 class SecureTokenStore implements TokenStore {
   SecureTokenStore([FlutterSecureStorage? storage])
-    : _s = storage ?? const FlutterSecureStorage();
+    : _s = storage ?? platformSecureStorage();
   final FlutterSecureStorage _s;
 
   @override

@@ -13,6 +13,7 @@ import '../../../core/utils/money.dart';
 import '../../../core/utils/server_time.dart';
 import '../../auth/state/session_controller.dart';
 import '../../cart/state/cart_controller.dart';
+import '../../cart/ui/cart_panel.dart' show confirmVoid;
 import '../../offline/offline_payment_policy.dart';
 import '../../offline/ui/offline_sale_views.dart';
 import '../../receipt/models/receipt_formatter.dart';
@@ -26,6 +27,7 @@ import '../state/payment_plan.dart';
 import 'qr_payment_dialog.dart';
 import 'terminal_payment_dialog.dart';
 import '../../../core/ui/safe_insets.dart';
+import '../../../core/desktop/exit_guard.dart';
 
 /// Opens the payment screen for the open sale: a dialog on tablets, a tall
 /// bottom sheet on phones. It cannot be dismissed by tapping outside (that
@@ -225,13 +227,14 @@ class _PayModalState extends State<PayModal> {
     try {
       await _rememberForRecovery(sale.id);
       if (!mounted) return;
-      attempt = await showTerminalPayment(
+      // Phase 6ZA: a terminal payment in progress blocks quitting the desktop app.
+      attempt = await InFlightOperations.track(() => showTerminalPayment(
         context,
         service: service,
         saleId: sale.id,
         provider: provider,
         amountMilli: totalMilli,
-      );
+      ));
     } finally {
       if (mounted) setState(() => _terminalInProgress = false);
     }
@@ -254,7 +257,8 @@ class _PayModalState extends State<PayModal> {
     if (service == null || provider == null || sale == null) return;
     await _rememberForRecovery(sale.id);
     if (!mounted) return;
-    final attempt = await showQrPayment(
+    // Phase 6ZA: a QR payment in progress blocks quitting the desktop app.
+    final attempt = await InFlightOperations.track(() => showQrPayment(
       context,
       service: service,
       saleId: sale.id,
@@ -263,7 +267,7 @@ class _PayModalState extends State<PayModal> {
       currencyLabel: provider.currencies.length == 1
           ? provider.currencies.first
           : '',
-    );
+    ));
     if (attempt == null || !mounted) return;
     // QR is tendered as "other"; the server re-verifies the captured attempt.
     await cart.completeSale([
@@ -331,10 +335,56 @@ class _PayModalState extends State<PayModal> {
     }
   }
 
+  /// Phase 6ZC: desktop keyboard tills (macOS / Windows / Linux) only; the
+  /// phone and tablet behaviour (no autofocus, no Enter action) is unchanged.
+  static bool get _desktop =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux);
+
+  /// Enter in the amount field: does exactly what the Complete Sale button
+  /// does, and only when that button would be enabled (not busy, a valid
+  /// tender, not a draft already recorded offline — Phase 6S).
+  void _completeFromKeyboard() {
+    final cart = context.read<CartController>();
+    if (cart.isMutating || cart.draftSyncedOffline) return;
+    if (!_plan(cart).isValid) return;
+    _complete(cart);
+  }
+
   Future<void> _complete(CartController cart) async {
     final plan = _plan(cart);
     if (!plan.isValid) return;
     await cart.completeSale(plan.payments);
+  }
+
+  /// Phase 6S: the draft's cart is already a synced offline sale. Cancel the
+  /// duplicate draft (existing void flow) only after the cashier confirms;
+  /// the offline sale itself is never touched.
+  Future<void> _cancelDuplicateDraft(CartController cart) async {
+    final id = cart.sale?.id;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final ok = await confirmVoid(
+      context,
+      subject: 'this duplicate online draft (the offline sale already recorded is kept)',
+      title: 'Cancel the duplicate draft?',
+      keepLabel: 'Keep draft',
+      confirmLabel: 'Cancel draft',
+    );
+    if (ok != true || !mounted) return;
+    if (await cart.cancelDuplicateDraft()) {
+      navigator.pop();
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Duplicate draft${id == null ? '' : ' #$id'} cancelled. The offline sale already recorded is unchanged.',
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -401,8 +451,11 @@ class _PayModalState extends State<PayModal> {
     final plan = _plan(cart);
     final total = _totalMilli(cart);
     final busy = cart.isMutating;
+    final duplicateDraft = cart.draftSyncedOffline;
     final failure =
-        (cart.error != null && cart.errorOperation == CartOperation.complete)
+        (cart.error != null &&
+            (cart.errorOperation == CartOperation.complete ||
+                (duplicateDraft && cart.errorOperation == CartOperation.cancel)))
         ? cart.error
         : null;
     final names = {
@@ -410,7 +463,11 @@ class _PayModalState extends State<PayModal> {
         l.id: l.productName ?? 'Item ${l.productVariationId}',
     };
     final retrying =
-        cart.hasPendingCompletion && failure != null && failure.isRetryable;
+        !duplicateDraft &&
+        cart.hasPendingCompletion &&
+        failure != null &&
+        cart.errorOperation == CartOperation.complete &&
+        failure.isRetryable;
 
     return _Shell(
       title: 'Take payment',
@@ -445,7 +502,24 @@ class _PayModalState extends State<PayModal> {
               const SizedBox(width: PosTokens.s12),
               Expanded(
                 flex: 2,
-                child: FilledButton(
+                child: duplicateDraft
+                    ? FilledButton(
+                        key: const Key('cancel-duplicate-draft'),
+                        onPressed: busy ? null : () => _cancelDuplicateDraft(cart),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52),
+                          backgroundColor: Theme.of(context).colorScheme.error,
+                          foregroundColor: Theme.of(context).colorScheme.onError,
+                        ),
+                        child: busy
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Cancel duplicate draft'),
+                      )
+                    : FilledButton(
                   onPressed: (!busy && plan.isValid)
                       ? () => _complete(cart)
                       : null,
@@ -571,6 +645,10 @@ class _PayModalState extends State<PayModal> {
             label: 'Amount tendered',
             enabled: !busy,
             onChanged: () => setState(() {}),
+            // Phase 6ZC: a keyboard till types the amount straight away and
+            // presses Enter — exactly the Complete Sale button (same guards).
+            autofocus: _desktop,
+            onSubmitted: _desktop ? _completeFromKeyboard : null,
           ),
           const SizedBox(height: PosTokens.s8),
           _QuickCash(
@@ -810,11 +888,19 @@ class _MoneyField extends StatelessWidget {
     required this.label,
     required this.onChanged,
     this.enabled = true,
+    this.autofocus = false,
+    this.onSubmitted,
   });
   final TextEditingController controller;
   final String label;
   final VoidCallback onChanged;
   final bool enabled;
+
+  /// Phase 6ZC: focused when the payment screen opens (desktop keyboard tills).
+  final bool autofocus;
+
+  /// Phase 6ZC: Enter in the field (desktop keyboard tills).
+  final VoidCallback? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -827,6 +913,8 @@ class _MoneyField extends StatelessWidget {
       ],
       decoration: InputDecoration(labelText: label),
       onChanged: (_) => onChanged(),
+      autofocus: autofocus,
+      onSubmitted: onSubmitted == null ? null : (_) => onSubmitted!(),
     );
   }
 }

@@ -12,6 +12,7 @@ import 'package:http/testing.dart';
 import 'dart:io';
 
 import 'package:buskit_pos/core/network/api_exception.dart';
+import 'package:buskit_pos/core/network/error_messages.dart';
 import 'package:buskit_pos/core/theme/app_theme.dart';
 import 'package:buskit_pos/features/cart/state/cart_controller.dart';
 import 'package:buskit_pos/features/checkout/data/payment_recovery_service.dart';
@@ -252,6 +253,31 @@ void main() {
       );
       expect(cart.sale, isNull);
       expect(find.byKey(const Key('recovery-resume')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Phase 6S. CAPTURED but the cart is already a synced offline sale (POS_DRAFT_SYNCED_OFFLINE): completed ONCE, never retried, the payment is left for a manager',
+    (tester) async {
+      service.current = FakeRecoveryService.result([recoverableJson()]);
+      server.onComplete = (_) async => throw apiError(
+        409,
+        message: 'This cart was already recorded as an offline sale. Cancel this draft instead of completing it.',
+        code: PosErrorCodes.draftSyncedOffline,
+      );
+      await pumpHost(tester);
+      await openRecovery(tester);
+      await tester.tap(find.byKey(const Key('recovery-resume')));
+      await tester.pumpAndSettle();
+      expect(server.completeCalls, hasLength(1));
+      expect(find.textContaining('already been recorded through offline sync'), findsOneWidget);
+      expect(find.textContaining('a manager must refund it'), findsOneWidget);
+      expect(service.cancelCalls, isEmpty, reason: 'the captured payment is never cancelled here');
+      expect(server.cancelCalls, isEmpty, reason: 'the draft is not cancelled while money is on it');
+      expect(cart.sale, isNull, reason: 'the cart is cleared, as for any failed resume');
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(server.completeCalls, hasLength(1), reason: 'never retried');
     },
   );
 

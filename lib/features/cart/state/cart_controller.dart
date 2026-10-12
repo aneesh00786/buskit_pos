@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../../core/network/error_messages.dart';
 import '../../../core/utils/money.dart';
 import '../../../core/utils/quantity.dart';
 import '../../../core/utils/uuid.dart';
@@ -103,8 +104,16 @@ class CartController extends ChangeNotifier {
       'Holding a sale needs an internet connection.';
   static const String localCartOpenMessage =
       'Complete or void the offline sale before resuming another one.';
+  static const String draftSaveFailedMessage =
+      'The cart could not be saved on this device, so this change was not made. Try again.';
+  static const String draftDiscardFailedMessage =
+      'The saved cart on this device could not be removed, so it was kept. Try again.';
+  static const String localSaleWrittenMessage =
+      'This sale is already saved on this device. Tap Complete again to finish saving it; the cart cannot be changed now.';
   static const String completionMayHaveReachedServerMessage =
       'The last payment attempt may have reached the server. Reconnect and retry so the sale is not recorded twice.';
+  static const String duplicateDraftCancelUnconfirmedMessage =
+      'Could not confirm that the duplicate draft was cancelled. It is still shown as open — check the connection and try again.';
 
   /// Called after a hold or resume succeeded, and when a resume failed because
   /// the held-sales list is out of date, so the list can reload.
@@ -127,6 +136,12 @@ class CartController extends ChangeNotifier {
   String? _pendingCustomerId;
   String? _pendingCustomerLabel;
   CompletedSale? _completed;
+
+  /// Phase 6S: the server draft whose completion was refused with
+  /// POS_DRAFT_SYNCED_OFFLINE — its cart is already a synced offline sale.
+  /// While it is the open sale it can only be cancelled, never completed
+  /// (online or offline) again.
+  int? _syncedOfflineDraftId;
   Map<int, String> _completedNames = const {};
   Map<int, String> _completedVariants = const {};
   _CompletionAttempt? _attempt;
@@ -148,6 +163,19 @@ class CartController extends ChangeNotifier {
   int _localVersion = 0;
   OfflineSale? _completedOffline;
   _CompletionAttempt? _offlineAttempt;
+
+  /// Phase 6X: the stable local sale id of the unpaid offline cart ([_local]),
+  /// fixed when its first line is saved and kept through every edit, an app
+  /// restart, the restore and checkout (it becomes the queued sale's id). The
+  /// cart's durable copy is the DRAFT file with this id.
+  String? _localDraftId;
+  DateTime? _localDraftCreatedAt;
+
+  /// Phase 6X: an offline checkout of the local cart hit a storage failure
+  /// AFTER its sale was written (re-read from storage). The cart can then only
+  /// be finished with Complete (same id) — never edited or discarded, so the
+  /// recorded sale can never be duplicated or contradicted.
+  bool _localSaleWritten = false;
 
   /// True when the last ONLINE completion failed in a way whose outcome is
   /// unknown (network, timeout, server error): the sale may already be
@@ -226,6 +254,12 @@ class CartController extends ChangeNotifier {
   /// Product names by line id, captured from the cart when the sale was paid
   /// (the completed sale view carries no names).
   Map<int, String> get completedNames => _completedNames;
+
+  /// True while the open draft was refused with POS_DRAFT_SYNCED_OFFLINE: it
+  /// is a duplicate of an offline sale already recorded on the server, so the
+  /// only safe action is cancelling it ([cancelDuplicateDraft]).
+  bool get draftSyncedOffline =>
+      _syncedOfflineDraftId != null && _sale != null && _sale!.id == _syncedOfflineDraftId;
 
   /// True while a completion attempt (and its idempotency key) is kept for a
   /// safe retry after a failure whose outcome may be unknown.
@@ -360,11 +394,26 @@ class CartController extends ChangeNotifier {
     if (_op != null) return false;
     if (_local != null) {
       if (_local!.isEmpty) return false;
-      _local = [];
-      _localVersion++;
-      _offlineAttempt = null;
+      if (_localSaleWritten) {
+        return _rejectLocally(localSaleWrittenMessage, CartOperation.remove);
+      }
+      _op = CartOperation.remove;
       _notify();
-      return true;
+      try {
+        // Phase 6X: nothing left to recover — the draft goes with the lines.
+        if (!await _persistLocal(const [])) {
+          return _rejectLocally(draftSaveFailedMessage, CartOperation.remove);
+        }
+        _local = [];
+        _localVersion++;
+        _offlineAttempt = null;
+        _error = null;
+        _errorOp = null;
+        return true;
+      } finally {
+        _op = null;
+        _notify();
+      }
     }
     final sale = _sale;
     if (sale == null || !sale.isDraft || sale.items.isEmpty) return false;
@@ -629,6 +678,11 @@ class CartController extends ChangeNotifier {
   /// total exactly. Nothing is retried automatically.
   Future<bool> completeSale(List<PaymentLine> payments) async {
     if (_op != null) return false;
+    // Phase 6S: a permanent conflict — never re-sent, and never recorded as
+    // a second offline sale either.
+    if (draftSyncedOffline) {
+      return _rejectLocally(draftSyncedOfflineMessage, CartOperation.complete);
+    }
     if (_local != null) return _completeOffline(payments, null);
     if (_sale != null && _isOffline) {
       if (_onlineOutcomeUnknown) {
@@ -717,20 +771,28 @@ class CartController extends ChangeNotifier {
       return _rejectLocally(emptyCompleteMessage, CartOperation.complete);
     }
 
-    final fingerprint = [
-      draft?.id ?? 'local',
-      for (final l in lines)
-        '${l.productVariationId}x${l.quantity}@${l.unitPriceMilli}',
-      ...(payments.map((p) => p.canonical).toList()..sort()),
-    ].join('|');
-    if (_offlineAttempt == null ||
-        _offlineAttempt!.fingerprint != fingerprint) {
-      _offlineAttempt = _CompletionAttempt(generateUuidV4(), fingerprint);
+    // Phase 6X: a local cart is recorded under its draft's stable id (the
+    // draft file is replaced by the completed sale in one write); a server
+    // draft paid offline keeps the per-attempt key as before.
+    final String localSaleId;
+    if (draft == null) {
+      localSaleId = _localDraftId ??= generateUuidV4();
+    } else {
+      final fingerprint = [
+        draft.id,
+        for (final l in lines)
+          '${l.productVariationId}x${l.quantity}@${l.unitPriceMilli}',
+        ...(payments.map((p) => p.canonical).toList()..sort()),
+      ].join('|');
+      if (_offlineAttempt == null ||
+          _offlineAttempt!.fingerprint != fingerprint) {
+        _offlineAttempt = _CompletionAttempt(generateUuidV4(), fingerprint);
+      }
+      localSaleId = _offlineAttempt!.key;
     }
-    final attempt = _offlineAttempt!;
     final customerId = draft != null ? draft.customerId : _pendingCustomerId;
     final request = OfflineCheckoutRequest(
-      localSaleId: attempt.key,
+      localSaleId: localSaleId,
       scope: support.scope(),
       staffName: support.staffName?.call(),
       lines: lines,
@@ -750,7 +812,18 @@ class CartController extends ChangeNotifier {
       final saved = await support.checkout.complete(request);
       _completedOffline = saved;
       _completed = null;
+      if (draft == null) {
+        // Phase 6X: the queued sale is stored — only now is the cart's draft
+        // removed. Should that fail, the draft is still never restored (its
+        // id is a recorded sale; getCartDrafts deletes it).
+        try {
+          await support.checkout.storage.deleteCartDraft(localSaleId);
+        } catch (_) {}
+      }
       _local = null;
+      _localDraftId = null;
+      _localDraftCreatedAt = null;
+      _localSaleWritten = false;
       _sale = null; // a server draft stays a draft; it is never completed
       _pendingCustomerId = null;
       _pendingCustomerLabel = null;
@@ -766,6 +839,17 @@ class CartController extends ChangeNotifier {
       _errorOp = CartOperation.complete;
       return false;
     } on OfflineCheckoutStorageFailure {
+      // Phase 6X: was the local cart's sale written before the failure?
+      // Re-read storage; when unsure, treat it as written (only Complete with
+      // the same id may continue — it finishes that save, never a second one).
+      if (draft == null) {
+        try {
+          _localSaleWritten =
+              await support.checkout.storage.getSale(localSaleId) != null;
+        } catch (_) {
+          _localSaleWritten = true;
+        }
+      }
       _error = const ApiException(
         kind: ApiErrorKind.unknown,
         message: OfflineCheckoutService.storageFailureMessage,
@@ -844,6 +928,9 @@ class CartController extends ChangeNotifier {
     if (support == null) {
       return _rejectLocally(_offlineUnavailable, CartOperation.add);
     }
+    if (_localSaleWritten) {
+      return _rejectLocally(localSaleWrittenMessage, CartOperation.add);
+    }
     _op = CartOperation.add;
     _error = null;
     _errorOp = null;
@@ -864,7 +951,8 @@ class CartController extends ChangeNotifier {
           CartOperation.add,
         );
       }
-      final lines = _local ?? <OfflineCheckoutLine>[];
+      // Phase 6X: edit a copy; it becomes the cart only once it is saved.
+      final lines = List<OfflineCheckoutLine>.of(_local ?? const []);
       final i = lines.indexWhere(
         (l) => l.productVariationId == productVariationId,
       );
@@ -888,6 +976,9 @@ class CartController extends ChangeNotifier {
       } else {
         lines[i] = line;
       }
+      if (!await _persistLocal(lines)) {
+        return _rejectLocally(draftSaveFailedMessage, CartOperation.add);
+      }
       _local = lines;
       _localVersion++;
       _offlineAttempt = null;
@@ -910,7 +1001,11 @@ class CartController extends ChangeNotifier {
   }
 
   Future<bool> _updateLocal(int productVariationId, int quantity) async {
-    final lines = _local!;
+    if (_localSaleWritten) {
+      return _rejectLocally(localSaleWrittenMessage, CartOperation.update);
+    }
+    // Phase 6X: edit a copy; it becomes the cart only once it is saved.
+    final lines = List<OfflineCheckoutLine>.of(_local!);
     final i = lines.indexWhere(
       (l) => l.productVariationId == productVariationId,
     );
@@ -935,6 +1030,142 @@ class CartController extends ChangeNotifier {
       }
       lines[i] = lines[i].withQuantity(quantity);
     }
+    final op = quantity == 0 ? CartOperation.remove : CartOperation.update;
+    _op = op;
+    _notify();
+    try {
+      if (!await _persistLocal(lines)) {
+        return _rejectLocally(draftSaveFailedMessage, op);
+      }
+      _local = lines;
+      _localVersion++;
+      _offlineAttempt = null;
+      _error = null;
+      _errorOp = null;
+      return true;
+    } finally {
+      _op = null;
+      _notify();
+    }
+  }
+
+  /// Phase 6X: writes the unpaid offline cart as its DRAFT (the same local
+  /// sale id every time), or deletes the draft when no line is left. Returns
+  /// false when storage failed — the caller then keeps the previous cart.
+  /// Unchanged carts are never written (callers return before calling this).
+  Future<bool> _persistLocal(List<OfflineCheckoutLine> lines) async {
+    final support = offline;
+    if (support == null) return false;
+    final storage = support.checkout.storage;
+    try {
+      final id = _localDraftId ??= generateUuidV4();
+      if (lines.isEmpty) {
+        await storage.deleteCartDraft(id);
+        return true;
+      }
+      final scope = support.scope();
+      final shift = await storage.getCurrentShift();
+      final device = await storage.getOrCreateDeviceInfo();
+      final now = DateTime.now().toUtc();
+      final created = _localDraftCreatedAt ??= now;
+      int sum(int Function(OfflineCheckoutLine l) f) =>
+          lines.fold<int>(0, (s, l) => s + f(l));
+      await storage.saveCartDraft(
+        OfflineSale(
+          localSaleId: id,
+          status: OfflineSaleStatus.draft,
+          companyId: scope?.companyId ?? shift?.companyId ?? 0,
+          storeId: scope?.storeId ?? shift?.storeId ?? 0,
+          registerId: scope?.registerId ?? shift?.registerId ?? 0,
+          deviceId: scope?.deviceId,
+          shiftId: shift?.shiftId ?? 0,
+          salesmanId: scope?.salesmanId ?? '',
+          salesmanName: support.staffName?.call(),
+          installationId: device.installationId,
+          customerId: _pendingCustomerId,
+          customerName: _pendingCustomerId == null ? null : _pendingCustomerLabel,
+          currency: shift?.currency,
+          createdAt: created,
+          updatedAt: now,
+          lines: [
+            for (final l in lines)
+              OfflineSaleLine(
+                productVariationId: l.productVariationId,
+                productName: l.productName,
+                variationName: l.variationName,
+                quantity: l.quantity,
+                unitPriceMilli: l.unitPriceMilli,
+                taxPercent: l.taxPercent,
+                taxMode: l.taxMode,
+                taxAmountMilli: l.taxAmountMilli,
+                discountAmountMilli: l.discountAmountMilli,
+                lineTotalMilli: l.lineTotalMilli,
+              ),
+          ],
+          payments: const [],
+          subtotalMilli: sum((l) => l.listedAmountMilli),
+          taxTotalMilli: sum((l) => l.taxAmountMilli),
+          discountTotalMilli: sum((l) => l.discountAmountMilli),
+          grandTotalMilli: sum((l) => l.lineTotalMilli),
+        ),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Phase 6X: puts this device's unpaid offline cart (its DRAFT) back after
+  /// an app restart or sign-in. Only into an empty cart, and only the
+  /// signed-in staff member's own cart for this store and register (other
+  /// drafts are left untouched). Nothing is sent to the server. Returns true
+  /// when a cart was restored.
+  Future<bool> restoreLocalDraft() async {
+    final support = offline;
+    if (support == null || _op != null || _sale != null || _local != null) {
+      return false;
+    }
+    final scope = support.scope();
+    if (scope == null) return false;
+    final List<OfflineSale> drafts;
+    try {
+      drafts = await support.checkout.storage.getCartDrafts();
+    } catch (_) {
+      return false;
+    }
+    final mine = drafts
+        .where(
+          (d) =>
+              d.salesmanId == scope.salesmanId &&
+              d.storeId == scope.storeId &&
+              d.registerId == scope.registerId &&
+              d.lines.isNotEmpty,
+        )
+        .firstOrNull;
+    // Re-checked: the cart may have been started while storage was read.
+    if (mine == null || _op != null || _sale != null || _local != null) {
+      return false;
+    }
+    _local = [
+      for (final l in mine.lines)
+        OfflineCheckoutLine(
+          productVariationId: l.productVariationId,
+          productName: l.productName,
+          variationName: l.variationName,
+          quantity: l.quantity,
+          unitPriceMilli: l.unitPriceMilli,
+          taxPercent: l.taxPercent,
+          taxMode: l.taxMode,
+          taxAmountMilli: l.taxAmountMilli,
+          discountAmountMilli: l.discountAmountMilli,
+          lineTotalMilli: l.lineTotalMilli,
+        ),
+    ];
+    _localDraftId = mine.localSaleId;
+    _localDraftCreatedAt = mine.createdAt;
+    _localSaleWritten = false;
+    _pendingCustomerId = mine.customerId;
+    _pendingCustomerLabel = mine.customerName;
     _localVersion++;
     _offlineAttempt = null;
     _error = null;
@@ -942,6 +1173,9 @@ class CartController extends ChangeNotifier {
     _notify();
     return true;
   }
+
+  /// The local sale id of the unpaid offline cart (null when there is none).
+  String? get localDraftId => _local == null ? null : _localDraftId;
 
   /// Early feedback while building a local cart (the authoritative check runs
   /// again when the sale is completed).
@@ -1036,9 +1270,27 @@ class CartController extends ChangeNotifier {
   Future<bool> cancelCurrent() async {
     if (_op != null) return false;
     if (_local != null) {
-      // Nothing was saved for a local cart until it is paid: voiding it just
-      // discards the lines on this device.
+      // Phase 6X: the cashier confirmed (the UI asks first). The unpaid cart's
+      // DRAFT is deleted before the lines go; nothing is queued. A sale that
+      // was already written by a failed checkout is never discarded here.
+      if (_localSaleWritten) {
+        return _rejectLocally(localSaleWrittenMessage, CartOperation.cancel);
+      }
+      final id = _localDraftId;
+      if (id != null) {
+        _op = CartOperation.cancel;
+        _notify();
+        try {
+          await offline!.checkout.storage.deleteCartDraft(id);
+        } catch (_) {
+          _op = null;
+          return _rejectLocally(draftDiscardFailedMessage, CartOperation.cancel);
+        }
+        _op = null;
+      }
       _local = null;
+      _localDraftId = null;
+      _localDraftCreatedAt = null;
       _localVersion++;
       _offlineAttempt = null;
       _pendingCustomerId = null;
@@ -1064,6 +1316,50 @@ class CartController extends ChangeNotifier {
         _images.clear();
       },
     );
+  }
+
+  /// Phase 6S: cancels the open draft after its completion was refused with
+  /// POS_DRAFT_SYNCED_OFFLINE, through the existing [cancelCurrent] (the UI
+  /// asks for confirmation first). Only the draft is cancelled: the synced
+  /// offline sale, the offline queue, stock and payments are not touched.
+  /// When the cancel's outcome is unknown (network/timeout/server error) the
+  /// draft is re-read from the server and shown as cancelled ONLY if the
+  /// server says it is; otherwise it stays open and can be cancelled again.
+  Future<bool> cancelDuplicateDraft() async {
+    final sale = _sale;
+    if (_op != null || sale == null || !draftSyncedOffline) return false;
+    if (await cancelCurrent()) {
+      _syncedOfflineDraftId = null;
+      return true;
+    }
+    final failure = _error;
+    if (_errorOp != CartOperation.cancel || failure == null || !failure.isRetryable) {
+      return false; // a definite refusal: shown as is, the draft stays open
+    }
+    try {
+      final fresh = await _service.getSale(sale.id);
+      if (fresh.status == 'canceled') {
+        _lastCancelledSaleId = fresh.id;
+        _sale = null;
+        _syncedOfflineDraftId = null;
+        _pendingCustomerId = null;
+        _pendingCustomerLabel = null;
+        _attempt = null;
+        _labels.clear();
+        _images.clear();
+        _error = null;
+        _errorOp = null;
+        _notify();
+        return true;
+      }
+      _apply(fresh);
+    } on ApiException {
+      // Still unknown: keep the draft as it is (recoverable).
+    }
+    _error = failure.withMessage(duplicateDraftCancelUnconfirmedMessage);
+    _errorOp = CartOperation.cancel;
+    _notify();
+    return false;
   }
 
   /// Voids a HELD sale (from the held-sales list) using the version the
@@ -1132,6 +1428,10 @@ class CartController extends ChangeNotifier {
     _completedVariants = const {};
     _attempt = null;
     _local = null;
+    // Phase 6X: the draft FILE is kept (restored at the next sign-in / start).
+    _localDraftId = null;
+    _localDraftCreatedAt = null;
+    _localSaleWritten = false;
     _localVersion++;
     _offlineAttempt = null;
     _completedOffline = null;
@@ -1196,6 +1496,9 @@ class CartController extends ChangeNotifier {
       _error = _friendly(e, step);
       _errorOp = op;
       if (op == CartOperation.complete) _onlineOutcomeUnknown = e.isRetryable;
+      if (op == CartOperation.complete && isDraftSyncedOffline(e) && _sale != null) {
+        _syncedOfflineDraftId = _sale!.id;
+      }
       if (e.isUnauthorized) onUnauthorized?.call();
 
       final vanished =
@@ -1256,6 +1559,7 @@ class CartController extends ChangeNotifier {
           return e.withMessage(cancelGoneMessage);
         }
       case CartOperation.complete:
+        if (isDraftSyncedOffline(e)) return e.withMessage(draftSyncedOfflineMessage);
       case CartOperation.add:
       case CartOperation.promotion:
       case CartOperation.loyalty:

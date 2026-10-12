@@ -190,14 +190,23 @@ class _PaymentRecoveryDialogState extends State<PaymentRecoveryDialog> {
       });
       return;
     }
-    final message = widget.cart.error?.message;
+    final failure = widget.cart.error;
+    final message = failure?.message;
+    // Phase 6S: the cart is already a synced offline sale. Never retried; the
+    // payment taken on this draft is resolved by a manager (refund), which
+    // the server requires before the draft can be cancelled.
+    final syncedOffline = failure != null && isDraftSyncedOffline(failure);
     // The sale stays a draft with its captured payment (nothing lost); the
     // cart is cleared so it cannot be edited into something else.
     widget.cart.reset();
     await _reload();
     if (!mounted) return;
     setState(
-      () => _error = message == null
+      () => _error = syncedOffline
+          ? 'This sale has already been recorded through offline sync, so it '
+                'cannot be completed again. The payment taken on this draft stays '
+                'recorded; a manager must refund it before the draft can be cancelled.'
+          : message == null
           ? 'The sale could not be completed.'
           : 'The sale could not be completed: $message The payment stays '
                 'recorded; a manager must handle it.',

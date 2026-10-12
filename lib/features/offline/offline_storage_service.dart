@@ -109,7 +109,7 @@ class OfflineStorageService {
   Future<OfflineRecoveryReport> initialize() async {
     _syncedMemo = null;
     await _store.root.create(recursive: true);
-    for (final d in const ['sales', 'queue', 'synced']) {
+    for (final d in const ['sales', 'queue', 'synced', 'drafts']) {
       await _store.ensureDir(d);
     }
     final report = OfflineRecoveryReport();
@@ -118,6 +118,7 @@ class OfflineStorageService {
       'sales',
       'queue',
       'synced',
+      'drafts',
     ]);
 
     // A sale already in synced/ but still in sales/ (crash during the move):
@@ -663,6 +664,70 @@ class OfflineStorageService {
     );
   }
 
+  // ------------------------------------------------- unpaid cart drafts
+
+  /// Phase 6X: the durable copy of an unpaid cart started offline, one file
+  /// per cart in drafts/ (its own folder, so sales/ keeps meaning "recorded
+  /// sales": drafts are never repaired, queued, synced or counted against
+  /// stock). Same [OfflineSale] model with status DRAFT and the cart's stable
+  /// local sale id, which the recorded sale later reuses.
+  String _cartDraftPath(String id) => 'drafts/$id.json';
+
+  /// Writes (creates or replaces) an unpaid cart's draft. Refused when the
+  /// sale is not a DRAFT or when a sale with this id is already recorded
+  /// (the cart was paid — its draft must not come back).
+  Future<void> saveCartDraft(OfflineSale draft) async {
+    _checkId(draft.localSaleId);
+    if (draft.status != OfflineSaleStatus.draft) {
+      throw const OfflineStorageException(
+        'Only a DRAFT can be saved as a cart draft',
+      );
+    }
+    final id = draft.localSaleId;
+    await _store.ensureDir('drafts');
+    await _store.withLocks([_cartDraftPath(id), _salePath(id)], () async {
+      if (_store.exists(_salePath(id)) || _store.exists(_syncedPath(id))) {
+        throw OfflineStorageException('Sale $id is already recorded');
+      }
+      await _store.writeHeld(
+        _cartDraftPath(id),
+        type: _tSale,
+        data: draft.copyWith(updatedAt: _now).toJson(),
+      );
+    });
+  }
+
+  /// Unpaid cart drafts, newest first. A draft whose sale is already recorded
+  /// (the app stopped between recording the sale and deleting its draft) is
+  /// deleted here, never returned. Unreadable files are reported and kept.
+  Future<List<OfflineSale>> getCartDrafts() async {
+    final out = <OfflineSale>[];
+    for (final name in await _store.list('drafts')) {
+      final id = name.substring(0, name.length - 5);
+      if (!OfflineSale.idPattern.hasMatch(id)) continue;
+      if (_store.exists(_salePath(id)) || _store.exists(_syncedPath(id))) {
+        await deleteCartDraft(id);
+        continue;
+      }
+      final r = await _store.read(_cartDraftPath(id), type: _tSale);
+      final d = r.isOk ? OfflineSale.fromJson(r.data!) : null;
+      if (d == null || d.status != OfflineSaleStatus.draft) {
+        _report(_cartDraftPath(id), r.problem ?? 'unreadable cart draft');
+        continue;
+      }
+      out.add(d);
+    }
+    out.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return out;
+  }
+
+  /// Deletes an unpaid cart's draft (missing = nothing to do). Only ever a
+  /// file in drafts/: a recorded sale is never touched.
+  Future<void> deleteCartDraft(String localSaleId) async {
+    _checkId(localSaleId);
+    await _store.delete(_cartDraftPath(localSaleId));
+  }
+
   /// The sale (from sales/ or synced/), or null when missing or unreadable
   /// (reported in [issues]; the file is left exactly as it is).
   Future<OfflineSale?> getSale(String localSaleId) async {
@@ -947,6 +1012,10 @@ class OfflineStorageService {
     }
     for (final name in await _store.list('synced')) {
       await _store.delete('synced/$name');
+    }
+    // Phase 6X: unpaid cart drafts (never sales) go with the device's data.
+    for (final name in await _store.list('drafts')) {
+      await _store.delete('drafts/$name');
     }
     _syncedMemo = null;
   }

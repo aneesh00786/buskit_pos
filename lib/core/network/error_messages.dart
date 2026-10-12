@@ -45,7 +45,24 @@ class PosErrorCodes {
   static const subscriptionInactive = 'POS_JACKY_SUBSCRIPTION_INACTIVE';
   static const businessTypeNotConfigured = 'POS_BUSINESS_TYPE_NOT_CONFIGURED';
   static const businessTypeDisabled = 'POS_BUSINESS_TYPE_DISABLED';
+
+  /// Phase 6S (backend Phase 6R): completing an online draft was refused
+  /// because its cart is already recorded as a synced OFFLINE sale. A
+  /// permanent business conflict — retrying can only fail the same way; the
+  /// duplicate draft is retired by cancelling it.
+  static const draftSyncedOffline = 'POS_DRAFT_SYNCED_OFFLINE';
 }
+
+/// True only for the specific "already recorded through offline sync"
+/// conflict — never for other 409s (version conflicts, stock, ...).
+bool isDraftSyncedOffline(ApiException e) =>
+    e.kind == ApiErrorKind.conflict &&
+    e.errorCode == PosErrorCodes.draftSyncedOffline;
+
+/// Cashier-facing wording for [PosErrorCodes.draftSyncedOffline].
+const draftSyncedOfflineMessage =
+    'This sale has already been recorded through offline sync, so this online draft '
+    'cannot be completed again. You can cancel the duplicate draft after confirming.';
 
 /// Phase 15D — customer-facing wording for licensing refusals (the product
 /// is ThriveWoo POS; the server's own messages are never shown for these).
@@ -116,6 +133,8 @@ String describeApiError(ApiException e) {
       return 'Not enough stock to complete this sale.';
     case PosErrorCodes.stockConflict:
       return 'Stock changed while the sale was being processed. Please try again.';
+    case PosErrorCodes.draftSyncedOffline:
+      return draftSyncedOfflineMessage;
     case PosErrorCodes.refundExceedsProviderRemaining:
       return 'This refund is more than what is left to refund on the customer\'s original payment.';
     case PosErrorCodes.licenceNotActive:

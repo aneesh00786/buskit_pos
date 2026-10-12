@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/desktop/exit_guard.dart';
 import '../../../core/layout/responsive.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/error_messages.dart';
@@ -68,9 +70,25 @@ class _ProductsPageState extends State<ProductsPage>
   final _scroll = ScrollController();
   _CatalogView _view = _CatalogView.grid;
 
+  // Phase 6ZA: a desktop quit (Cmd+Q / closing the last window) is refused
+  // while a sale or payment is in flight. Mobile platforms never send it.
+  AppLifecycleListener? _exitListener;
+
+  Future<AppExitResponse> _onExitRequested() async {
+    if (!mounted) return AppExitResponse.exit;
+    final answer = decideAppExit(cartBusy: context.read<CartController>().isMutating);
+    if (answer == AppExitResponse.cancel) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text(exitBlockedMessage)));
+    }
+    return answer;
+  }
+
   @override
   void initState() {
     super.initState();
+    _exitListener = AppLifecycleListener(onExitRequested: _onExitRequested);
     WidgetsBinding.instance.addObserver(this);
     _scroll.addListener(_onScroll);
     // Controller methods notify listeners synchronously, which is not allowed
@@ -80,7 +98,13 @@ class _ProductsPageState extends State<ProductsPage>
       final c = context.read<ProductListController>();
       unawaited(c.loadCategories());
       unawaited(c.loadInitial());
-      _startPaymentRecovery();
+      // Phase 6X: put back an unpaid offline cart saved before a restart
+      // FIRST — payment recovery never interrupts a cart that is open.
+      final cart = context.read<CartController>();
+      unawaited(() async {
+        await cart.restoreLocalDraft();
+        if (mounted) _startPaymentRecovery();
+      }());
     });
   }
 
@@ -163,6 +187,7 @@ class _ProductsPageState extends State<ProductsPage>
 
   @override
   void dispose() {
+    _exitListener?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _reachable?.removeListener(_onReachability);
     _scroll.dispose();

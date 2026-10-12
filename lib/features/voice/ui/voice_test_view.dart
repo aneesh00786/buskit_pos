@@ -37,7 +37,7 @@ Future<bool> showVoiceTest(
 }) {
   final readScope = scope ?? _sessionScope(context);
   final controller = VoiceController(
-    permission: permission ?? const PermissionHandlerMicrophone(),
+    permission: permission ?? defaultMicrophonePermission(),
     recognizer: recognizer ?? SpeechToTextRecognizer(),
     scope: readScope,
     previewService:
