@@ -174,8 +174,7 @@ class ShiftSummary {
 
   bool get isOpen => status == 'open';
 
-  String get registerLabel =>
-      registerName ?? registerCode ?? 'Register';
+  String get registerLabel => registerName ?? registerCode ?? 'Register';
 
   ShiftSummary withCashCount(ShiftCashCount? count) => ShiftSummary(
     shiftId: shiftId,

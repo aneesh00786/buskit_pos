@@ -449,7 +449,8 @@ class SalesHistoryController extends ChangeNotifier {
     String? reason,
   }) async {
     if (_refundStatus == RefundStatus.refunding) return false;
-    final sorted = [...lines]..sort((a, b) => a.saleItemId.compareTo(b.saleItemId));
+    final sorted = [...lines]
+      ..sort((a, b) => a.saleItemId.compareTo(b.saleItemId));
     final fingerprint = [
       saleId,
       sorted.map((l) => l.canonical).join(','),

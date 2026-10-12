@@ -34,7 +34,9 @@ Future<void> showSettings(BuildContext context) {
   Widget content() => MultiProvider(
     providers: [
       ChangeNotifierProvider<SettingsController>.value(value: controller),
-      ChangeNotifierProvider<CashMovementController>.value(value: cashController),
+      ChangeNotifierProvider<CashMovementController>.value(
+        value: cashController,
+      ),
     ],
     child: const SettingsView(),
   );
@@ -156,7 +158,8 @@ class _Body extends StatelessWidget {
     // area shows a notice, but cash management, printer setup and About stay
     // available: they have their own permissions (or none).
     final session = context.watch<SessionController>();
-    final storeAreaDenied = session.isDenied('settings.view') ||
+    final storeAreaDenied =
+        session.isDenied('settings.view') ||
         (controller.status == SettingsStatus.error &&
             _isPermissionDenied(controller.error));
     if (storeAreaDenied) {
@@ -283,15 +286,13 @@ class _CommonSections extends StatelessWidget {
             children: [
               _KeyValue('App version', AppConfig.appVersion),
               // Phase 15D: from the signed-in session (GET /auth/me) only.
-              _KeyValue(
-                'Business type',
-                switch (context.watch<SessionController>().businessType) {
-                  BusinessType.retail => 'Retail',
-                  BusinessType.restaurant => 'Restaurant',
-                  null => 'Not set',
-                },
-                key: const Key('about-business-type'),
-              ),
+              _KeyValue('Business type', switch (context
+                  .watch<SessionController>()
+                  .businessType) {
+                BusinessType.retail => 'Retail',
+                BusinessType.restaurant => 'Restaurant',
+                null => 'Not set',
+              }, key: const Key('about-business-type')),
               _KeyValue(
                 'ThriveWoo POS licence',
                 context.watch<SessionController>().isLicensed
@@ -405,12 +406,15 @@ class _StoreSection extends StatelessWidget {
           // Editing needs settings.store AND settings.edit (Phase 17.10 C2);
           // hidden only when the loaded context positively lacks one.
           if (!context.watch<SessionController>().isDenied('settings.store') &&
-              !context.watch<SessionController>().isDenied('settings.edit')) ...[
+              !context.watch<SessionController>().isDenied(
+                'settings.edit',
+              )) ...[
             const SizedBox(height: PosTokens.s8),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: () => _showEditStoreDialog(context, controller, store),
+                onPressed: () =>
+                    _showEditStoreDialog(context, controller, store),
                 icon: const Icon(Icons.edit_outlined),
                 label: const Text('Edit Store'),
               ),
@@ -563,8 +567,9 @@ class _RegistersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canManage =
-        !context.watch<SessionController>().isDenied('settings.register');
+    final canManage = !context.watch<SessionController>().isDenied(
+      'settings.register',
+    );
     return _SectionCard(
       title: 'Registers',
       icon: Icons.point_of_sale_outlined,
@@ -632,8 +637,9 @@ class _DevicesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canManage =
-        !context.watch<SessionController>().isDenied('settings.device');
+    final canManage = !context.watch<SessionController>().isDenied(
+      'settings.device',
+    );
     return _SectionCard(
       title: 'Devices',
       icon: Icons.tablet_mac_outlined,

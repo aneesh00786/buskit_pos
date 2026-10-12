@@ -172,8 +172,7 @@ class ReceiptActionsState extends State<ReceiptActions> {
   Future<void> _setup() async {
     // "Test print" prints the receipt it is given: without reprint
     // permission it gets the test receipt, never a copy of this sale.
-    final receipt =
-        reprintRefusal(context.read<SessionController?>()) == null
+    final receipt = reprintRefusal(context.read<SessionController?>()) == null
         ? widget.receipt
         : testPrintReceipt;
     final saved = await showDialog<bool>(

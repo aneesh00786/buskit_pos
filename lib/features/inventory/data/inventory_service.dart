@@ -45,7 +45,9 @@ class ApiInventoryService implements InventoryService {
   }
 
   @override
-  Future<List<InventoryAdjustment>> listHistory({int? productVariationId}) async {
+  Future<List<InventoryAdjustment>> listHistory({
+    int? productVariationId,
+  }) async {
     final data = await _client.get(
       '/inventory/adjustments',
       query: productVariationId == null

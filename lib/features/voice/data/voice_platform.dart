@@ -44,8 +44,13 @@ abstract class MicrophonePermission {
 /// validated), so no unsupported or untested plugin path is ever called.
 MicrophonePermission defaultMicrophonePermission([TargetPlatform? platform]) {
   final p = platform ?? defaultTargetPlatform;
-  const desktop = {TargetPlatform.macOS, TargetPlatform.windows, TargetPlatform.linux};
-  if (!kIsWeb && desktop.contains(p)) return const UnsupportedPlatformMicrophone();
+  const desktop = {
+    TargetPlatform.macOS,
+    TargetPlatform.windows,
+    TargetPlatform.linux,
+  };
+  if (!kIsWeb && desktop.contains(p))
+    return const UnsupportedPlatformMicrophone();
   return const PermissionHandlerMicrophone();
 }
 
@@ -58,7 +63,8 @@ class UnsupportedPlatformMicrophone implements MicrophonePermission {
   Future<VoicePermission> status() async => VoicePermission.unsupportedPlatform;
 
   @override
-  Future<VoicePermission> request() async => VoicePermission.unsupportedPlatform;
+  Future<VoicePermission> request() async =>
+      VoicePermission.unsupportedPlatform;
 
   @override
   Future<bool> openSettings() async => false;

@@ -213,7 +213,9 @@ class _AuthGate extends StatelessWidget {
             Provider<ProductService>.value(value: products),
             Provider<CameraScanner>.value(value: const MobileCameraScanner()),
             // Card-terminal payments through the server's payment-attempt API.
-            Provider<PaymentTerminalService>.value(value: ApiPaymentTerminalService(client)),
+            Provider<PaymentTerminalService>.value(
+              value: ApiPaymentTerminalService(client),
+            ),
             // Phase 6: unfinished sales/payments of this device after a restart.
             Provider<PaymentRecoveryService?>.value(
               value: ApiPaymentRecoveryService(client),

@@ -88,7 +88,10 @@ class ApiSalesHistoryService implements SalesHistoryService {
 
   @override
   Future<CompletedSale?> getDetail(int id, {bool refresh = false}) async {
-    final data = await _client.get('/sales/$id', query: refresh ? const {'refresh': 'true'} : null);
+    final data = await _client.get(
+      '/sales/$id',
+      query: refresh ? const {'refresh': 'true'} : null,
+    );
     return CompletedSale.fromJson(data);
   }
 

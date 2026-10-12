@@ -149,7 +149,12 @@ class SalesTotals {
 
 /// Cash drawer deposits/withdrawals for the period — never sales revenue.
 class CashMovementTotals {
-  const CashMovementTotals({this.deposits = 0, this.withdrawals = 0, this.depositCount = 0, this.withdrawalCount = 0});
+  const CashMovementTotals({
+    this.deposits = 0,
+    this.withdrawals = 0,
+    this.depositCount = 0,
+    this.withdrawalCount = 0,
+  });
   final double deposits;
   final double withdrawals;
   final int depositCount;
@@ -218,7 +223,12 @@ class AnalyticsSummary {
       topProductsFrom: asString(topPeriod?['from']),
       topProductsTo: asString(topPeriod?['to']),
       sales: sales == null
-          ? SalesTotals(completedCount: legacyCount, grossSales: legacyGross, refundsTotal: 0, netSales: legacyGross)
+          ? SalesTotals(
+              completedCount: legacyCount,
+              grossSales: legacyGross,
+              refundsTotal: 0,
+              netSales: legacyGross,
+            )
           : SalesTotals(
               completedCount: asInt(sales['completed_count']) ?? legacyCount,
               grossSales: asDouble(sales['gross_sales']) ?? legacyGross,
@@ -227,9 +237,13 @@ class AnalyticsSummary {
               fullRefundCount: asInt(sales['full_refund_count']) ?? 0,
               partialRefundCount: asInt(sales['partial_refund_count']) ?? 0,
               fullyRefundedSales: asInt(sales['fully_refunded_sales']) ?? 0,
-              partiallyRefundedSales: asInt(sales['partially_refunded_sales']) ?? 0,
+              partiallyRefundedSales:
+                  asInt(sales['partially_refunded_sales']) ?? 0,
             ),
-      refundPayouts: asList(m['refund_payouts']).map(MethodAmount.fromJson).whereType<MethodAmount>().toList(),
+      refundPayouts: asList(m['refund_payouts'])
+          .map(MethodAmount.fromJson)
+          .whereType<MethodAmount>()
+          .toList(),
       cashMovements: cash == null
           ? const CashMovementTotals()
           : CashMovementTotals(

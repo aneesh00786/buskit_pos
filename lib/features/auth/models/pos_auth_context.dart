@@ -93,9 +93,10 @@ class PosAuthContext {
     if (staff == null) return null;
     return PosAuthContext(
       staff: staff,
-      permissions: asList(
-        m['permissions'],
-      ).map(asString).whereType<String>().toList(),
+      permissions: asList(m['permissions'])
+          .map(asString)
+          .whereType<String>()
+          .toList(),
       businessType: BusinessType.fromWire(
         asMap(m['business'])?['business_type'],
       ),

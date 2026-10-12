@@ -32,8 +32,10 @@ class PosErrorCodes {
 
   /// Shift Close: the register has no open shift (closed or never opened).
   static const noOpenShift = 'POS_NO_OPEN_SHIFT';
-  static const refundExceedsProviderRemaining = 'POS_PAYMENT_REFUND_EXCEEDS_REMAINING';
-  static const paymentProviderUnavailable = 'POS_PAYMENT_PROVIDER_NOT_SUPPORTED';
+  static const refundExceedsProviderRemaining =
+      'POS_PAYMENT_REFUND_EXCEEDS_REMAINING';
+  static const paymentProviderUnavailable =
+      'POS_PAYMENT_PROVIDER_NOT_SUPPORTED';
 
   /// Phase 14B: more than one active product carries the scanned barcode;
   /// the server chose none.
@@ -90,19 +92,26 @@ const _c5PermissionMessages = <String, String>{
   'promotions.view': 'You do not have permission to view promotions.',
   'promotions.apply': 'You do not have permission to apply promotions.',
   'loyalty.view': 'You do not have permission to view loyalty details.',
-  'loyalty.redeem_points': 'You do not have permission to redeem loyalty points.',
-  'loyalty.redeem_wallet': 'You do not have permission to use the loyalty wallet.',
+  'loyalty.redeem_points':
+      'You do not have permission to redeem loyalty points.',
+  'loyalty.redeem_wallet':
+      'You do not have permission to use the loyalty wallet.',
   'shifts.open': 'You do not have permission to open a shift. Ask a manager to open the shift for this register.',
-  'shifts.close': 'You do not have permission to close the shift. Ask a manager.',
+  'shifts.close':
+      'You do not have permission to close the shift. Ask a manager.',
   'payments.accept_cash': 'You do not have permission to accept cash payments.',
-  'reports.product': 'You do not have permission to view product sales reports.',
-  'reports.cashier': 'You do not have permission to view cashier sales reports.',
+  'reports.product':
+      'You do not have permission to view product sales reports.',
+  'reports.cashier':
+      'You do not have permission to view cashier sales reports.',
   'reports.sales': 'You do not have permission to view sales reports.',
   'reports.tax': 'You do not have permission to view tax reports.',
   'payments.accept_card': 'You do not have permission to accept card payments.',
-  'payments.accept_other': 'You do not have permission to accept this payment method.',
+  'payments.accept_other':
+      'You do not have permission to accept this payment method.',
   // Phase 14A
-  'payments.cash_drawer': 'You do not have permission to open the cash drawer. Ask a manager.',
+  'payments.cash_drawer':
+      'You do not have permission to open the cash drawer. Ask a manager.',
 };
 
 /// Turns an [ApiException] into a short, user-facing message. Codes are
@@ -163,7 +172,8 @@ String describeApiError(ApiException e) {
       if (anyOf.contains('reports.sales')) {
         return 'You do not have permission to view sales reports.';
       }
-      if (anyOf.contains('loyalty.redeem_points') && anyOf.contains('loyalty.redeem_wallet')) {
+      if (anyOf.contains('loyalty.redeem_points') &&
+          anyOf.contains('loyalty.redeem_wallet')) {
         return 'You do not have permission to change loyalty redemptions. Ask a manager or administrator.';
       }
       final c5 = _c5PermissionMessages[permission];

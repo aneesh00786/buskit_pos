@@ -76,7 +76,9 @@ class _ProductsPageState extends State<ProductsPage>
 
   Future<AppExitResponse> _onExitRequested() async {
     if (!mounted) return AppExitResponse.exit;
-    final answer = decideAppExit(cartBusy: context.read<CartController>().isMutating);
+    final answer = decideAppExit(
+      cartBusy: context.read<CartController>().isMutating,
+    );
     if (answer == AppExitResponse.cancel) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -216,7 +218,9 @@ class _ProductsPageState extends State<ProductsPage>
     if (notSellable != null) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(_snackBar(notSellable, duration: const Duration(seconds: 5)));
+        ..showSnackBar(
+          _snackBar(notSellable, duration: const Duration(seconds: 5)),
+        );
       return;
     }
     final label = [
@@ -372,161 +376,168 @@ class _ProductsPageState extends State<ProductsPage>
       child: PosShortcuts(
         searchFocus: _searchFocus,
         child: ResponsivePosLayout(
-        builder: (context, layout) {
-          final staff = session.salesmanId == null
-              ? null
-              : 'Staff ${session.salesmanId}';
-          return PosScaffold(
-            layout: layout,
-            compactTitle: 'Products',
-            compactActions: [
-              if (client != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: NetworkStatusChip(
-                    reachable: client.reachable,
-                    showLabel: false,
-                  ),
-                ),
-              if (camera != null)
-                IconButton(
-                  tooltip: onScan == null
-                      ? 'Camera scanning is not available on this device'
-                      : 'Scan barcode with camera',
-                  constraints: const BoxConstraints(
-                    minWidth: 48,
-                    minHeight: 48,
-                  ),
-                  onPressed: onScan,
-                  icon: const Icon(Icons.qr_code_scanner),
-                ),
-              if (held != null) _HeldSalesAction(held: held),
-            ],
-            sidebarBuilder: (collapsed) => PosSidebar(
-              collapsed: collapsed,
-              brandTitle: 'ThriveWoo POS',
-              brandSubtitle: 'Point of sale',
-              deviceLabel: session.deviceIdentifier,
-              appVersion: AppConfig.appVersion,
-              onHelp: () => _showHelp(context, session.deviceIdentifier),
-              heldCount: held?.heldCount,
-              onOpenOrders: held == null
-                  ? null
-                  : () {
-                      // The compact layout shows the sidebar in a drawer: close it first.
-                      if (layout.isCompact) Navigator.of(context).pop();
-                      showHeldSales(context);
-                    },
-              onOpenHistory: () {
-                // The compact layout shows the sidebar in a drawer: close it first.
-                if (layout.isCompact) Navigator.of(context).pop();
-                showSalesHistory(context);
-              },
-              onOpenCustomers: () {
-                if (layout.isCompact) Navigator.of(context).pop();
-                showCustomers(context);
-              },
-              onOpenInventory: () {
-                if (layout.isCompact) Navigator.of(context).pop();
-                showInventory(
-                  context,
-                  onCatalogueChanged: context.read<ProductListController>().retry,
-                );
-              },
-              onOpenPromotions: () {
-                if (layout.isCompact) Navigator.of(context).pop();
-                showPromotions(context);
-              },
-              onOpenAnalytics: () {
-                if (layout.isCompact) Navigator.of(context).pop();
-                showAnalytics(context);
-              },
-              // Phase 14F-B: hidden only when every report permission is
-              // positively denied (the server enforces each report itself).
-              onOpenReports:
-                  ReportKind.values.every((k) => session.isDenied(k.permission))
-                  ? null
-                  : () {
-                      if (layout.isCompact) Navigator.of(context).pop();
-                      showReports(context);
-                    },
-              onOpenSettings: () {
-                if (layout.isCompact) Navigator.of(context).pop();
-                showSettings(context);
-              },
-              // Phase 9: store-wide payment exceptions — only when wired
-              // and not positively denied payments.view_store_exceptions
-              // (the server enforces it either way).
-              onOpenPaymentExceptions:
-                  _storeExceptions(context) == null ||
-                      session.isDenied('payments.view_store_exceptions')
-                  ? null
-                  : () {
-                      if (layout.isCompact) Navigator.of(context).pop();
-                      showStoreExceptions(context);
-                    },
-              onSignOut: session.logoutStaff,
-              // Hidden only when the loaded permissions positively lack
-              // shifts.view (the summary needs it); the backend still
-              // enforces shifts.view / shifts.close itself.
-              onCloseShift: session.isDenied('shifts.view')
-                  ? null
-                  : () async {
-                      if (layout.isCompact) Navigator.of(context).pop();
-                      // Sales saved offline and not yet synced (warned about).
-                      var unsynced = 0;
-                      try {
-                        unsynced =
-                            (await readOfflineServices(
-                                      context,
-                                    )?.storage.getPendingSales() ??
-                                    const [])
-                                .length;
-                      } catch (_) {}
-                      if (!context.mounted) return;
-                      showShiftClose(
-                        context,
-                        cartHasItems: cart.hasActiveDraftWithItems,
-                        unsyncedOfflineSales: unsynced,
-                        onClosed: (result) {
-                          // Offline sales must stop with the shift.
-                          readOfflineServices(
-                            context,
-                          )?.cache.markShiftClosed(result.shiftId);
-                          session.logoutStaff(
-                            notice:
-                                'Shift #${result.shiftId} closed. Sign in to open the next shift.',
-                          );
-                        },
-                      );
-                    },
-            ),
-            header: PosHeader(
-              search: _SearchField(controller: _search, focusNode: _searchFocus),
-              staffLabel: staff,
-              reachable: client?.reachable,
-              onScanBarcode: onScan,
-              // Phase 14F-C: the header's Reports action opens the same
-              // screen as the sidebar (hidden rules identical).
-              onOpenReports:
-                  ReportKind.values.every((k) => session.isDenied(k.permission))
-                  ? null
-                  : () => showReports(context),
-            ),
-            banner: OfflineBanner(reachable: client?.reachable),
-            body: _Catalog(
+          builder: (context, layout) {
+            final staff = session.salesmanId == null
+                ? null
+                : 'Staff ${session.salesmanId}';
+            return PosScaffold(
               layout: layout,
-              search: _search,
-              scroll: _scroll,
-              view: _view,
-              onViewChanged: (v) => setState(() => _view = v),
-              onSelect: _onSelect,
-            ),
-            cart: const CartPanel(),
-            summary: const SalesSummaryPanel(),
-            bottomBar: _CartBar(cart: cart),
-          );
-        },
+              compactTitle: 'Products',
+              compactActions: [
+                if (client != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: NetworkStatusChip(
+                      reachable: client.reachable,
+                      showLabel: false,
+                    ),
+                  ),
+                if (camera != null)
+                  IconButton(
+                    tooltip: onScan == null
+                        ? 'Camera scanning is not available on this device'
+                        : 'Scan barcode with camera',
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    onPressed: onScan,
+                    icon: const Icon(Icons.qr_code_scanner),
+                  ),
+                if (held != null) _HeldSalesAction(held: held),
+              ],
+              sidebarBuilder: (collapsed) => PosSidebar(
+                collapsed: collapsed,
+                brandTitle: 'ThriveWoo POS',
+                brandSubtitle: 'Point of sale',
+                deviceLabel: session.deviceIdentifier,
+                appVersion: AppConfig.appVersion,
+                onHelp: () => _showHelp(context, session.deviceIdentifier),
+                heldCount: held?.heldCount,
+                onOpenOrders: held == null
+                    ? null
+                    : () {
+                        // The compact layout shows the sidebar in a drawer: close it first.
+                        if (layout.isCompact) Navigator.of(context).pop();
+                        showHeldSales(context);
+                      },
+                onOpenHistory: () {
+                  // The compact layout shows the sidebar in a drawer: close it first.
+                  if (layout.isCompact) Navigator.of(context).pop();
+                  showSalesHistory(context);
+                },
+                onOpenCustomers: () {
+                  if (layout.isCompact) Navigator.of(context).pop();
+                  showCustomers(context);
+                },
+                onOpenInventory: () {
+                  if (layout.isCompact) Navigator.of(context).pop();
+                  showInventory(
+                    context,
+                    onCatalogueChanged: context
+                        .read<ProductListController>()
+                        .retry,
+                  );
+                },
+                onOpenPromotions: () {
+                  if (layout.isCompact) Navigator.of(context).pop();
+                  showPromotions(context);
+                },
+                onOpenAnalytics: () {
+                  if (layout.isCompact) Navigator.of(context).pop();
+                  showAnalytics(context);
+                },
+                // Phase 14F-B: hidden only when every report permission is
+                // positively denied (the server enforces each report itself).
+                onOpenReports:
+                    ReportKind.values.every(
+                      (k) => session.isDenied(k.permission),
+                    )
+                    ? null
+                    : () {
+                        if (layout.isCompact) Navigator.of(context).pop();
+                        showReports(context);
+                      },
+                onOpenSettings: () {
+                  if (layout.isCompact) Navigator.of(context).pop();
+                  showSettings(context);
+                },
+                // Phase 9: store-wide payment exceptions — only when wired
+                // and not positively denied payments.view_store_exceptions
+                // (the server enforces it either way).
+                onOpenPaymentExceptions:
+                    _storeExceptions(context) == null ||
+                        session.isDenied('payments.view_store_exceptions')
+                    ? null
+                    : () {
+                        if (layout.isCompact) Navigator.of(context).pop();
+                        showStoreExceptions(context);
+                      },
+                onSignOut: session.logoutStaff,
+                // Hidden only when the loaded permissions positively lack
+                // shifts.view (the summary needs it); the backend still
+                // enforces shifts.view / shifts.close itself.
+                onCloseShift: session.isDenied('shifts.view')
+                    ? null
+                    : () async {
+                        if (layout.isCompact) Navigator.of(context).pop();
+                        // Sales saved offline and not yet synced (warned about).
+                        var unsynced = 0;
+                        try {
+                          unsynced =
+                              (await readOfflineServices(context)?.storage
+                                          .getPendingSales() ??
+                                      const [])
+                                  .length;
+                        } catch (_) {}
+                        if (!context.mounted) return;
+                        showShiftClose(
+                          context,
+                          cartHasItems: cart.hasActiveDraftWithItems,
+                          unsyncedOfflineSales: unsynced,
+                          onClosed: (result) {
+                            // Offline sales must stop with the shift.
+                            readOfflineServices(context)?.cache
+                                .markShiftClosed(result.shiftId);
+                            session.logoutStaff(
+                              notice:
+                                  'Shift #${result.shiftId} closed. Sign in to open the next shift.',
+                            );
+                          },
+                        );
+                      },
+              ),
+              header: PosHeader(
+                search: _SearchField(
+                  controller: _search,
+                  focusNode: _searchFocus,
+                ),
+                staffLabel: staff,
+                reachable: client?.reachable,
+                onScanBarcode: onScan,
+                // Phase 14F-C: the header's Reports action opens the same
+                // screen as the sidebar (hidden rules identical).
+                onOpenReports:
+                    ReportKind.values.every(
+                      (k) => session.isDenied(k.permission),
+                    )
+                    ? null
+                    : () => showReports(context),
+              ),
+              banner: OfflineBanner(reachable: client?.reachable),
+              body: _Catalog(
+                layout: layout,
+                search: _search,
+                scroll: _scroll,
+                view: _view,
+                onViewChanged: (v) => setState(() => _view = v),
+                onSelect: _onSelect,
+              ),
+              cart: const CartPanel(),
+              summary: const SalesSummaryPanel(),
+              bottomBar: _CartBar(cart: cart),
+            );
+          },
         ),
       ),
     );

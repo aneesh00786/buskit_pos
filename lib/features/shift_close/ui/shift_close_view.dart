@@ -61,9 +61,9 @@ Future<void> showShiftClose(
       isDismissible: false,
       enableDrag: false,
       builder: (_) => SizedBox(
-      height: size.height * 0.94,
-      child: SheetSafeArea(child: content()),
-    ),
+        height: size.height * 0.94,
+        child: SheetSafeArea(child: content()),
+      ),
     );
   }
   final result = controller.result;
@@ -275,7 +275,10 @@ class _SummaryForm extends StatelessWidget {
           title: 'Sales',
           children: [
             _Line('Sales (${s.salesCount})', formatMoney(s.salesTotal)),
-            _Line('Refunds (${s.refundsCount})', '−${formatMoney(s.refundsTotal)}'),
+            _Line(
+              'Refunds (${s.refundsCount})',
+              '−${formatMoney(s.refundsTotal)}',
+            ),
             if (s.voidsCount > 0)
               _Line('Voided (${s.voidsCount})', formatMoney(s.voidsTotal)),
           ],

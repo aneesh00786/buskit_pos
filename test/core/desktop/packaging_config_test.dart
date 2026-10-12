@@ -38,12 +38,17 @@ void main() {
     expect(s, contains("'data\\app.so'"));
   });
 
-  test('no server address is hard-coded in the packaging scripts, and no files are bundled as Flutter assets', () {
+  test('no server address is hard-coded in the packaging scripts, and only assets/images/ is bundled as Flutter assets', () {
     final url = RegExp(r'https://[a-z0-9]');
     for (final f in ['scripts/package_macos.sh', 'scripts/package_windows.ps1', 'scripts/verify_desktop_artifact.sh']) {
       expect(url.hasMatch(read(f)), isFalse, reason: f);
     }
-    expect(RegExp(r'^\s+assets:', multiLine: true).hasMatch(read('pubspec.yaml')), isFalse,
-        reason: 'nothing from the repository (e.g. .env files) is packaged as an asset');
+    final pubspec = read('pubspec.yaml');
+    final section = RegExp(r'^  assets:\n((?:    - .*\n)+)', multiLine: true).firstMatch(pubspec);
+    final entries = section == null ? <String>[] : RegExp(r'- (.*)').allMatches(section.group(1)!).map((m) => m.group(1)!.trim()).toList();
+    expect(entries, ['assets/images/'], reason: 'nothing else from the repository (e.g. .env files) is packaged as an asset');
+    final images = Directory('assets/images').listSync(recursive: true).whereType<File>().map((f) => f.path.split('/').last);
+    expect(images.where((n) => n.startsWith('.env') || RegExp(r'\.(p12|pfx|p8|pem|key|jks|keystore|json|yaml)$').hasMatch(n)), isEmpty,
+        reason: 'assets/images holds images only');
   });
 }

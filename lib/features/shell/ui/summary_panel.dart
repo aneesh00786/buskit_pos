@@ -10,7 +10,12 @@ import '../../analytics/state/analytics_controller.dart';
 import '../../auth/state/session_controller.dart';
 
 /// Phase C5: the backend opens /analytics/summary with ANY one of these.
-const _reportPermissions = ['reports.sales', 'reports.cashier', 'reports.payment', 'reports.product'];
+const _reportPermissions = [
+  'reports.sales',
+  'reports.cashier',
+  'reports.payment',
+  'reports.product',
+];
 
 /// Right-hand sales summary for very wide screens. Three cards (today's
 /// sales, top items, staff performance) show real figures from
@@ -38,7 +43,8 @@ class _SalesSummaryPanelState extends State<SalesSummaryPanel> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       // No reporting permission at all (known up front): don't call.
-      if (context.read<SessionController>().isDeniedAll(_reportPermissions)) return;
+      if (context.read<SessionController>().isDeniedAll(_reportPermissions))
+        return;
       _controller.load();
     });
   }
@@ -58,10 +64,12 @@ class _SalesSummaryPanelState extends State<SalesSummaryPanel> {
         // Phase C5: no reporting permission (known up front, or the backend's
         // 403) is its own state — never "loading", never "temporarily
         // unavailable".
-        final noAccess = session.isDeniedAll(_reportPermissions) ||
+        final noAccess =
+            session.isDeniedAll(_reportPermissions) ||
             (_controller.status == AnalyticsStatus.error &&
                 _controller.error?.errorCode == PosErrorCodes.permissionDenied);
-        final loading = !noAccess &&
+        final loading =
+            !noAccess &&
             (_controller.status == AnalyticsStatus.idle ||
                 _controller.status == AnalyticsStatus.loading);
         // Every card below treats "no access" like "unavailable".

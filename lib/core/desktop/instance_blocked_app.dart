@@ -8,9 +8,12 @@ import 'single_instance.dart';
 /// the POS starts (see [SingleInstanceLock]). Null on Android / iOS (no guard
 /// needed). Never throws: anything unexpected is [InstanceOwnership.failed].
 Future<InstanceClaim?> claimDesktopInstance({TargetPlatform? platform}) async {
-  if (!SingleInstanceLock.appliesTo(platform ?? defaultTargetPlatform)) return null;
+  if (!SingleInstanceLock.appliesTo(platform ?? defaultTargetPlatform))
+    return null;
   try {
-    return await SingleInstanceLock.acquire(await getApplicationSupportDirectory());
+    return await SingleInstanceLock.acquire(
+      await getApplicationSupportDirectory(),
+    );
   } catch (e) {
     return InstanceClaim(InstanceOwnership.failed, detail: '$e');
   }
@@ -23,7 +26,8 @@ class InstanceBlockedApp extends StatelessWidget {
 
   final InstanceClaim claim;
 
-  static const alreadyRunningTitle = 'ThriveWoo POS is already open on this computer';
+  static const alreadyRunningTitle =
+      'ThriveWoo POS is already open on this computer';
   static const alreadyRunningMessage =
       'Only one copy of the POS can run at a time, so sales saved on this computer are never written twice. '
       'Switch to the window that is already open, or close it and start the POS again.';
@@ -48,16 +52,25 @@ class InstanceBlockedApp extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(running ? Icons.filter_none : Icons.error_outline, size: 48),
+                    Icon(
+                      running ? Icons.filter_none : Icons.error_outline,
+                      size: 48,
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       running ? alreadyRunningTitle : checkFailedTitle,
                       key: const Key('instance-blocked-title'),
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    Text(running ? alreadyRunningMessage : checkFailedMessage, textAlign: TextAlign.center),
+                    Text(
+                      running ? alreadyRunningMessage : checkFailedMessage,
+                      textAlign: TextAlign.center,
+                    ),
                   ],
                 ),
               ),

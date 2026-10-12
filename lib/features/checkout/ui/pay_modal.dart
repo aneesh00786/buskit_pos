@@ -228,13 +228,15 @@ class _PayModalState extends State<PayModal> {
       await _rememberForRecovery(sale.id);
       if (!mounted) return;
       // Phase 6ZA: a terminal payment in progress blocks quitting the desktop app.
-      attempt = await InFlightOperations.track(() => showTerminalPayment(
-        context,
-        service: service,
-        saleId: sale.id,
-        provider: provider,
-        amountMilli: totalMilli,
-      ));
+      attempt = await InFlightOperations.track(
+        () => showTerminalPayment(
+          context,
+          service: service,
+          saleId: sale.id,
+          provider: provider,
+          amountMilli: totalMilli,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _terminalInProgress = false);
     }
@@ -258,16 +260,18 @@ class _PayModalState extends State<PayModal> {
     await _rememberForRecovery(sale.id);
     if (!mounted) return;
     // Phase 6ZA: a QR payment in progress blocks quitting the desktop app.
-    final attempt = await InFlightOperations.track(() => showQrPayment(
-      context,
-      service: service,
-      saleId: sale.id,
-      provider: provider,
-      amountMilli: totalMilli,
-      currencyLabel: provider.currencies.length == 1
-          ? provider.currencies.first
-          : '',
-    ));
+    final attempt = await InFlightOperations.track(
+      () => showQrPayment(
+        context,
+        service: service,
+        saleId: sale.id,
+        provider: provider,
+        amountMilli: totalMilli,
+        currencyLabel: provider.currencies.length == 1
+            ? provider.currencies.first
+            : '',
+      ),
+    );
     if (attempt == null || !mounted) return;
     // QR is tendered as "other"; the server re-verifies the captured attempt.
     await cart.completeSale([
@@ -391,7 +395,8 @@ class _PayModalState extends State<PayModal> {
   Widget build(BuildContext context) {
     // Never sit on a tender this staff member may not use (Phase C5).
     final available = _availableModes(context);
-    if (available.isNotEmpty && !available.contains(_mode)) _mode = available.first;
+    if (available.isNotEmpty && !available.contains(_mode))
+      _mode = available.first;
     final sessionForTender = context.watch<SessionController>();
     if (_secondary == TenderMethod.card &&
         sessionForTender.isDenied('payments.accept_card')) {
@@ -431,7 +436,10 @@ class _PayModalState extends State<PayModal> {
               ),
             ),
             Expanded(
-              child: OfflineSaleSavedView(sale: savedOffline, onNewSale: newSale),
+              child: OfflineSaleSavedView(
+                sale: savedOffline,
+                onNewSale: newSale,
+              ),
             ),
           ],
         ),
@@ -455,7 +463,8 @@ class _PayModalState extends State<PayModal> {
     final failure =
         (cart.error != null &&
             (cart.errorOperation == CartOperation.complete ||
-                (duplicateDraft && cart.errorOperation == CartOperation.cancel)))
+                (duplicateDraft &&
+                    cart.errorOperation == CartOperation.cancel)))
         ? cart.error
         : null;
     final names = {
@@ -505,37 +514,47 @@ class _PayModalState extends State<PayModal> {
                 child: duplicateDraft
                     ? FilledButton(
                         key: const Key('cancel-duplicate-draft'),
-                        onPressed: busy ? null : () => _cancelDuplicateDraft(cart),
+                        onPressed: busy
+                            ? null
+                            : () => _cancelDuplicateDraft(cart),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(52),
                           backgroundColor: Theme.of(context).colorScheme.error,
-                          foregroundColor: Theme.of(context).colorScheme.onError,
+                          foregroundColor: Theme.of(context)
+                              .colorScheme
+                              .onError,
                         ),
                         child: busy
                             ? const SizedBox(
                                 width: 22,
                                 height: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Text('Cancel duplicate draft'),
                       )
                     : FilledButton(
-                  onPressed: (!busy && plan.isValid)
-                      ? () => _complete(cart)
-                      : null,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                    backgroundColor: PosTokens.of(context).success,
-                    foregroundColor: PosTokens.of(context).onSuccess,
-                  ),
-                  child: busy
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(retrying ? 'Retry payment' : 'Complete Sale'),
-                ),
+                        onPressed: (!busy && plan.isValid)
+                            ? () => _complete(cart)
+                            : null,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52),
+                          backgroundColor: PosTokens.of(context).success,
+                          foregroundColor: PosTokens.of(context).onSuccess,
+                        ),
+                        child: busy
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                retrying ? 'Retry payment' : 'Complete Sale',
+                              ),
+                      ),
               ),
             ],
           ),

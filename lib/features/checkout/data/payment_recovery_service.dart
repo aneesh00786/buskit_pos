@@ -65,8 +65,12 @@ class RecoveryAttempt {
       attempt.referenceStatus == ProviderReferenceStatus.recordedUnattached;
 
   /// Same attempt with the server's current view (Phase 18B.18).
-  RecoveryAttempt withAttempt(PaymentAttempt latest) =>
-      RecoveryAttempt(attempt: latest, method: method, cancellable: cancellable, refreshError: refreshError);
+  RecoveryAttempt withAttempt(PaymentAttempt latest) => RecoveryAttempt(
+    attempt: latest,
+    method: method,
+    cancellable: cancellable,
+    refreshError: refreshError,
+  );
 
   static RecoveryAttempt? fromJson(Object? json) {
     final a = PaymentAttempt.fromJson(json);
@@ -312,7 +316,9 @@ Future<PaymentRecoveryResult> withReferenceStatus(
     final attempts = <RecoveryAttempt>[];
     for (final a in s.attempts) {
       final x = a.attempt;
-      if (!x.status.isOpen || x.hasProviderReference || x.referenceStatus != ProviderReferenceStatus.unknown) {
+      if (!x.status.isOpen ||
+          x.hasProviderReference ||
+          x.referenceStatus != ProviderReferenceStatus.unknown) {
         attempts.add(a);
         continue;
       }
@@ -366,8 +372,14 @@ class ApiPaymentRecoveryService implements PaymentRecoveryService {
   }
 
   Future<PaymentAttempt> _current(int attemptId) async {
-    final a = PaymentAttempt.fromJson(await _client.get('/payment-attempts/$attemptId'));
-    if (a == null) throw const ApiException(kind: ApiErrorKind.unknown, message: 'Unexpected response from the server.');
+    final a = PaymentAttempt.fromJson(
+      await _client.get('/payment-attempts/$attemptId'),
+    );
+    if (a == null)
+      throw const ApiException(
+        kind: ApiErrorKind.unknown,
+        message: 'Unexpected response from the server.',
+      );
     return a;
   }
 

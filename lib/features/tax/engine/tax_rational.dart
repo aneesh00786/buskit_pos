@@ -59,7 +59,10 @@ class Fraction {
 /// Rounds a NON-NEGATIVE fraction to whole minor units.
 BigInt roundFraction(Fraction a, String mode) {
   if (a.n.isNegative) {
-    throw const TaxEngineException('INVARIANT_VIOLATION', 'Cannot round a negative amount');
+    throw const TaxEngineException(
+      'INVARIANT_VIOLATION',
+      'Cannot round a negative amount',
+    );
   }
   final q = a.n ~/ a.d;
   final r = a.n - q * a.d;
@@ -74,7 +77,10 @@ BigInt roundFraction(Fraction a, String mode) {
       if (twoR < a.d) return q;
       return q.isEven ? q : q + BigInt.one;
     default:
-      throw TaxEngineException('INVALID_POLICY', 'Unknown rounding mode: $mode');
+      throw TaxEngineException(
+        'INVALID_POLICY',
+        'Unknown rounding mode: $mode',
+      );
   }
 }
 
@@ -85,7 +91,10 @@ List<BigInt> allocate(BigInt total, List<Fraction> shares) {
   final floors = [for (final s in shares) s.floor];
   var remaining = total - floors.fold(BigInt.zero, (s, x) => s + x);
   if (remaining.isNegative || remaining > BigInt.from(shares.length)) {
-    throw const TaxEngineException('INVARIANT_VIOLATION', 'Allocation total does not match its shares');
+    throw const TaxEngineException(
+      'INVARIANT_VIOLATION',
+      'Allocation total does not match its shares',
+    );
   }
   final order = [for (var i = 0; i < shares.length; i++) i]
     ..sort((a, b) {

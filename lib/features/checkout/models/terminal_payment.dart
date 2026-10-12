@@ -48,7 +48,8 @@ class PaymentProviderInfo {
   /// How long the till waits for a terminal payment before it says the wait
   /// is longer than expected: the terminal's auto-cancel window + the grace.
   Duration get terminalWaitWindow =>
-      Duration(minutes: autoCancelMinutes ?? defaultAutoCancelMinutes) + autoCancelReportGrace;
+      Duration(minutes: autoCancelMinutes ?? defaultAutoCancelMinutes) +
+      autoCancelReportGrace;
 
   /// A card terminal this register can actually use right now.
   bool get isUsableCardTerminal =>
@@ -80,7 +81,10 @@ class PaymentProviderInfo {
       statusPolling: caps['statusPolling'] == true,
       cancel: caps['cancel'] == true,
       qr: caps['qr'] == true,
-      currencies: asList(m['currencies']).map(asString).whereType<String>().toList(),
+      currencies: asList(m['currencies'])
+          .map(asString)
+          .whereType<String>()
+          .toList(),
       terminalConfigured: terminal?['configured'] == true,
       terminalName: asString(terminal?['display_name']),
       autoCancelMinutes: switch (asInt(terminal?['auto_cancel_minutes'])) {
@@ -166,7 +170,8 @@ class PaymentAttempt {
   /// one is checked or cancelled through the provider — never abandoned.
   final String? providerPaymentId;
   bool get hasProviderReference =>
-      (providerPaymentId != null && providerPaymentId!.isNotEmpty) || referenceStatus == ProviderReferenceStatus.attached;
+      (providerPaymentId != null && providerPaymentId!.isNotEmpty) ||
+      referenceStatus == ProviderReferenceStatus.attached;
 
   /// Phase 18B.17: see [ProviderReferenceStatus].
   final ProviderReferenceStatus referenceStatus;
@@ -183,7 +188,8 @@ class PaymentAttempt {
   final DateTime? expiresAt;
 
   /// Closed by the provider at its expiry, without payment.
-  bool get isExpired => status == AttemptStatus.cancelled && failureCode == 'EXPIRED';
+  bool get isExpired =>
+      status == AttemptStatus.cancelled && failureCode == 'EXPIRED';
 
   /// Phase 18B.1: an open terminal attempt that never got a provider
   /// reference (server decides). Only a manager can end it, by abandoning it
@@ -192,7 +198,9 @@ class PaymentAttempt {
 
   /// Ended by a manager without the provider's confirmation — NOT proof that
   /// no money was taken.
-  bool get isAbandoned => status == AttemptStatus.cancelled && failureCode == 'ABANDONED_UNCONFIRMED';
+  bool get isAbandoned =>
+      status == AttemptStatus.cancelled &&
+      failureCode == 'ABANDONED_UNCONFIRMED';
 
   static PaymentAttempt? fromJson(Object? json) {
     final m = asMap(json);
@@ -216,7 +224,9 @@ class PaymentAttempt {
       qrPayload: asString(action?['qr_payload']),
       expiresAt: DateTime.tryParse(asString(m['expires_at']) ?? '')?.toUtc(),
       unconfirmed: m['unconfirmed'] == true,
-      referenceStatus: ProviderReferenceStatus.fromWire(m['provider_reference_status']),
+      referenceStatus: ProviderReferenceStatus.fromWire(
+        m['provider_reference_status'],
+      ),
     );
   }
 }

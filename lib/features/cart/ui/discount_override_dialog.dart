@@ -42,7 +42,9 @@ Future<void> showDiscountOverrideDialog(
       ..showSnackBar(
         SnackBar(
           content: Text(
-            err != null ? describeApiError(err) : 'The discount could not be applied.',
+            err != null
+                ? describeApiError(err)
+                : 'The discount could not be applied.',
           ),
         ),
       );
@@ -51,14 +53,20 @@ Future<void> showDiscountOverrideDialog(
 }
 
 class _DiscountRequest {
-  const _DiscountRequest({required this.type, required this.value, this.reason});
+  const _DiscountRequest({
+    required this.type,
+    required this.value,
+    this.reason,
+  });
   final String type;
   final String value;
   final String? reason;
 }
 
 Future<bool?> _confirmDiscount(BuildContext context, _DiscountRequest r) {
-  final label = r.type == 'percentage' ? '${r.value}%' : formatMoney(double.tryParse(r.value));
+  final label = r.type == 'percentage'
+      ? '${r.value}%'
+      : formatMoney(double.tryParse(r.value));
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -68,7 +76,10 @@ Future<bool?> _confirmDiscount(BuildContext context, _DiscountRequest r) {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _KeyValue('Discount', label),
-          _KeyValue('Reason', (r.reason == null || r.reason!.isEmpty) ? '—' : r.reason!),
+          _KeyValue(
+            'Reason',
+            (r.reason == null || r.reason!.isEmpty) ? '—' : r.reason!,
+          ),
           const SizedBox(height: PosTokens.s12),
           Text(
             'This overrides the normal discount rules and applies to the whole sale.',
@@ -128,7 +139,9 @@ class _DiscountFormState extends State<_DiscountForm> {
   late final _value = TextEditingController(
     text: widget.current == null ? '' : _trim(widget.current!.discountValue),
   );
-  late final _reason = TextEditingController(text: widget.current?.reason ?? '');
+  late final _reason = TextEditingController(
+    text: widget.current?.reason ?? '',
+  );
   String? _error;
 
   static String _trim(double v) {
@@ -149,17 +162,23 @@ class _DiscountFormState extends State<_DiscountForm> {
     final raw = _value.text.trim();
     if (_type == 'percentage') {
       if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(raw)) {
-        setState(() => _error = 'Enter a percentage with at most 2 decimal places');
+        setState(
+          () => _error = 'Enter a percentage with at most 2 decimal places',
+        );
         return;
       }
       final v = double.parse(raw);
       if (v <= 0 || v > 100) {
-        setState(() => _error = 'Enter a percentage greater than 0 and at most 100');
+        setState(
+          () => _error = 'Enter a percentage greater than 0 and at most 100',
+        );
         return;
       }
     } else {
       if (!RegExp(r'^\d+(\.\d{1,3})?$').hasMatch(raw)) {
-        setState(() => _error = 'Enter an amount with at most 3 decimal places');
+        setState(
+          () => _error = 'Enter an amount with at most 3 decimal places',
+        );
         return;
       }
       if (double.parse(raw) <= 0) {
@@ -202,7 +221,9 @@ class _DiscountFormState extends State<_DiscountForm> {
             TextField(
               controller: _value,
               autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: InputDecoration(
                 labelText: _type == 'percentage' ? 'Percentage *' : 'Amount *',
                 suffixText: _type == 'percentage' ? '%' : null,

@@ -45,7 +45,9 @@ Future<void> showInventory(
   Widget content() => MultiProvider(
     providers: [
       ChangeNotifierProvider<InventoryController>.value(value: controller),
-      ChangeNotifierProvider<ProductPriceController>.value(value: priceController),
+      ChangeNotifierProvider<ProductPriceController>.value(
+        value: priceController,
+      ),
     ],
     child: const InventoryView(),
   );
@@ -59,7 +61,10 @@ Future<void> showInventory(
       context: context,
       builder: (_) => Dialog(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 700, maxHeight: size.height * 0.9),
+          constraints: BoxConstraints(
+            maxWidth: 700,
+            maxHeight: size.height * 0.9,
+          ),
           child: content(),
         ),
       ),
@@ -168,12 +173,18 @@ class _SearchPane extends StatelessWidget {
         );
       case InventoryLoadStatus.loaded:
         body = c.results.isEmpty
-            ? const EmptyView(title: 'No products found', icon: Icons.inventory_2_outlined)
+            ? const EmptyView(
+                title: 'No products found',
+                icon: Icons.inventory_2_outlined,
+              )
             : ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: PosTokens.s16),
                 itemCount: c.results.length,
                 separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (_, i) => _ProductRow(product: c.results[i], onTap: () => c.select(c.results[i])),
+                itemBuilder: (_, i) => _ProductRow(
+                  product: c.results[i],
+                  onTap: () => c.select(c.results[i]),
+                ),
               );
     }
     return Column(
@@ -198,9 +209,11 @@ class _SearchPane extends StatelessWidget {
 }
 
 String _productLabel(ProductItem p) =>
-    (p.variationName == null || p.variationName!.isEmpty || p.variationName == 'Default')
-        ? p.productName
-        : '${p.productName} · ${p.variationName}';
+    (p.variationName == null ||
+        p.variationName!.isEmpty ||
+        p.variationName == 'Default')
+    ? p.productName
+    : '${p.productName} · ${p.variationName}';
 
 String _stockLabel(double? stock) => stock == null ? '—' : '${stock.round()}';
 
@@ -213,7 +226,11 @@ class _ProductRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      title: Text(_productLabel(product), maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: Text(
+        _productLabel(product),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       subtitle: product.productCode == null ? null : Text(product.productCode!),
       trailing: Text(
         'Stock ${_stockLabel(product.currentStock)}',
@@ -252,7 +269,9 @@ class _ProductPane extends StatelessWidget {
               Text('Current stock', style: theme.textTheme.bodySmall),
               Text(
                 _stockLabel(product.currentStock),
-                style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               if (canAdjust) ...[
                 const SizedBox(height: PosTokens.s12),
@@ -262,7 +281,10 @@ class _ProductPane extends StatelessWidget {
                       child: FilledButton.icon(
                         onPressed: c.isAdjusting
                             ? null
-                            : () => _startAdjustment(context, AdjustmentDirection.increase),
+                            : () => _startAdjustment(
+                                context,
+                                AdjustmentDirection.increase,
+                              ),
                         icon: const Icon(Icons.add),
                         label: const Text('Increase'),
                       ),
@@ -272,7 +294,10 @@ class _ProductPane extends StatelessWidget {
                       child: OutlinedButton.icon(
                         onPressed: c.isAdjusting
                             ? null
-                            : () => _startAdjustment(context, AdjustmentDirection.decrease),
+                            : () => _startAdjustment(
+                                context,
+                                AdjustmentDirection.decrease,
+                              ),
                         icon: const Icon(Icons.remove),
                         label: const Text('Decrease'),
                       ),
@@ -300,7 +325,10 @@ class _ProductPane extends StatelessWidget {
     );
   }
 
-  Future<void> _startAdjustment(BuildContext context, AdjustmentDirection direction) async {
+  Future<void> _startAdjustment(
+    BuildContext context,
+    AdjustmentDirection direction,
+  ) async {
     final c = inventory;
     final current = c.selectedStock ?? 0;
     final request = await showDialog<_AdjustRequest>(
@@ -310,7 +338,9 @@ class _ProductPane extends StatelessWidget {
     if (request == null || !context.mounted) return;
 
     final qty = int.parse(request.quantity);
-    final newStock = direction == AdjustmentDirection.increase ? current + qty : current - qty;
+    final newStock = direction == AdjustmentDirection.increase
+        ? current + qty
+        : current - qty;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -321,27 +351,44 @@ class _ProductPane extends StatelessWidget {
           children: [
             _KeyValue('Product', _productLabel(product)),
             _KeyValue('Current stock', '$current'),
-            _KeyValue('Adjustment', direction == AdjustmentDirection.increase ? '+$qty' : '-$qty'),
+            _KeyValue(
+              'Adjustment',
+              direction == AdjustmentDirection.increase ? '+$qty' : '-$qty',
+            ),
             _KeyValue('New stock', '$newStock'),
             _KeyValue('Reason', request.reason),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Confirm')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Confirm'),
+          ),
         ],
       ),
     );
     if (confirmed != true || !context.mounted) return;
 
-    final ok = await c.adjust(direction: direction, quantity: request.quantity, reason: request.reason);
+    final ok = await c.adjust(
+      direction: direction,
+      quantity: request.quantity,
+      reason: request.reason,
+    );
     if (!context.mounted) return;
     if (ok) {
       final a = c.lastAdjustment;
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          icon: Icon(Icons.check_circle_outline, color: Theme.of(ctx).colorScheme.primary, size: 32),
+          icon: Icon(
+            Icons.check_circle_outline,
+            color: Theme.of(ctx).colorScheme.primary,
+            size: 32,
+          ),
           title: const Text('Stock adjusted'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -357,7 +404,10 @@ class _ProductPane extends StatelessWidget {
             ],
           ),
           actions: [
-            FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Done')),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Done'),
+            ),
           ],
         ),
       );
@@ -367,7 +417,13 @@ class _ProductPane extends StatelessWidget {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(content: Text(err != null ? describeApiError(err) : 'The adjustment could not be completed.')),
+        SnackBar(
+          content: Text(
+            err != null
+                ? describeApiError(err)
+                : 'The adjustment could not be completed.',
+          ),
+        ),
       );
     c.clearAdjustError();
   }
@@ -397,10 +453,17 @@ class _History extends StatelessWidget {
             for (final a in c.history)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: Icon(a.direction == AdjustmentDirection.increase ? Icons.add : Icons.remove),
+                leading: Icon(
+                  a.direction == AdjustmentDirection.increase
+                      ? Icons.add
+                      : Icons.remove,
+                ),
                 title: Text('${a.signedQuantity} → ${a.resultingQuantity}'),
                 subtitle: Text(
-                  [a.reason, if (a.createdAt != null) formatTimestamp(a.createdAt!)].join(' · '),
+                  [
+                    a.reason,
+                    if (a.createdAt != null) formatTimestamp(a.createdAt!),
+                  ].join(' · '),
                 ),
               ),
           ],
@@ -451,8 +514,10 @@ class _AdjustFormState extends State<_AdjustForm> {
     final qty = RegExp(r'^\d+$').hasMatch(raw) ? int.tryParse(raw) : null;
     if (qty == null || qty <= 0) {
       qtyError = 'Enter a whole number greater than 0';
-    } else if (widget.direction == AdjustmentDirection.decrease && qty > widget.currentStock) {
-      qtyError = 'Cannot decrease below 0 (current stock ${widget.currentStock})';
+    } else if (widget.direction == AdjustmentDirection.decrease &&
+        qty > widget.currentStock) {
+      qtyError =
+          'Cannot decrease below 0 (current stock ${widget.currentStock})';
     }
     if (reason.length < minReason) {
       reasonError = 'Enter a reason (at least $minReason characters)';
@@ -482,7 +547,10 @@ class _AdjustFormState extends State<_AdjustForm> {
               controller: _qty,
               autofocus: true,
               keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: 'Quantity *', errorText: _qtyError),
+              decoration: InputDecoration(
+                labelText: 'Quantity *',
+                errorText: _qtyError,
+              ),
               onChanged: (_) {
                 if (_qtyError != null) setState(() => _qtyError = null);
               },
@@ -491,7 +559,10 @@ class _AdjustFormState extends State<_AdjustForm> {
             TextField(
               controller: _reason,
               maxLength: maxReason,
-              decoration: InputDecoration(labelText: 'Reason *', errorText: _reasonError),
+              decoration: InputDecoration(
+                labelText: 'Reason *',
+                errorText: _reasonError,
+              ),
               onChanged: (_) {
                 if (_reasonError != null) setState(() => _reasonError = null);
               },
@@ -500,7 +571,10 @@ class _AdjustFormState extends State<_AdjustForm> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
         FilledButton(onPressed: _submit, child: const Text('Continue')),
       ],
     );
@@ -520,9 +594,13 @@ class _KeyValue extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(child: Text(label, style: style, overflow: TextOverflow.ellipsis)),
+          Expanded(
+            child: Text(label, style: style, overflow: TextOverflow.ellipsis),
+          ),
           const SizedBox(width: PosTokens.s8),
-          Flexible(child: Text(value, style: style, textAlign: TextAlign.end)),
+          Flexible(
+            child: Text(value, style: style, textAlign: TextAlign.end),
+          ),
         ],
       ),
     );

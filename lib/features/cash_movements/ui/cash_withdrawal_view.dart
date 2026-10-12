@@ -279,7 +279,9 @@ class _MovementRow extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: Icon(
         m.isDeposit ? Icons.add_circle_outline : Icons.remove_circle_outline,
-        color: m.isDeposit ? theme.colorScheme.primary : theme.colorScheme.error,
+        color: m.isDeposit
+            ? theme.colorScheme.primary
+            : theme.colorScheme.error,
       ),
       title: Text('${m.isDeposit ? '+' : '−'} ${formatMoney(m.amount)}'),
       subtitle: Text(
@@ -415,7 +417,10 @@ Future<bool?> confirmCashWithdrawal(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _KeyValue('Amount', formatMoney(double.tryParse(amount))),
-          _KeyValue('Reason', (reason == null || reason.isEmpty) ? '—' : reason),
+          _KeyValue(
+            'Reason',
+            (reason == null || reason.isEmpty) ? '—' : reason,
+          ),
           const SizedBox(height: PosTokens.s12),
           Text(
             'This withdraws cash from this register\'s current shift. '
@@ -500,7 +505,10 @@ Future<bool?> confirmCashDeposit(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _KeyValue('Amount', formatMoney(double.tryParse(amount))),
-          _KeyValue('Reason', (reason == null || reason.isEmpty) ? '—' : reason),
+          _KeyValue(
+            'Reason',
+            (reason == null || reason.isEmpty) ? '—' : reason,
+          ),
           const SizedBox(height: PosTokens.s12),
           Text(
             'This adds cash to this register\'s current shift. '

@@ -56,7 +56,9 @@ class ProductPriceController extends ChangeNotifier {
     required String price,
     String? reason,
   }) {
-    final key = _keyFor('set|$productId|$expectedVersion|$price|${reason ?? ''}');
+    final key = _keyFor(
+      'set|$productId|$expectedVersion|$price|${reason ?? ''}',
+    );
     return _run(
       productId,
       () => _service.setPrice(

@@ -20,12 +20,20 @@ const _pricing = ['EXCLUSIVE', 'INCLUSIVE'];
 const _classKinds = ['TAXABLE', 'ZERO_RATED', 'EXEMPT', 'OUT_OF_SCOPE'];
 const _bases = ['BASE', 'BASE_PLUS_PRIOR'];
 const _inclusiveMethods = ['COMPONENT_FROM_GROSS', 'BASE_FIRST'];
-const _residueTargets = ['BASE', 'LARGEST_COMPONENT', 'COMPONENTS_PROPORTIONAL'];
+const _residueTargets = [
+  'BASE',
+  'LARGEST_COMPONENT',
+  'COMPONENTS_PROPORTIONAL',
+];
 const _compoundBases = ['ROUNDED_PRIOR', 'UNROUNDED_PRIOR'];
 const _roundingLevels = ['LINE', 'INVOICE'];
 
 class TaxComponentAmount {
-  const TaxComponentAmount({required this.code, required this.rate, required this.tax});
+  const TaxComponentAmount({
+    required this.code,
+    required this.rate,
+    required this.tax,
+  });
   final String code;
 
   /// The rate exactly as configured (a percent string).
@@ -73,7 +81,12 @@ class TaxLineResult {
 }
 
 class TaxInvoiceLine {
-  const TaxInvoiceLine({required this.base, required this.components, required this.taxTotal, required this.total});
+  const TaxInvoiceLine({
+    required this.base,
+    required this.components,
+    required this.taxTotal,
+    required this.total,
+  });
   final String base;
   final List<TaxComponentAmount> components;
   final String taxTotal;
@@ -120,59 +133,110 @@ class _Component {
 }
 
 BigInt _sum(Iterable<BigInt> xs) => xs.fold(BigInt.zero, (s, x) => s + x);
-bool _hasCompound(List<_Component> comps) => comps.any((c) => c.basis == 'BASE_PLUS_PRIOR');
+bool _hasCompound(List<_Component> comps) =>
+    comps.any((c) => c.basis == 'BASE_PLUS_PRIOR');
 
 List<_Component> _parseComponents(Object? classKind, Object? components) {
   if (components is! List) {
-    throw const TaxEngineException('INVALID_COMPONENTS', 'Components must be a list');
+    throw const TaxEngineException(
+      'INVALID_COMPONENTS',
+      'Components must be a list',
+    );
   }
   final seen = <String>{};
   final out = <_Component>[];
   for (final c in components) {
     final map = c is Map ? c : null;
-    final basis = map == null || !map.containsKey('basis') ? 'BASE' : map['basis'];
+    final basis = map == null || !map.containsKey('basis')
+        ? 'BASE'
+        : map['basis'];
     final code = map?['code'];
-    if (map == null || code is! String || code.isEmpty || seen.contains(code) || !_bases.contains(basis)) {
-      throw const TaxEngineException('INVALID_COMPONENTS', 'Each component needs a unique code and a valid basis');
+    if (map == null ||
+        code is! String ||
+        code.isEmpty ||
+        seen.contains(code) ||
+        !_bases.contains(basis)) {
+      throw const TaxEngineException(
+        'INVALID_COMPONENTS',
+        'Each component needs a unique code and a valid basis',
+      );
     }
     seen.add(code);
     final rate = parseRate(map['rate']);
     out.add(_Component(code, map['rate'] as String, rate, basis as String));
   }
   if (classKind == 'TAXABLE' && out.isEmpty) {
-    throw const TaxEngineException('INVALID_COMPONENTS', 'A taxable item needs at least one component');
+    throw const TaxEngineException(
+      'INVALID_COMPONENTS',
+      'A taxable item needs at least one component',
+    );
   }
-  if (classKind == 'ZERO_RATED' && (out.isEmpty || out.any((c) => c.rate.n != BigInt.zero))) {
-    throw const TaxEngineException('INVALID_COMPONENTS', 'A zero-rated item needs components whose rates are all 0');
+  if (classKind == 'ZERO_RATED' &&
+      (out.isEmpty || out.any((c) => c.rate.n != BigInt.zero))) {
+    throw const TaxEngineException(
+      'INVALID_COMPONENTS',
+      'A zero-rated item needs components whose rates are all 0',
+    );
   }
-  if ((classKind == 'EXEMPT' || classKind == 'OUT_OF_SCOPE') && out.isNotEmpty) {
-    throw TaxEngineException('INVALID_COMPONENTS', 'An $classKind item has no tax components');
+  if ((classKind == 'EXEMPT' || classKind == 'OUT_OF_SCOPE') &&
+      out.isNotEmpty) {
+    throw TaxEngineException(
+      'INVALID_COMPONENTS',
+      'An $classKind item has no tax components',
+    );
   }
   if (!_classKinds.contains(classKind)) {
-    throw TaxEngineException('INVALID_COMPONENTS', 'Unknown class kind: $classKind');
+    throw TaxEngineException(
+      'INVALID_COMPONENTS',
+      'Unknown class kind: $classKind',
+    );
   }
   return out;
 }
 
-Map<Object?, Object?> _checkPolicy(Object? policy, Object? pricing, List<_Component> comps) {
+Map<Object?, Object?> _checkPolicy(
+  Object? policy,
+  Object? pricing,
+  List<_Component> comps,
+) {
   final p = policy is Map ? policy : const <Object?, Object?>{};
   if (!roundingModes.contains(p['roundingMode'])) {
-    throw const TaxEngineException('INVALID_POLICY', 'roundingMode is required');
+    throw const TaxEngineException(
+      'INVALID_POLICY',
+      'roundingMode is required',
+    );
   }
-  if (!_pricing.contains(pricing)) throw TaxEngineException('INVALID_POLICY', 'Unknown pricing: $pricing');
-  if (pricing == 'INCLUSIVE' && !_inclusiveMethods.contains(p['inclusiveMethod'])) {
-    throw const TaxEngineException('INVALID_POLICY', 'inclusiveMethod is required for inclusive pricing');
+  if (!_pricing.contains(pricing))
+    throw TaxEngineException('INVALID_POLICY', 'Unknown pricing: $pricing');
+  if (pricing == 'INCLUSIVE' &&
+      !_inclusiveMethods.contains(p['inclusiveMethod'])) {
+    throw const TaxEngineException(
+      'INVALID_POLICY',
+      'inclusiveMethod is required for inclusive pricing',
+    );
   }
-  if (pricing == 'INCLUSIVE' && p['inclusiveMethod'] == 'BASE_FIRST' && !_residueTargets.contains(p['residueTarget'])) {
-    throw const TaxEngineException('INVALID_POLICY', 'residueTarget is required for BASE_FIRST');
+  if (pricing == 'INCLUSIVE' &&
+      p['inclusiveMethod'] == 'BASE_FIRST' &&
+      !_residueTargets.contains(p['residueTarget'])) {
+    throw const TaxEngineException(
+      'INVALID_POLICY',
+      'residueTarget is required for BASE_FIRST',
+    );
   }
   if (_hasCompound(comps) && !_compoundBases.contains(p['compoundBasis'])) {
-    throw const TaxEngineException('INVALID_POLICY', 'compoundBasis is required for compound components');
+    throw const TaxEngineException(
+      'INVALID_POLICY',
+      'compoundBasis is required for compound components',
+    );
   }
   return p;
 }
 
-List<BigInt> _exclusiveTaxes(BigInt baseMinor, List<_Component> comps, Map<Object?, Object?> policy) {
+List<BigInt> _exclusiveTaxes(
+  BigInt baseMinor,
+  List<_Component> comps,
+  Map<Object?, Object?> policy,
+) {
   final mode = policy['roundingMode'] as String;
   final taxes = <BigInt>[];
   var priorRounded = BigInt.zero;
@@ -199,7 +263,11 @@ List<BigInt> _exclusiveTaxes(BigInt baseMinor, List<_Component> comps, Map<Objec
 ({List<Fraction> cs, Fraction m}) _coefficients(List<_Component> comps) {
   final cs = <Fraction>[];
   for (final c in comps) {
-    cs.add(c.basis == 'BASE' ? c.rate : c.rate * cs.fold(Fraction.one, (s, x) => s + x));
+    cs.add(
+      c.basis == 'BASE'
+          ? c.rate
+          : c.rate * cs.fold(Fraction.one, (s, x) => s + x),
+    );
   }
   return (cs: cs, m: cs.fold(Fraction.one, (s, x) => s + x));
 }
@@ -234,7 +302,9 @@ TaxLineResult calculateLine(Map<String, Object?> input) {
       );
     }
     final k = _coefficients(comps);
-    taxes = [for (final c in k.cs) roundFraction(Fraction(amount) * c / k.m, mode)];
+    taxes = [
+      for (final c in k.cs) roundFraction(Fraction(amount) * c / k.m, mode),
+    ];
     base = amount - _sum(taxes);
     total = amount;
   } else {
@@ -247,7 +317,8 @@ TaxLineResult calculateLine(Map<String, Object?> input) {
     if (residue != BigInt.zero) {
       final target = policy['residueTarget'];
       final taxSum = _sum(taxes);
-      if (target == 'BASE' || (target == 'COMPONENTS_PROPORTIONAL' && taxSum == BigInt.zero)) {
+      if (target == 'BASE' ||
+          (target == 'COMPONENTS_PROPORTIONAL' && taxSum == BigInt.zero)) {
         base = base0 + residue;
         residueAppliedTo = 'BASE';
       } else if (target == 'LARGEST_COMPONENT') {
@@ -259,22 +330,34 @@ TaxLineResult calculateLine(Map<String, Object?> input) {
         residueAppliedTo = 'LARGEST_COMPONENT';
       } else {
         final mag = residue.abs();
-        final parts = allocate(mag, [for (final t in taxes) Fraction(mag * t, taxSum)]);
+        final parts = allocate(mag, [
+          for (final t in taxes) Fraction(mag * t, taxSum),
+        ]);
         taxes = [
-          for (var i = 0; i < taxes.length; i++) residue.isNegative ? taxes[i] - parts[i] : taxes[i] + parts[i],
+          for (var i = 0; i < taxes.length; i++)
+            residue.isNegative ? taxes[i] - parts[i] : taxes[i] + parts[i],
         ];
         residueAppliedTo = 'COMPONENTS_PROPORTIONAL';
       }
       if (taxes.any((t) => t.isNegative)) {
-        throw const TaxEngineException('RESIDUE_NOT_ALLOCATABLE', 'The rounding residue would make a tax negative');
+        throw const TaxEngineException(
+          'RESIDUE_NOT_ALLOCATABLE',
+          'The rounding residue would make a tax negative',
+        );
       }
     }
     if (base.isNegative) {
-      throw const TaxEngineException('RESIDUE_NOT_ALLOCATABLE', 'The rounding residue would make the base negative');
+      throw const TaxEngineException(
+        'RESIDUE_NOT_ALLOCATABLE',
+        'The rounding residue would make the base negative',
+      );
     }
   }
   if (base + _sum(taxes) != total) {
-    throw const TaxEngineException('INVARIANT_VIOLATION', 'base + taxes != total');
+    throw const TaxEngineException(
+      'INVARIANT_VIOLATION',
+      'base + taxes != total',
+    );
   }
 
   String fmt(BigInt m) => formatAmount(m, currency);
@@ -283,7 +366,11 @@ TaxLineResult calculateLine(Map<String, Object?> input) {
     base: fmt(base),
     components: [
       for (var i = 0; i < comps.length; i++)
-        TaxComponentAmount(code: comps[i].code, rate: comps[i].rateText, tax: fmt(taxes[i])),
+        TaxComponentAmount(
+          code: comps[i].code,
+          rate: comps[i].rateText,
+          tax: fmt(taxes[i]),
+        ),
     ],
     taxTotal: fmt(_sum(taxes)),
     total: fmt(total),
@@ -307,12 +394,21 @@ TaxInvoiceResult calculateInvoice(Map<String, Object?> input) {
   final currency = input['currency'];
   final pricing = input['pricing'];
   final lines = input['lines'];
-  final policy = input['policy'] is Map ? input['policy'] as Map : const <Object?, Object?>{};
+  final policy = input['policy'] is Map
+      ? input['policy'] as Map
+      : const <Object?, Object?>{};
   if (!_roundingLevels.contains(policy['roundingLevel'])) {
-    throw const TaxEngineException('INVALID_POLICY', 'roundingLevel is required');
+    throw const TaxEngineException(
+      'INVALID_POLICY',
+      'roundingLevel is required',
+    );
   }
   minorUnits(currency);
-  if (lines is! List) throw const TaxEngineException('INVALID_COMPONENTS', 'Lines must be a list');
+  if (lines is! List)
+    throw const TaxEngineException(
+      'INVALID_COMPONENTS',
+      'Lines must be a list',
+    );
 
   final List<_Row> rows;
   if (policy['roundingLevel'] == 'LINE') {
@@ -327,11 +423,17 @@ TaxInvoiceResult calculateInvoice(Map<String, Object?> input) {
             'classKind': l['classKind'],
             'components': l['components'],
           });
-          return _Row(r.minorBase, _parseComponents(l['classKind'], l['components']), r.minorTaxes, r.minorTotal);
+          return _Row(
+            r.minorBase,
+            _parseComponents(l['classKind'], l['components']),
+            r.minorTaxes,
+            r.minorTotal,
+          );
         }(),
     ];
   } else {
-    final parsed = <({BigInt amount, Object? classKind, List<_Component> comps})>[];
+    final parsed =
+        <({BigInt amount, Object? classKind, List<_Component> comps})>[];
     for (final l in lines.cast<Map>()) {
       final amount = parseAmount(l['amount'], currency);
       final comps = _parseComponents(l['classKind'], l['components']);
@@ -342,7 +444,8 @@ TaxInvoiceResult calculateInvoice(Map<String, Object?> input) {
           'Invoice-level rounding does not support compound components',
         );
       }
-      if (pricing == 'INCLUSIVE' && policy['inclusiveMethod'] != 'COMPONENT_FROM_GROSS') {
+      if (pricing == 'INCLUSIVE' &&
+          policy['inclusiveMethod'] != 'COMPONENT_FROM_GROSS') {
         throw const TaxEngineException(
           'UNSUPPORTED_COMBINATION',
           'Invoice-level inclusive rounding needs COMPONENT_FROM_GROSS',
@@ -382,10 +485,14 @@ TaxInvoiceResult calculateInvoice(Map<String, Object?> input) {
     rows = [
       for (var li = 0; li < parsed.length; li++)
         _Row(
-          pricing == 'EXCLUSIVE' ? parsed[li].amount : parsed[li].amount - _sum(taxes[li]),
+          pricing == 'EXCLUSIVE'
+              ? parsed[li].amount
+              : parsed[li].amount - _sum(taxes[li]),
           parsed[li].comps,
           taxes[li],
-          pricing == 'EXCLUSIVE' ? parsed[li].amount + _sum(taxes[li]) : parsed[li].amount,
+          pricing == 'EXCLUSIVE'
+              ? parsed[li].amount + _sum(taxes[li])
+              : parsed[li].amount,
         ),
     ];
   }
@@ -396,14 +503,21 @@ TaxInvoiceResult calculateInvoice(Map<String, Object?> input) {
     for (var i = 0; i < r.comps.length; i++) {
       final c = r.comps[i];
       final prev = totals[c.key];
-      totals[c.key] = (code: c.code, rate: prev?.rate ?? c.rateText, tax: (prev?.tax ?? BigInt.zero) + r.taxes[i]);
+      totals[c.key] = (
+        code: c.code,
+        rate: prev?.rate ?? c.rateText,
+        tax: (prev?.tax ?? BigInt.zero) + r.taxes[i],
+      );
     }
   }
   final baseTotal = _sum(rows.map((r) => r.base));
   final taxTotal = _sum(rows.map((r) => _sum(r.taxes)));
   final total = _sum(rows.map((r) => r.total));
   if (baseTotal + taxTotal != total) {
-    throw const TaxEngineException('INVARIANT_VIOLATION', 'invoice base + taxes != total');
+    throw const TaxEngineException(
+      'INVARIANT_VIOLATION',
+      'invoice base + taxes != total',
+    );
   }
   return TaxInvoiceResult(
     lines: [
@@ -412,14 +526,19 @@ TaxInvoiceResult calculateInvoice(Map<String, Object?> input) {
           base: fmt(r.base),
           components: [
             for (var i = 0; i < r.comps.length; i++)
-              TaxComponentAmount(code: r.comps[i].code, rate: r.comps[i].rateText, tax: fmt(r.taxes[i])),
+              TaxComponentAmount(
+                code: r.comps[i].code,
+                rate: r.comps[i].rateText,
+                tax: fmt(r.taxes[i]),
+              ),
           ],
           taxTotal: fmt(_sum(r.taxes)),
           total: fmt(r.total),
         ),
     ],
     componentTotals: [
-      for (final t in totals.values) TaxComponentAmount(code: t.code, rate: t.rate, tax: fmt(t.tax)),
+      for (final t in totals.values)
+        TaxComponentAmount(code: t.code, rate: t.rate, tax: fmt(t.tax)),
     ],
     baseTotal: fmt(baseTotal),
     taxTotal: fmt(taxTotal),

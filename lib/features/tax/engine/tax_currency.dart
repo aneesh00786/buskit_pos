@@ -36,10 +36,14 @@ BigInt _pow10(int e) => BigInt.from(10).pow(e);
 BigInt parseAmount(Object? value, Object? currency) {
   final mu = minorUnits(currency);
   if (value is! String) {
-    throw const TaxEngineException('INVALID_AMOUNT', 'Amounts must be decimal strings');
+    throw const TaxEngineException(
+      'INVALID_AMOUNT',
+      'Amounts must be decimal strings',
+    );
   }
   final m = _amountRe.firstMatch(value);
-  if (m == null) throw TaxEngineException('INVALID_AMOUNT', 'Invalid amount: $value');
+  if (m == null)
+    throw TaxEngineException('INVALID_AMOUNT', 'Invalid amount: $value');
   final fraction = m.group(2) ?? '';
   if (fraction.length > mu) {
     throw TaxEngineException(
@@ -65,10 +69,14 @@ String formatAmount(BigInt minor, Object? currency) {
 /// A percentage string ("9", "9.975", at most 6 decimals) -> exact fraction of 1.
 Fraction parseRate(Object? value) {
   if (value is! String) {
-    throw const TaxEngineException('INVALID_RATE', 'Rates must be decimal strings');
+    throw const TaxEngineException(
+      'INVALID_RATE',
+      'Rates must be decimal strings',
+    );
   }
   final m = _rateRe.firstMatch(value);
-  if (m == null) throw TaxEngineException('INVALID_RATE', 'Invalid rate: $value');
+  if (m == null)
+    throw TaxEngineException('INVALID_RATE', 'Invalid rate: $value');
   final fraction = m.group(2) ?? '';
   return Fraction(
     BigInt.parse('${m.group(1)}$fraction'),

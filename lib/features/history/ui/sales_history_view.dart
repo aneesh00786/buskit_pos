@@ -520,7 +520,10 @@ class _DetailBody extends StatelessWidget {
           spacing: PosTokens.s8,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Text(sale.displayNumber, style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              sale.displayNumber,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             RefundStatusBadge(status: sale.refundStatus),
           ],
         ),
@@ -561,9 +564,10 @@ class _DetailBody extends StatelessWidget {
                       if (sale.refundedQuantity(line) > 0)
                         Text(
                           'Refunded ${sale.refundedQuantity(line)} of ${line.quantity}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
                         ),
                     ],
                   ),
@@ -629,10 +633,16 @@ class _ProviderRefundsBox extends StatelessWidget {
                     _ => Icons.schedule,
                   },
                   size: 18,
-                  color: r.status == ProviderRefundStatus.failed ? scheme.error : null,
+                  color: r.status == ProviderRefundStatus.failed
+                      ? scheme.error
+                      : null,
                 ),
                 const SizedBox(width: PosTokens.s8),
-                Expanded(child: Text('${r.providerLabel} · ${formatMoney(r.amount)} — ${r.statusText}')),
+                Expanded(
+                  child: Text(
+                    '${r.providerLabel} · ${formatMoney(r.amount)} — ${r.statusText}',
+                  ),
+                ),
               ],
             ),
           ),
@@ -642,9 +652,15 @@ class _ProviderRefundsBox extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 key: const Key('check-provider-refunds'),
-                onPressed: h.isRefreshingProviderRefunds ? null : h.refreshProviderRefunds,
+                onPressed: h.isRefreshingProviderRefunds
+                    ? null
+                    : h.refreshProviderRefunds,
                 icon: const Icon(Icons.refresh),
-                label: Text(h.isRefreshingProviderRefunds ? 'Checking…' : 'Check refund status'),
+                label: Text(
+                  h.isRefreshingProviderRefunds
+                      ? 'Checking…'
+                      : 'Check refund status',
+                ),
               ),
             ),
           ),
@@ -678,16 +694,19 @@ class _RefundSection extends StatelessWidget {
       children.add(
         _RefundedBox(
           title: 'Fully refunded ${formatMoney(sale.refundedTotal)}',
-          detail: '${sale.refunds.length} refund${sale.refunds.length == 1 ? '' : 's'}',
+          detail:
+              '${sale.refunds.length} refund${sale.refunds.length == 1 ? '' : 's'}',
         ),
       );
     }
     if (sale.refunds.isNotEmpty) {
-      if (children.isNotEmpty) children.add(const SizedBox(height: PosTokens.s12));
+      if (children.isNotEmpty)
+        children.add(const SizedBox(height: PosTokens.s12));
       children.add(PartialRefundHistory(sale: sale, names: names));
     }
     if (sale.providerRefunds.isNotEmpty) {
-      if (children.isNotEmpty) children.add(const SizedBox(height: PosTokens.s12));
+      if (children.isNotEmpty)
+        children.add(const SizedBox(height: PosTokens.s12));
       children.add(_ProviderRefundsBox(sale: sale));
     }
 
@@ -697,11 +716,13 @@ class _RefundSection extends StatelessWidget {
     // its fetch failed, they stay visible and the backend's own 403 is what
     // actually decides — never hide on missing data alone.
     final session = context.watch<SessionController>();
-    final canAct = sale.status == 'completed' &&
+    final canAct =
+        sale.status == 'completed' &&
         status != SaleRefundStatus.full &&
         !session.isDenied('payments.refund');
     if (canAct) {
-      if (children.isNotEmpty) children.add(const SizedBox(height: PosTokens.s12));
+      if (children.isNotEmpty)
+        children.add(const SizedBox(height: PosTokens.s12));
       children.add(
         Consumer<SalesHistoryController>(
           builder: (context, h, _) {
@@ -715,7 +736,11 @@ class _RefundSection extends StatelessWidget {
                     padding: EdgeInsets.only(bottom: PosTokens.s8),
                     child: Row(
                       children: [
-                        SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
                         SizedBox(width: PosTokens.s8),
                         Text('Processing refund…'),
                       ],
@@ -750,7 +775,10 @@ class _RefundSection extends StatelessWidget {
     }
 
     if (children.isEmpty) return const SizedBox.shrink();
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
   }
 
   void _showError(BuildContext context, String message) {
@@ -759,10 +787,23 @@ class _RefundSection extends StatelessWidget {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _startItemsRefund(BuildContext context, SalesHistoryController h) async {
-    final request = await showRefundItemsDialog(context, sale: sale, names: names, controller: h);
+  Future<void> _startItemsRefund(
+    BuildContext context,
+    SalesHistoryController h,
+  ) async {
+    final request = await showRefundItemsDialog(
+      context,
+      sale: sale,
+      names: names,
+      controller: h,
+    );
     if (request == null || !context.mounted) return;
-    final confirmed = await confirmPartialRefund(context, sale: sale, names: names, request: request);
+    final confirmed = await confirmPartialRefund(
+      context,
+      sale: sale,
+      names: names,
+      request: request,
+    );
     if (confirmed != true || !context.mounted) return;
 
     final ok = await h.refundItems(
@@ -777,13 +818,23 @@ class _RefundSection extends StatelessWidget {
       final recorded = h.lastPartialRefund;
       final fresh = h.detail ?? sale;
       if (recorded != null) {
-        await showPartialRefundResult(context, sale: fresh, names: names, refund: recorded);
+        await showPartialRefundResult(
+          context,
+          sale: fresh,
+          names: names,
+          refund: recorded,
+        );
       }
       h.clearLastPartialRefund();
       return;
     }
     final err = h.refundError;
-    _showError(context, err != null ? describeApiError(err) : 'The refund could not be completed.');
+    _showError(
+      context,
+      err != null
+          ? describeApiError(err)
+          : 'The refund could not be completed.',
+    );
     h.clearRefundError();
   }
 
@@ -800,13 +851,22 @@ class _RefundSection extends StatelessWidget {
     if (ok) {
       final refunded = h.detail;
       if (refunded?.refund != null) {
-        await showRefundResult(context, sale: refunded!, refund: refunded.refund!);
+        await showRefundResult(
+          context,
+          sale: refunded!,
+          refund: refunded.refund!,
+        );
       }
       return;
     }
 
     final err = h.refundError;
-    _showError(context, err != null ? describeApiError(err) : 'The refund could not be completed.');
+    _showError(
+      context,
+      err != null
+          ? describeApiError(err)
+          : 'The refund could not be completed.',
+    );
     h.clearRefundError();
   }
 }
@@ -848,7 +908,10 @@ class _RefundedBox extends StatelessWidget {
 /// [confirmVoid]'s destructive-confirmation shape from the cart. The refund
 /// total is always the sale's full grand total; quantity-based refunds use
 /// [showRefundItemsDialog] instead.
-Future<bool?> confirmRefund(BuildContext context, {required CompletedSale sale}) {
+Future<bool?> confirmRefund(
+  BuildContext context, {
+  required CompletedSale sale,
+}) {
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -860,8 +923,7 @@ Future<bool?> confirmRefund(BuildContext context, {required CompletedSale sale})
           _KeyValue('Transaction', sale.displayNumber),
           if (sale.completedAt != null)
             _KeyValue('Sale date', formatTimestamp(sale.completedAt!)),
-          if (sale.customerId != null)
-            _KeyValue('Customer', sale.customerId!),
+          if (sale.customerId != null) _KeyValue('Customer', sale.customerId!),
           const Divider(height: PosTokens.s24),
           _KeyValue('Original total', formatMoney(sale.totals.grandTotal)),
           _KeyValue(
@@ -873,9 +935,8 @@ Future<bool?> confirmRefund(BuildContext context, {required CompletedSale sale})
           Text(
             'This refunds the entire sale. To refund only some items, use '
             'Refund items instead. This cannot be undone.',
-            style: Theme.of(
-              ctx,
-            ).textTheme.bodySmall?.copyWith(color: Theme.of(ctx).colorScheme.error),
+            style: Theme.of(ctx).textTheme.bodySmall
+                ?.copyWith(color: Theme.of(ctx).colorScheme.error),
           ),
         ],
       ),

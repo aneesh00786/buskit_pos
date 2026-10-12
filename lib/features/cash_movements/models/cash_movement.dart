@@ -90,19 +90,24 @@ class CurrentShiftSummary {
 /// `GET /shifts/current/cash-movements`'s full response: the shift (or
 /// `null` if none is open) plus its movements (both types), newest-first.
 class CurrentShiftCashMovements {
-  const CurrentShiftCashMovements({required this.shift, required this.movements});
+  const CurrentShiftCashMovements({
+    required this.shift,
+    required this.movements,
+  });
 
   final CurrentShiftSummary? shift;
   final List<CashMovement> movements;
 
   static CurrentShiftCashMovements fromJson(Object? json) {
     final m = asMap(json);
-    if (m == null) return const CurrentShiftCashMovements(shift: null, movements: []);
+    if (m == null)
+      return const CurrentShiftCashMovements(shift: null, movements: []);
     return CurrentShiftCashMovements(
       shift: CurrentShiftSummary.fromJson(m['shift']),
-      movements: asList(
-        m['movements'],
-      ).map(CashMovement.fromJson).whereType<CashMovement>().toList(),
+      movements: asList(m['movements'])
+          .map(CashMovement.fromJson)
+          .whereType<CashMovement>()
+          .toList(),
     );
   }
 }

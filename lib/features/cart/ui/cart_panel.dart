@@ -91,8 +91,7 @@ class _CartPanelState extends State<CartPanel> {
                     : null,
               ),
               _CustomerRow(dense: dense),
-              if (sale != null && sale.isLocal)
-                const _LocalCartNotice(),
+              if (sale != null && sale.isLocal) const _LocalCartNotice(),
               if (sale != null && !sale.isDraft)
                 _NotOpenNotice(status: sale.status, onNewCart: cart.reset),
               if (panelError != null)
@@ -166,32 +165,32 @@ class _CartPanelState extends State<CartPanel> {
 /// The existing "Clear the cart?" confirmation (Clear all / Phase 14E-A F8):
 /// removes every line only after the cashier confirms.
 Future<void> confirmClearCart(BuildContext context) async {
-    final cart = context.read<CartController>();
-    final count = cart.sale?.itemCount ?? 0;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Clear the cart?'),
-        content: Text(
-          'Remove all $count ${count == 1 ? 'item' : 'items'} from this sale? '
-          'The sale stays open and empty.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-            ),
-            child: const Text('Remove all'),
-          ),
-        ],
+  final cart = context.read<CartController>();
+  final count = cart.sale?.itemCount ?? 0;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Clear the cart?'),
+      content: Text(
+        'Remove all $count ${count == 1 ? 'item' : 'items'} from this sale? '
+        'The sale stays open and empty.',
       ),
-    );
-    if (ok == true) await cart.clearAll();
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(ctx).colorScheme.error,
+          ),
+          child: const Text('Remove all'),
+        ),
+      ],
+    ),
+  );
+  if (ok == true) await cart.clearAll();
 }
 
 class _Header extends StatelessWidget {
@@ -233,38 +232,38 @@ class _Header extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Flexible(
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    'Current Sale',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleLarge,
+                  ),
+                ),
+              ),
+              if (itemCount > 0) ...[
+                const SizedBox(width: PosTokens.s8),
                 Flexible(
-                  child: Semantics(
-                    header: true,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: t.surfaceMuted,
+                      borderRadius: BorderRadius.circular(PosTokens.rPill),
+                    ),
                     child: Text(
-                      'Current Sale',
+                      '$itemCount ${itemCount == 1 ? 'item' : 'items'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleLarge,
+                      style: theme.textTheme.labelMedium,
                     ),
                   ),
                 ),
-                if (itemCount > 0) ...[
-                  const SizedBox(width: PosTokens.s8),
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: t.surfaceMuted,
-                        borderRadius: BorderRadius.circular(PosTokens.rPill),
-                      ),
-                      child: Text(
-                        '$itemCount ${itemCount == 1 ? 'item' : 'items'}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium,
-                      ),
-                    ),
-                  ),
-                ],
+              ],
             ],
           ),
           Wrap(
@@ -479,7 +478,8 @@ class _DiscountOverrideRow extends StatelessWidget {
     final t = PosTokens.of(context);
     final theme = Theme.of(context);
     final discount = sale.discountOverride;
-    final editable = cart.canChooseDiscount && !session.isDenied('discounts.override');
+    final editable =
+        cart.canChooseDiscount && !session.isDenied('discounts.override');
 
     if (discount == null) {
       if (!editable) return const SizedBox.shrink();
@@ -523,7 +523,8 @@ class _DiscountOverrideRow extends StatelessWidget {
             ),
             if (editable) ...[
               TextButton(
-                onPressed: () => showDiscountOverrideDialog(context, current: discount),
+                onPressed: () =>
+                    showDiscountOverrideDialog(context, current: discount),
                 child: const Text('Change'),
               ),
               TextButton(
@@ -560,7 +561,10 @@ class _LoyaltyRow extends StatelessWidget {
     if (!hasRedemption && !hasTierDiscount && !warning) {
       if (!editable) return const SizedBox.shrink();
       // Phase C5: no redemption permission at all -> nothing to offer.
-      if (context.watch<SessionController>().isDeniedAll(const ['loyalty.redeem_points', 'loyalty.redeem_wallet'])) {
+      if (context.watch<SessionController>().isDeniedAll(const [
+        'loyalty.redeem_points',
+        'loyalty.redeem_wallet',
+      ])) {
         return const SizedBox.shrink();
       }
       return Padding(
@@ -755,7 +759,11 @@ class _Actions extends StatelessWidget {
                 child: OutlinedButton.icon(
                   // Phase C5: disabled (not hidden, to keep the Hold/Pay row
                   // stable) when the loaded permissions lack sales.hold.
-                  onPressed: disabled || context.watch<SessionController>().isDenied('sales.hold')
+                  onPressed:
+                      disabled ||
+                          context.watch<SessionController>().isDenied(
+                            'sales.hold',
+                          )
                       ? null
                       : () => _hold(context),
                   icon: const Icon(Icons.pause_circle_outline),

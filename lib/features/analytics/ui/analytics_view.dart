@@ -162,7 +162,9 @@ class _Body extends StatelessWidget {
                       _StatRow(
                         label: _methodLabel(r.method),
                         trailing: '-${formatMoney(r.amount)}',
-                        subtitle: r.method == 'wallet' ? 'returned to customer wallets' : 'paid out',
+                        subtitle: r.method == 'wallet'
+                            ? 'returned to customer wallets'
+                            : 'paid out',
                       ),
                     _StatRow(
                       label: 'Total refunds',
@@ -184,12 +186,14 @@ class _Body extends StatelessWidget {
                     _StatRow(
                       label: 'Cash deposits',
                       trailing: formatMoney(s.cashMovements.deposits),
-                      subtitle: '${s.cashMovements.depositCount} deposit${s.cashMovements.depositCount == 1 ? '' : 's'}',
+                      subtitle:
+                          '${s.cashMovements.depositCount} deposit${s.cashMovements.depositCount == 1 ? '' : 's'}',
                     ),
                     _StatRow(
                       label: 'Cash withdrawals',
                       trailing: '-${formatMoney(s.cashMovements.withdrawals)}',
-                      subtitle: '${s.cashMovements.withdrawalCount} withdrawal${s.cashMovements.withdrawalCount == 1 ? '' : 's'}',
+                      subtitle:
+                          '${s.cashMovements.withdrawalCount} withdrawal${s.cashMovements.withdrawalCount == 1 ? '' : 's'}',
                     ),
                   ],
                 ),
@@ -455,7 +459,10 @@ class _RangeBar extends StatelessWidget {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final initial = controller.hasCustomRange
-        ? DateTimeRange(start: _parse(controller.from!), end: _parse(controller.to!))
+        ? DateTimeRange(
+            start: _parse(controller.from!),
+            end: _parse(controller.to!),
+          )
         : DateTimeRange(start: today, end: today);
     final picked = await showDateRangePicker(
       context: context,

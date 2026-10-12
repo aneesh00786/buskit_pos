@@ -53,15 +53,20 @@ class SingleInstanceLock {
   /// locks of a terminated process but documents that this may be delayed;
   /// a short re-check keeps a restart right after a crash from being refused.
   /// It never lets a second copy in while the first is still running.
-  static const retryDelays = [Duration(milliseconds: 500), Duration(milliseconds: 1500)];
+  static const retryDelays = [
+    Duration(milliseconds: 500),
+    Duration(milliseconds: 1500),
+  ];
 
   /// Windows ERROR_SHARING_VIOLATION: the file is held open exclusively by
   /// another process — i.e. another copy, not a broken folder.
   static const _windowsSharingViolation = 32;
 
   /// How a failure to OPEN the lock file is reported (pure; tested).
-  static InstanceOwnership classifyOpenFailure(FileSystemException e, {required bool windows}) =>
-      windows && e.osError?.errorCode == _windowsSharingViolation
+  static InstanceOwnership classifyOpenFailure(
+    FileSystemException e, {
+    required bool windows,
+  }) => windows && e.osError?.errorCode == _windowsSharingViolation
       ? InstanceOwnership.heldElsewhere
       : InstanceOwnership.failed;
 
@@ -76,18 +81,26 @@ class SingleInstanceLock {
     }
     for (var attempt = 0; ; attempt++) {
       final claim = await _tryOnce(directory, path);
-      if (claim.ownership != InstanceOwnership.heldElsewhere || attempt >= retry.length) return claim;
+      if (claim.ownership != InstanceOwnership.heldElsewhere ||
+          attempt >= retry.length)
+        return claim;
       await Future<void>.delayed(retry[attempt]);
     }
   }
 
-  static Future<InstanceClaim> _tryOnce(Directory directory, String path) async {
+  static Future<InstanceClaim> _tryOnce(
+    Directory directory,
+    String path,
+  ) async {
     RandomAccessFile? file;
     try {
       await directory.create(recursive: true);
       file = await File(path).open(mode: FileMode.append);
     } on FileSystemException catch (e) {
-      return InstanceClaim(classifyOpenFailure(e, windows: Platform.isWindows), detail: e.message);
+      return InstanceClaim(
+        classifyOpenFailure(e, windows: Platform.isWindows),
+        detail: e.message,
+      );
     }
     try {
       // Non-blocking (POSIX fcntl / Windows LockFileEx with FAIL_IMMEDIATELY):

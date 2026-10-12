@@ -52,7 +52,10 @@ class ApiPaymentTerminalService implements PaymentTerminalService {
   @override
   Future<List<PaymentProviderInfo>> listProviders() async {
     final data = await _client.get('/payment-providers');
-    return asList(data).map(PaymentProviderInfo.fromJson).whereType<PaymentProviderInfo>().toList();
+    return asList(data)
+        .map(PaymentProviderInfo.fromJson)
+        .whereType<PaymentProviderInfo>()
+        .toList();
   }
 
   @override
@@ -75,11 +78,16 @@ class ApiPaymentTerminalService implements PaymentTerminalService {
   );
 
   @override
-  Future<PaymentAttempt> refresh(int attemptId) async =>
-      _parse(await _client.get('/payment-attempts/$attemptId', query: {'refresh': 'true'}));
+  Future<PaymentAttempt> refresh(int attemptId) async => _parse(
+    await _client.get(
+      '/payment-attempts/$attemptId',
+      query: {'refresh': 'true'},
+    ),
+  );
 
   @override
-  Future<PaymentAttempt> current(int attemptId) async => _parse(await _client.get('/payment-attempts/$attemptId'));
+  Future<PaymentAttempt> current(int attemptId) async =>
+      _parse(await _client.get('/payment-attempts/$attemptId'));
 
   @override
   Future<PaymentAttempt> cancel(int attemptId) async =>
@@ -87,7 +95,12 @@ class ApiPaymentTerminalService implements PaymentTerminalService {
 
   @override
   Future<AbandonResult> abandonUnconfirmed(int attemptId, String reason) async {
-    final data = asMap(await _client.post('/payment-attempts/$attemptId/abandon-unconfirmed', body: {'reason': reason}));
+    final data = asMap(
+      await _client.post(
+        '/payment-attempts/$attemptId/abandon-unconfirmed',
+        body: {'reason': reason},
+      ),
+    );
     return AbandonResult(
       attempt: _parse(data?['payment_attempt']),
       warning: asString(data?['warning']) ?? abandonWarning,
@@ -97,7 +110,10 @@ class ApiPaymentTerminalService implements PaymentTerminalService {
   PaymentAttempt _parse(Object? data) {
     final a = PaymentAttempt.fromJson(data);
     if (a == null) {
-      throw const ApiException(kind: ApiErrorKind.unknown, message: 'Unexpected response from the server.');
+      throw const ApiException(
+        kind: ApiErrorKind.unknown,
+        message: 'Unexpected response from the server.',
+      );
     }
     return a;
   }

@@ -91,7 +91,10 @@ class TerminalPaymentController extends ChangeNotifier {
   bool _disposed = false;
 
   bool get canCancel =>
-      _attempt != null && _attempt!.status.isOpen && _phase != TerminalPhase.cancelling && !isReferenceRecordedUnattached;
+      _attempt != null &&
+      _attempt!.status.isOpen &&
+      _phase != TerminalPhase.cancelling &&
+      !isReferenceRecordedUnattached;
 
   /// Phase 18B.1: an unconfirmed attempt (no provider reference) may be
   /// abandoned by a manager; the server decides permission and timing.
@@ -104,7 +107,8 @@ class TerminalPaymentController extends ChangeNotifier {
       !_attempt!.hasProviderReference &&
       !isReferenceRecordedUnattached &&
       _attempt!.status.isOpen &&
-      (_phase == TerminalPhase.unknown || _phase == TerminalPhase.waitingForCard);
+      (_phase == TerminalPhase.unknown ||
+          _phase == TerminalPhase.waitingForCard);
 
   /// Phase 18B.15: the server refused abandon / cancel because the provider's
   /// reference for this still-open attempt is durably recorded but not yet
@@ -112,6 +116,7 @@ class TerminalPaymentController extends ChangeNotifier {
   /// still be paid on the terminal: no abandon, no cancel, no other tender
   /// until a manager attaches it; "Check again" picks the reference up.
   bool _referenceRecorded = false;
+
   /// Phase 18B.17: an explicit provider_reference_status from the server
   /// decides; only when it is missing / unknown (older backend) does the
   /// earlier refusal ([_referenceRecorded]) decide.
@@ -120,7 +125,8 @@ class TerminalPaymentController extends ChangeNotifier {
     if (a == null || !a.status.isOpen || a.hasProviderReference) return false;
     return switch (a.referenceStatus) {
       ProviderReferenceStatus.recordedUnattached => true,
-      ProviderReferenceStatus.attached || ProviderReferenceStatus.notRecorded => false,
+      ProviderReferenceStatus.attached ||
+      ProviderReferenceStatus.notRecorded => false,
       ProviderReferenceStatus.unknown => _referenceRecorded,
     };
   }
@@ -132,9 +138,11 @@ class TerminalPaymentController extends ChangeNotifier {
   /// window) has passed and the payment is still not confirmed either way.
   /// Shown as its own state; never treated as failed or cancelled.
   bool _overdue = false;
-  bool get isOverdue => _overdue && (_attempt == null || _attempt!.status.isOpen);
+  bool get isOverdue =>
+      _overdue && (_attempt == null || _attempt!.status.isOpen);
   bool get canCheckAgain =>
-      _phase == TerminalPhase.unknown || (isReferenceRecordedUnattached && _phase != TerminalPhase.processing);
+      _phase == TerminalPhase.unknown ||
+      (isReferenceRecordedUnattached && _phase != TerminalPhase.processing);
   bool get isFinal =>
       _phase == TerminalPhase.approved ||
       _phase == TerminalPhase.declined ||
@@ -159,7 +167,15 @@ class TerminalPaymentController extends ChangeNotifier {
   Future<void> start() async {
     _set(TerminalPhase.connecting);
     try {
-      _apply(await _service.start(saleId: saleId, provider: provider, amountMilli: amountMilli, idempotencyKey: idempotencyKey, method: method));
+      _apply(
+        await _service.start(
+          saleId: saleId,
+          provider: provider,
+          amountMilli: amountMilli,
+          idempotencyKey: idempotencyKey,
+          method: method,
+        ),
+      );
     } on ApiException catch (e) {
       _onError(e, starting: true);
       await _readReferenceStatus();
@@ -171,7 +187,8 @@ class TerminalPaymentController extends ChangeNotifier {
   /// reference is recorded. A failure here changes nothing.
   Future<void> _readReferenceStatus() async {
     final a = _attempt;
-    if (a == null || _disposed || !a.status.isOpen || a.hasProviderReference) return;
+    if (a == null || _disposed || !a.status.isOpen || a.hasProviderReference)
+      return;
     try {
       final latest = await _service.current(a.id);
       if (_disposed || latest.id != a.id) return;
@@ -240,9 +257,10 @@ class TerminalPaymentController extends ChangeNotifier {
       final latest = PaymentAttempt.fromJson(e.dataMap?['payment_attempt']);
       if (latest != null) _attempt = latest;
       _message = switch (e.errorCode) {
-        'POS_PAYMENT_ABANDON_TOO_EARLY' => _tooEarly(asString(e.dataMap?['available_at'])),
-        _ when e.kind == ApiErrorKind.forbidden =>
-          'Only a manager can abandon this payment. Ask a manager to sign in on this till.',
+        'POS_PAYMENT_ABANDON_TOO_EARLY' => _tooEarly(
+          asString(e.dataMap?['available_at']),
+        ),
+        _ when e.kind == ApiErrorKind.forbidden => 'Only a manager can abandon this payment. Ask a manager to sign in on this till.',
         _ => e.message,
       };
       _set(TerminalPhase.unknown, keepMessage: true);
@@ -250,7 +268,8 @@ class TerminalPaymentController extends ChangeNotifier {
     }
   }
 
-  static const referenceUnrecordedCode = 'POS_PAYMENT_PROVIDER_REFERENCE_UNRECORDED';
+  static const referenceUnrecordedCode =
+      'POS_PAYMENT_PROVIDER_REFERENCE_UNRECORDED';
 
   /// Shown while [isReferenceRecordedUnattached]: never "failed" / "cancelled".
   static const referenceRecordedMessage =
@@ -289,7 +308,10 @@ class TerminalPaymentController extends ChangeNotifier {
       case AttemptStatus.cancelled:
         _timer?.cancel();
         if (a.isAbandoned) _message = abandonWarning;
-        _set(a.isExpired ? TerminalPhase.expired : TerminalPhase.cancelled, keepMessage: a.isAbandoned);
+        _set(
+          a.isExpired ? TerminalPhase.expired : TerminalPhase.cancelled,
+          keepMessage: a.isAbandoned,
+        );
       case AttemptStatus.pending:
       case AttemptStatus.authorized:
         _deadline ??= _now().add(maxWait);
@@ -326,7 +348,10 @@ class TerminalPaymentController extends ChangeNotifier {
       return;
     }
     if (latest != null) return _apply(latest);
-    if (starting && (e.kind == ApiErrorKind.validation || e.kind == ApiErrorKind.conflict || e.kind == ApiErrorKind.forbidden)) {
+    if (starting &&
+        (e.kind == ApiErrorKind.validation ||
+            e.kind == ApiErrorKind.conflict ||
+            e.kind == ApiErrorKind.forbidden)) {
       // The server refused the request (nothing was sent to the terminal).
       _message = e.message;
       _set(TerminalPhase.unavailable, keepMessage: true);

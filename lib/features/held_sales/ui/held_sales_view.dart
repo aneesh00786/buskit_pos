@@ -339,7 +339,10 @@ class _DetailBody extends StatelessWidget {
               const SizedBox(height: 12),
               FilledButton.icon(
                 // Phase C5: disabled when the loaded permissions lack sales.resume.
-                onPressed: (resumable && !cart.isMutating && !session.isDenied('sales.resume'))
+                onPressed:
+                    (resumable &&
+                        !cart.isMutating &&
+                        !session.isDenied('sales.resume'))
                     ? () => _resume(context, sale)
                     : null,
                 icon: cart.isMutating

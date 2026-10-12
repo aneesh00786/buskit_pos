@@ -43,7 +43,8 @@ class ProviderRefund {
   String get statusText => switch (status) {
     ProviderRefundStatus.succeeded => 'Refunded to the customer',
     ProviderRefundStatus.pending => 'Refund pending with the payment provider',
-    ProviderRefundStatus.failed => 'Provider refund failed — return this amount another way',
+    ProviderRefundStatus.failed =>
+      'Provider refund failed — return this amount another way',
     ProviderRefundStatus.unknown => 'Refund status unknown',
   };
 

@@ -1034,8 +1034,7 @@ class VoiceController extends ChangeNotifier {
     VoicePermission.permanentlyDenied => 'Microphone access is turned off for this app. Turn it on in the device settings to use voice.',
     VoicePermission.unavailable =>
       'The microphone is not available on this device.',
-    VoicePermission.unsupportedPlatform =>
-      'Voice input is not available in the desktop app. Use the keyboard or a barcode scanner instead.',
+    VoicePermission.unsupportedPlatform => 'Voice input is not available in the desktop app. Use the keyboard or a barcode scanner instead.',
     _ => 'Microphone access is needed to use voice.',
   };
 

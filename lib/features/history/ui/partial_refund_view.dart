@@ -136,7 +136,11 @@ class _RefundItemsDialogState extends State<_RefundItemsDialog> {
   /// Phase 12C — a WEIGHT line: the refund (or damaged) weight is typed in the
   /// existing quantity dialog (weight mode: 0.001+, at most 3 decimals) and
   /// must not exceed [max] — refused with a message, never clamped or rounded.
-  Future<void> _enterWeight(CartLine line, {required bool damaged, required num max}) async {
+  Future<void> _enterWeight(
+    CartLine line, {
+    required bool damaged,
+    required num max,
+  }) async {
     final name = _itemName(widget.names, line);
     final current = (damaged ? _damaged[line.id] : _qty[line.id]) ?? 0;
     final w = await showQuantityDialog(
@@ -149,9 +153,11 @@ class _RefundItemsDialogState extends State<_RefundItemsDialog> {
     final wMilli = quantityMilliOf(w)!;
     final maxMilli = quantityMilliOf(max) ?? 0;
     if (wMilli > maxMilli) {
-      setState(() => _weightError = damaged
-          ? 'The damaged weight cannot be more than the refund weight (${formatQuantity(max, weight: true)}).'
-          : 'Only ${formatQuantity(max, weight: true)} of $name can still be refunded.');
+      setState(
+        () => _weightError = damaged
+            ? 'The damaged weight cannot be more than the refund weight (${formatQuantity(max, weight: true)}).'
+            : 'Only ${formatQuantity(max, weight: true)} of $name can still be refunded.',
+      );
       return;
     }
     setState(() {
@@ -190,10 +196,19 @@ class _RefundItemsDialogState extends State<_RefundItemsDialog> {
     final lines = _lines;
     if (lines.isEmpty) return;
     final reason = _reason.text.trim().isEmpty ? null : _reason.text.trim();
-    final preview = await h.previewRefund(widget.sale.id, lines, refundMethod: _method);
+    final preview = await h.previewRefund(
+      widget.sale.id,
+      lines,
+      refundMethod: _method,
+    );
     if (!mounted || preview == null) return;
     Navigator.of(context).pop(
-      PartialRefundRequest(lines: lines, preview: preview, refundMethod: _method, reason: reason),
+      PartialRefundRequest(
+        lines: lines,
+        preview: preview,
+        refundMethod: _method,
+        reason: reason,
+      ),
     );
   }
 
@@ -201,7 +216,9 @@ class _RefundItemsDialogState extends State<_RefundItemsDialog> {
   Widget build(BuildContext context) {
     final h = context.watch<SalesHistoryController>();
     final theme = Theme.of(context);
-    final refundable = widget.sale.items.where((l) => widget.sale.refundableQuantity(l) > 0).toList();
+    final refundable = widget.sale.items
+        .where((l) => widget.sale.refundableQuantity(l) > 0)
+        .toList();
     final hasSelection = _lines.isNotEmpty;
 
     return AlertDialog(
@@ -231,8 +248,16 @@ class _RefundItemsDialogState extends State<_RefundItemsDialog> {
                   refundable: widget.sale.refundableQuantity(line),
                   quantity: _qty[line.id] ?? 0,
                   damaged: _damaged[line.id] ?? 0,
-                  onQuantity: () => _enterWeight(line, damaged: false, max: widget.sale.refundableQuantity(line)),
-                  onDamaged: () => _enterWeight(line, damaged: true, max: _qty[line.id] ?? 0),
+                  onQuantity: () => _enterWeight(
+                    line,
+                    damaged: false,
+                    max: widget.sale.refundableQuantity(line),
+                  ),
+                  onDamaged: () => _enterWeight(
+                    line,
+                    damaged: true,
+                    max: _qty[line.id] ?? 0,
+                  ),
                   onClear: () => _clearWeight(line.id),
                 )
               else
@@ -245,9 +270,18 @@ class _RefundItemsDialogState extends State<_RefundItemsDialog> {
                   refundable: widget.sale.refundableQuantity(line).toInt(),
                   quantity: (_qty[line.id] ?? 0).toInt(),
                   damaged: (_damaged[line.id] ?? 0).toInt(),
-                  onQuantity: (v) => _setQty(line.id, v, widget.sale.refundableQuantity(line).toInt()),
+                  onQuantity: (v) => _setQty(
+                    line.id,
+                    v,
+                    widget.sale.refundableQuantity(line).toInt(),
+                  ),
                   onDamaged: (v) {
-                    setState(() => _damaged[line.id] = v.clamp(0, (_qty[line.id] ?? 0).toInt()));
+                    setState(
+                      () => _damaged[line.id] = v.clamp(
+                        0,
+                        (_qty[line.id] ?? 0).toInt(),
+                      ),
+                    );
                     h.clearPreviewError();
                   },
                 ),
@@ -266,7 +300,8 @@ class _RefundItemsDialogState extends State<_RefundItemsDialog> {
               const SizedBox(height: PosTokens.s4),
               SegmentedButton<String>(
                 segments: [
-                  for (final m in _methods) ButtonSegment(value: m, label: Text(_methodLabel(m))),
+                  for (final m in _methods)
+                    ButtonSegment(value: m, label: Text(_methodLabel(m))),
                 ],
                 selected: {?_method},
                 onSelectionChanged: (s) {
@@ -298,7 +333,10 @@ class _RefundItemsDialogState extends State<_RefundItemsDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           onPressed: hasSelection && !h.isPreviewing ? _review : null,
           child: Text(h.isPreviewing ? 'Calculating…' : 'Review refund'),
@@ -513,7 +551,11 @@ class _Stepper extends StatelessWidget {
           ),
           SizedBox(
             width: 28,
-            child: Text('$value', key: Key('$keyPrefix-value-$itemId'), textAlign: TextAlign.center),
+            child: Text(
+              '$value',
+              key: Key('$keyPrefix-value-$itemId'),
+              textAlign: TextAlign.center,
+            ),
           ),
           IconButton(
             key: Key('$keyPrefix-inc-$itemId'),
@@ -555,13 +597,17 @@ Future<bool?> confirmPartialRefund(
               preview.fullyRefundedAfter
                   ? 'This refunds everything left on the sale. This cannot be undone.'
                   : 'This cannot be undone.',
-              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(color: Theme.of(ctx).colorScheme.error),
+              style: Theme.of(ctx).textTheme.bodySmall
+                  ?.copyWith(color: Theme.of(ctx).colorScheme.error),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           onPressed: () => Navigator.of(ctx).pop(true),
           style: FilledButton.styleFrom(
@@ -585,7 +631,11 @@ Future<void> showPartialRefundResult(
   return showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      icon: Icon(Icons.check_circle_outline, color: Theme.of(ctx).colorScheme.primary, size: 32),
+      icon: Icon(
+        Icons.check_circle_outline,
+        color: Theme.of(ctx).colorScheme.primary,
+        size: 32,
+      ),
       title: const Text('Refund successful'),
       scrollable: true,
       content: ConstrainedBox(
@@ -596,21 +646,29 @@ Future<void> showPartialRefundResult(
           children: [
             _KV('Transaction', sale.displayNumber),
             _KV('Reference', 'Refund #${refund.id}'),
-            if (refund.refundedAt != null) _KV('Date/time', formatTimestamp(refund.refundedAt!)),
+            if (refund.refundedAt != null)
+              _KV('Date/time', formatTimestamp(refund.refundedAt!)),
             const Divider(),
             _AmountsBreakdown(sale: sale, names: names, amounts: refund),
           ],
         ),
       ),
       actions: [
-        FilledButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Done')),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Done'),
+        ),
       ],
     ),
   );
 }
 
 class _AmountsBreakdown extends StatelessWidget {
-  const _AmountsBreakdown({required this.sale, required this.names, required this.amounts});
+  const _AmountsBreakdown({
+    required this.sale,
+    required this.names,
+    required this.amounts,
+  });
   final CompletedSale sale;
   final Map<int, String> names;
   final RefundAmounts amounts;
@@ -629,16 +687,24 @@ class _AmountsBreakdown extends StatelessWidget {
             formatMoney(l.refundAmount),
           ),
         const Divider(),
-        if (amounts.subtotalAmount != null) _KV('Subtotal', formatMoney(amounts.subtotalAmount)),
-        if ((amounts.discountAmount ?? 0) != 0) _KV('Discount', '-${formatMoney(amounts.discountAmount)}'),
-        if (amounts.taxAmount != null) _KV('Tax', formatMoney(amounts.taxAmount)),
+        if (amounts.subtotalAmount != null)
+          _KV('Subtotal', formatMoney(amounts.subtotalAmount)),
+        if ((amounts.discountAmount ?? 0) != 0)
+          _KV('Discount', '-${formatMoney(amounts.discountAmount)}'),
+        if (amounts.taxAmount != null)
+          _KV('Tax', formatMoney(amounts.taxAmount)),
         _KV('Refund total', formatMoney(amounts.refundAmount), bold: true),
-        for (final p in amounts.payouts) _KV('Refund to ${_methodLabel(p.method)}', formatMoney(p.amount)),
-        if (amounts.walletAmount > 0) _KV('Back to wallet', formatMoney(amounts.walletAmount)),
+        for (final p in amounts.payouts)
+          _KV('Refund to ${_methodLabel(p.method)}', formatMoney(p.amount)),
+        if (amounts.walletAmount > 0)
+          _KV('Back to wallet', formatMoney(amounts.walletAmount)),
         if (!loyalty.isEmpty) ...[
-          if (loyalty.pointsEarnedReversed != 0) _KV('Points earned reversed', '${loyalty.pointsEarnedReversed}'),
-          if (loyalty.pointsRedeemedReturned != 0) _KV('Points returned', '${loyalty.pointsRedeemedReturned}'),
-          if (loyalty.cashbackReversed != 0) _KV('Cashback reversed', formatMoney(loyalty.cashbackReversed)),
+          if (loyalty.pointsEarnedReversed != 0)
+            _KV('Points earned reversed', '${loyalty.pointsEarnedReversed}'),
+          if (loyalty.pointsRedeemedReturned != 0)
+            _KV('Points returned', '${loyalty.pointsRedeemedReturned}'),
+          if (loyalty.cashbackReversed != 0)
+            _KV('Cashback reversed', formatMoney(loyalty.cashbackReversed)),
         ],
       ],
     );
@@ -647,7 +713,11 @@ class _AmountsBreakdown extends StatelessWidget {
 
 /// Previous partial refunds for a sale, oldest first.
 class PartialRefundHistory extends StatelessWidget {
-  const PartialRefundHistory({super.key, required this.sale, required this.names});
+  const PartialRefundHistory({
+    super.key,
+    required this.sale,
+    required this.names,
+  });
   final CompletedSale sale;
   final Map<int, String> names;
 
@@ -678,8 +748,10 @@ class PartialRefundHistory extends StatelessWidget {
               if (r.reason != null) _KV('Reason', r.reason!),
             ],
           ),
-        if (sale.refundedTotal != null) _KV('Refunded so far', formatMoney(sale.refundedTotal), bold: true),
-        if (sale.refundableTotal != null && sale.refundStatus != SaleRefundStatus.full)
+        if (sale.refundedTotal != null)
+          _KV('Refunded so far', formatMoney(sale.refundedTotal), bold: true),
+        if (sale.refundableTotal != null &&
+            sale.refundStatus != SaleRefundStatus.full)
           _KV('Still refundable', formatMoney(sale.refundableTotal)),
       ],
     );
@@ -695,7 +767,8 @@ class _KV extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = bold
-        ? Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)
+        ? Theme.of(context).textTheme.titleSmall
+              ?.copyWith(fontWeight: FontWeight.w800)
         : Theme.of(context).textTheme.bodyMedium;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),

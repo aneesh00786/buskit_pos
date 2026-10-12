@@ -11,7 +11,11 @@ library;
 import '../../offline/pos_tax.dart';
 
 class LegacyTaxComponent {
-  const LegacyTaxComponent({required this.code, required this.percent, required this.taxMilli});
+  const LegacyTaxComponent({
+    required this.code,
+    required this.percent,
+    required this.taxMilli,
+  });
   final String code;
   final double percent;
   final int taxMilli;
@@ -62,6 +66,12 @@ LegacyTaxLine calculateLegacyLine({
     totalMilli: t.totalMilli,
     components: t.mode == 'none'
         ? const []
-        : [LegacyTaxComponent(code: 'TAX', percent: t.percent, taxMilli: t.taxMilli)],
+        : [
+            LegacyTaxComponent(
+              code: 'TAX',
+              percent: t.percent,
+              taxMilli: t.taxMilli,
+            ),
+          ],
   );
 }

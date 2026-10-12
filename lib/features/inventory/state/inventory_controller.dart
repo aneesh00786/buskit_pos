@@ -174,9 +174,7 @@ class InventoryController extends ChangeNotifier {
       final fresh = await _products.findById(product.id);
       if (fresh == null || _selected?.id != product.id) return;
       _selected = fresh;
-      _results = [
-        for (final p in _results) p.id == fresh.id ? fresh : p,
-      ];
+      _results = [for (final p in _results) p.id == fresh.id ? fresh : p];
       _notify();
     } on ApiException {
       // Non-fatal: the adjustment itself already succeeded/failed on its own.

@@ -39,7 +39,8 @@ class _ProductPriceSectionState extends State<ProductPriceSection> {
   void _loadHistory() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (context.read<SessionController>().isDenied('products.price_change')) return;
+      if (context.read<SessionController>().isDenied('products.price_change'))
+        return;
       context.read<ProductPriceController>().loadHistory(widget.product.id);
     });
   }
@@ -64,11 +65,16 @@ class _ProductPriceSectionState extends State<ProductPriceSection> {
             children: [
               Text(
                 formatMoney(p.sellPrice),
-                style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               if (p.hasPosOverride) ...[
                 const SizedBox(width: PosTokens.s8),
-                Chip(label: const Text('POS price'), visualDensity: VisualDensity.compact),
+                Chip(
+                  label: const Text('POS price'),
+                  visualDensity: VisualDensity.compact,
+                ),
               ],
             ],
           ),
@@ -86,7 +92,11 @@ class _ProductPriceSectionState extends State<ProductPriceSection> {
                 FilledButton.icon(
                   onPressed: c.isBusy ? null : () => _change(context),
                   icon: c.isBusy
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Icon(Icons.sell_outlined),
                   label: Text(c.isBusy ? 'Saving…' : 'Change price'),
                 ),
@@ -133,7 +143,12 @@ class _ProductPriceSectionState extends State<ProductPriceSection> {
       reason: request.reason,
     );
     if (!context.mounted) return;
-    _feedback(context, c, ok, success: 'Price updated to ${formatMoney(c.lastResult?.sellPrice)}');
+    _feedback(
+      context,
+      c,
+      ok,
+      success: 'Price updated to ${formatMoney(c.lastResult?.sellPrice)}',
+    );
   }
 
   Future<void> _reset(BuildContext context) async {
@@ -147,18 +162,38 @@ class _ProductPriceSectionState extends State<ProductPriceSection> {
       newPrice: product.pricing.cataloguePrice ?? 0,
     );
     if (confirmed != true || !context.mounted) return;
-    final ok = await c.resetPrice(productId: product.id, expectedVersion: product.pricing.priceVersion);
+    final ok = await c.resetPrice(
+      productId: product.id,
+      expectedVersion: product.pricing.priceVersion,
+    );
     if (!context.mounted) return;
-    _feedback(context, c, ok, success: 'POS now uses the catalogue price ${formatMoney(c.lastResult?.sellPrice)}');
+    _feedback(
+      context,
+      c,
+      ok,
+      success:
+          'POS now uses the catalogue price ${formatMoney(c.lastResult?.sellPrice)}',
+    );
   }
 
-  void _feedback(BuildContext context, ProductPriceController c, bool ok, {required String success}) {
+  void _feedback(
+    BuildContext context,
+    ProductPriceController c,
+    bool ok, {
+    required String success,
+  }) {
     final err = c.error;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(ok ? success : (err != null ? describeApiError(err) : 'The price could not be changed.')),
+          content: Text(
+            ok
+                ? success
+                : (err != null
+                      ? describeApiError(err)
+                      : 'The price could not be changed.'),
+          ),
         ),
       );
     if (!ok) c.clearError();
@@ -166,9 +201,11 @@ class _ProductPriceSectionState extends State<ProductPriceSection> {
 }
 
 String _label(ProductItem p) =>
-    (p.variationName == null || p.variationName!.isEmpty || p.variationName == 'Default')
-        ? p.productName
-        : '${p.productName} · ${p.variationName}';
+    (p.variationName == null ||
+        p.variationName!.isEmpty ||
+        p.variationName == 'Default')
+    ? p.productName
+    : '${p.productName} · ${p.variationName}';
 
 Future<bool?> _confirm(
   BuildContext context, {
@@ -198,8 +235,14 @@ Future<bool?> _confirm(
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Confirm')),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Confirm'),
+        ),
       ],
     ),
   );
@@ -229,8 +272,10 @@ class _History extends StatelessWidget {
               ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                title: Text('${formatMoney(h.previousPrice)} → ${formatMoney(h.newPrice)}'
-                    '${h.action == 'reset' ? ' (catalogue)' : ''}'),
+                title: Text(
+                  '${formatMoney(h.previousPrice)} → ${formatMoney(h.newPrice)}'
+                  '${h.action == 'reset' ? ' (catalogue)' : ''}',
+                ),
                 subtitle: Text(
                   [
                     if (h.reason != null && h.reason!.isNotEmpty) h.reason!,
@@ -276,7 +321,9 @@ class _PriceFormState extends State<_PriceForm> {
 
   void _submit() {
     final raw = _price.text.trim();
-    final value = RegExp(r'^\d+(\.\d{1,3})?$').hasMatch(raw) ? double.tryParse(raw) : null;
+    final value = RegExp(r'^\d+(\.\d{1,3})?$').hasMatch(raw)
+        ? double.tryParse(raw)
+        : null;
     String? error;
     if (value == null || value <= 0) {
       error = 'Enter a price greater than 0 (up to 3 decimals)';
@@ -290,7 +337,8 @@ class _PriceFormState extends State<_PriceForm> {
       return;
     }
     final reason = _reason.text.trim();
-    Navigator.of(context).pop(_PriceRequest(raw, reason.isEmpty ? null : reason));
+    Navigator.of(context)
+        .pop(_PriceRequest(raw, reason.isEmpty ? null : reason));
   }
 
   @override
@@ -309,8 +357,13 @@ class _PriceFormState extends State<_PriceForm> {
             TextField(
               controller: _price,
               autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(labelText: 'New price *', errorText: _error),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: 'New price *',
+                errorText: _error,
+              ),
               onChanged: (_) {
                 if (_error != null) setState(() => _error = null);
               },
@@ -325,7 +378,10 @@ class _PriceFormState extends State<_PriceForm> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
         FilledButton(onPressed: _submit, child: const Text('Continue')),
       ],
     );
@@ -345,12 +401,15 @@ class _KeyValue extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(child: Text(label, style: style, overflow: TextOverflow.ellipsis)),
+          Expanded(
+            child: Text(label, style: style, overflow: TextOverflow.ellipsis),
+          ),
           const SizedBox(width: PosTokens.s8),
-          Flexible(child: Text(value, style: style, textAlign: TextAlign.end)),
+          Flexible(
+            child: Text(value, style: style, textAlign: TextAlign.end),
+          ),
         ],
       ),
     );
   }
 }
-

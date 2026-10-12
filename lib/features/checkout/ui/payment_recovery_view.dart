@@ -217,7 +217,9 @@ class _PaymentRecoveryDialogState extends State<PaymentRecoveryDialog> {
 
   Future<void> _cancel(RecoverableSale s) => _run(() async {
     // Phase 18B.18: never an attempt whose reference is recorded but not attached.
-    for (final a in s.attempts.where((a) => a.cancellable && !a.referenceRecordedUnattached)) {
+    for (final a in s.attempts.where(
+      (a) => a.cancellable && !a.referenceRecordedUnattached,
+    )) {
       await widget.service.cancelAttempt(a.attempt.id);
     }
     await _reload();
@@ -454,7 +456,9 @@ class _PaymentRecoveryDialogState extends State<PaymentRecoveryDialog> {
       case RecoveryState.pending:
       case RecoveryState.authorized:
         return [
-          if (s.attempts.any((a) => a.cancellable && !a.referenceRecordedUnattached))
+          if (s.attempts.any(
+            (a) => a.cancellable && !a.referenceRecordedUnattached,
+          ))
             TextButton(
               key: const Key('recovery-cancel'),
               onPressed: busy ? null : () => _cancel(s),
@@ -515,7 +519,8 @@ String? referenceLabel(RecoveryAttempt a) {
   if (!a.attempt.status.isOpen) return null;
   if (a.attempt.hasProviderReference) return 'Provider reference attached';
   return switch (a.attempt.referenceStatus) {
-    ProviderReferenceStatus.recordedUnattached => 'Provider reference recorded — waiting for a manager to attach it',
+    ProviderReferenceStatus.recordedUnattached =>
+      'Provider reference recorded — waiting for a manager to attach it',
     ProviderReferenceStatus.notRecorded => 'No provider reference',
     ProviderReferenceStatus.attached => 'Provider reference attached',
     ProviderReferenceStatus.unknown => null,
@@ -562,9 +567,16 @@ class _SaleDetail extends StatelessWidget {
           ),
           // Phase 18B.18: the provider-reference state of an open attempt.
           if (referenceLabel(a) != null)
-            Text(referenceLabel(a)!, key: Key('recovery-reference-${a.attempt.id}'), style: theme.textTheme.bodySmall),
+            Text(
+              referenceLabel(a)!,
+              key: Key('recovery-reference-${a.attempt.id}'),
+              style: theme.textTheme.bodySmall,
+            ),
           if (a.referenceRecordedUnattached)
-            _Banner(text: recordedReferenceGuidance, key: Key('recovery-reference-recorded-${a.attempt.id}')),
+            _Banner(
+              text: recordedReferenceGuidance,
+              key: Key('recovery-reference-recorded-${a.attempt.id}'),
+            ),
         ],
       ],
     );

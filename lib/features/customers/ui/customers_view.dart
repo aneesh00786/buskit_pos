@@ -155,7 +155,8 @@ class _Header extends StatelessWidget {
             ),
           ),
           // Phase C5: hidden when the loaded permissions lack customers.create.
-          if (!showingDetail && !context.watch<SessionController>().isDenied('customers.create'))
+          if (!showingDetail &&
+              !context.watch<SessionController>().isDenied('customers.create'))
             IconButton(
               tooltip: 'New customer',
               constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
@@ -269,7 +270,10 @@ class _ListBody extends StatelessWidget {
                     : 'Try a different search.',
                 icon: Icons.people_outline,
               ),
-              if (c.query.isEmpty && !context.watch<SessionController>().isDenied('customers.create'))
+              if (c.query.isEmpty &&
+                  !context.watch<SessionController>().isDenied(
+                    'customers.create',
+                  ))
                 FilledButton.icon(
                   onPressed: () => showCustomerForm(context),
                   icon: const Icon(Icons.person_add_alt_outlined),

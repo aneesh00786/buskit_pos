@@ -259,7 +259,9 @@ class CartController extends ChangeNotifier {
   /// is a duplicate of an offline sale already recorded on the server, so the
   /// only safe action is cancelling it ([cancelDuplicateDraft]).
   bool get draftSyncedOffline =>
-      _syncedOfflineDraftId != null && _sale != null && _sale!.id == _syncedOfflineDraftId;
+      _syncedOfflineDraftId != null &&
+      _sale != null &&
+      _sale!.id == _syncedOfflineDraftId;
 
   /// True while a completion attempt (and its idempotency key) is kept for a
   /// safe retry after a failure whose outcome may be unknown.
@@ -341,7 +343,10 @@ class CartController extends ChangeNotifier {
       final m = quantityMilliOf(quantity);
       if (m == null || m % quantityUnit != 0) {
         final invalid = _validateQuantity(quantity);
-        return _rejectLocally(invalid ?? _weightNeedsServer, CartOperation.update);
+        return _rejectLocally(
+          invalid ?? _weightNeedsServer,
+          CartOperation.update,
+        );
       }
       return _updateLocal(itemId, m ~/ quantityUnit);
     }
@@ -1083,7 +1088,9 @@ class CartController extends ChangeNotifier {
           salesmanName: support.staffName?.call(),
           installationId: device.installationId,
           customerId: _pendingCustomerId,
-          customerName: _pendingCustomerId == null ? null : _pendingCustomerLabel,
+          customerName: _pendingCustomerId == null
+              ? null
+              : _pendingCustomerLabel,
           currency: shift?.currency,
           createdAt: created,
           updatedAt: now,
@@ -1284,7 +1291,10 @@ class CartController extends ChangeNotifier {
           await offline!.checkout.storage.deleteCartDraft(id);
         } catch (_) {
           _op = null;
-          return _rejectLocally(draftDiscardFailedMessage, CartOperation.cancel);
+          return _rejectLocally(
+            draftDiscardFailedMessage,
+            CartOperation.cancel,
+          );
         }
         _op = null;
       }
@@ -1333,7 +1343,9 @@ class CartController extends ChangeNotifier {
       return true;
     }
     final failure = _error;
-    if (_errorOp != CartOperation.cancel || failure == null || !failure.isRetryable) {
+    if (_errorOp != CartOperation.cancel ||
+        failure == null ||
+        !failure.isRetryable) {
       return false; // a definite refusal: shown as is, the draft stays open
     }
     try {
@@ -1496,7 +1508,9 @@ class CartController extends ChangeNotifier {
       _error = _friendly(e, step);
       _errorOp = op;
       if (op == CartOperation.complete) _onlineOutcomeUnknown = e.isRetryable;
-      if (op == CartOperation.complete && isDraftSyncedOffline(e) && _sale != null) {
+      if (op == CartOperation.complete &&
+          isDraftSyncedOffline(e) &&
+          _sale != null) {
         _syncedOfflineDraftId = _sale!.id;
       }
       if (e.isUnauthorized) onUnauthorized?.call();
@@ -1559,7 +1573,8 @@ class CartController extends ChangeNotifier {
           return e.withMessage(cancelGoneMessage);
         }
       case CartOperation.complete:
-        if (isDraftSyncedOffline(e)) return e.withMessage(draftSyncedOfflineMessage);
+        if (isDraftSyncedOffline(e))
+          return e.withMessage(draftSyncedOfflineMessage);
       case CartOperation.add:
       case CartOperation.promotion:
       case CartOperation.loyalty:

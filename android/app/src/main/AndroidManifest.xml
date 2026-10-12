@@ -16,6 +16,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:screenOrientation="sensorLandscape"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
@@ -25,6 +26,15 @@
                  the Android process has started. This theme is visible to the user
                  while the Flutter UI initializes. After that, this theme continues
                  to determine the Window background behind the Flutter UI. -->
+            <!-- TEMPORARY (testing): landscape only (either way up). With
+                 screenOrientation="sensorLandscape" above and
+                 lib/core/platform/landscape_lock.dart. Android 16+ ignores
+                 orientation locks on large screens (tablets) for apps that
+                 target API 36 unless this property opts out (API 36 only).
+                 To restore: remove screenOrientation and this property. -->
+            <property
+              android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+              android:value="true" />
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
