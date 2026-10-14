@@ -10,7 +10,19 @@ enum VoiceIntentType {
 
   /// Phase 13G: the session's language has no parser yet — the text is
   /// never interpreted as another language.
-  unsupportedLanguage('UNSUPPORTED_LANGUAGE');
+  unsupportedLanguage('UNSUPPORTED_LANGUAGE'),
+
+  /// Phase 2 (English): "bill order 1048" — an EXISTING order (a held sale)
+  /// by its number ([VoiceIntent.orderNumber]). Looked up by the server.
+  billOrder('BILL_ORDER'),
+
+  /// Phase 2.1 (English): "bill table 6" — the held orders at that table
+  /// ([VoiceIntent.tableNumber]), looked up by the server; never chosen
+  /// automatically when there are several.
+  tableOrder('TABLE_ORDER'),
+
+  /// Phase 2 (English): "bill that order" — the order on screen, if any.
+  billShownOrder('BILL_SHOWN_ORDER');
 
   const VoiceIntentType(this.wire);
   final String wire;
@@ -23,6 +35,9 @@ enum ClarificationNeed {
 
   /// "Bill two" / "Bill something" — which product?
   product,
+
+  /// Phase 2: "bill order" — which order number?
+  order,
 }
 
 /// One requested line, exactly as spoken. [productQuery] / [variantQuery]
@@ -64,9 +79,17 @@ class VoiceIntent {
     this.items = const [],
     this.clarification,
     this.need,
+    this.orderNumber,
+    this.tableNumber,
   });
 
   final VoiceIntentType type;
+
+  /// Phase 2: BILL_ORDER — the order number as said (never resolved here).
+  final int? orderNumber;
+
+  /// Phase 2: TABLE_ORDER — the table number as said.
+  final int? tableNumber;
 
   /// The Phase 13A voice session / request this intent belongs to.
   final String voiceSessionId;
@@ -88,6 +111,8 @@ class VoiceIntent {
     'recognizedText': recognizedText,
     'items': [for (final i in items) i.toJson()],
     'clarification': ?clarification,
+    'orderNumber': ?orderNumber,
+    'tableNumber': ?tableNumber,
   };
 }
 
@@ -101,6 +126,7 @@ class VoiceCorrection {
   const VoiceCorrection._(
     this.kind, {
     this.target,
+    this.position,
     this.quantity,
     this.unit,
     this.items = const [],
@@ -110,18 +136,20 @@ class VoiceCorrection {
   /// "make the coffee three" / "make it three" ([target] null = it / that).
   const VoiceCorrection.setQuantity({
     String? target,
+    int? position,
     required num quantity,
     String? unit,
   }) : this._(
          VoiceCorrectionKind.setQuantity,
          target: target,
+         position: position,
          quantity: quantity,
          unit: unit,
        );
 
-  /// "remove the coffee" / "remove it".
-  const VoiceCorrection.remove({String? target})
-    : this._(VoiceCorrectionKind.remove, target: target);
+  /// "remove the coffee" / "remove it" / "remove the second item".
+  const VoiceCorrection.remove({String? target, int? position})
+    : this._(VoiceCorrectionKind.remove, target: target, position: position);
 
   /// "add one more coffee" / "add one water".
   const VoiceCorrection.add(List<VoiceIntentItem> items)
@@ -133,10 +161,22 @@ class VoiceCorrection {
 
   final VoiceCorrectionKind kind;
 
-  /// The item as said ("coffee", "large coffee"); null = "it" / "that".
+  /// The item as said ("coffee", "large coffee"); null = "it" / "that"
+  /// (or a [position] was said instead).
   final String? target;
+
+  /// Phase 1 (English): the line by its place on the bill — 1 = "the first
+  /// item", 2 = "the second one" / "item 2", -1 = "the last item". Null when
+  /// no position was said. Matched against the bill's own lines only.
+  final int? position;
   final num? quantity;
   final String? unit;
   final List<VoiceIntentItem> items;
   final String? question;
 }
+
+/// Phase 1 (English) — a spoken answer to "Would you like to confirm this
+/// bill?". [confirm] / [reject] / [cancel] only for a clear answer; a mix
+/// ("yes … no") or a "yes" followed by something else is [unclear] (the
+/// controller asks again — never a guess).
+enum VoiceReply { confirm, reject, cancel, unclear }

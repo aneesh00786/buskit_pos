@@ -3,6 +3,7 @@ import '../../../core/utils/quantity.dart';
 import '../../loyalty/models/loyalty_sale_info.dart';
 import '../../promotions/models/promotion.dart';
 import 'discount_override.dart';
+import 'line_pricing.dart';
 
 class CartLine {
   const CartLine({
@@ -20,6 +21,8 @@ class CartLine {
     this.discountAmount,
     this.lineTotal,
     this.sellingMode = 'PIECE',
+    this.lineDiscount,
+    this.priceOverride,
   });
 
   final int id;
@@ -53,6 +56,12 @@ class CartLine {
   final double? discountAmount;
   final double? lineTotal;
 
+  /// Backend migration 055: this line's own discount and per-sale price
+  /// override, when it has one (absent otherwise). [unitPrice] is already
+  /// the overridden price; [discountAmount] is the line's TOTAL discount.
+  final LineDiscount? lineDiscount;
+  final LinePriceOverride? priceOverride;
+
   bool get isUnavailable => availabilityStatus == 'unavailable';
 
   static CartLine? fromJson(Object? json) {
@@ -78,6 +87,8 @@ class CartLine {
       taxIncluded: asBool(m['tax_included']),
       discountAmount: asDouble(m['discount_amount']),
       lineTotal: asDouble(m['line_total']),
+      lineDiscount: LineDiscount.fromJson(m['line_discount']),
+      priceOverride: LinePriceOverride.fromJson(m['price_override']),
     );
   }
 }
@@ -124,7 +135,12 @@ class CartSale {
     this.storeId,
     this.registerId,
     this.isLocal = false,
+    this.tableRef,
+    this.mergeNotice,
   });
+
+  /// Phase 2.1: the table label of a held order (null = no table).
+  final String? tableRef;
 
   final int id;
   final int version;
@@ -162,6 +178,10 @@ class CartSale {
   /// ported tax rule, and it can only be completed as an offline sale.
   final bool isLocal;
 
+  /// Only on the response to an add that merged into a line with a line
+  /// discount or a price override (never part of the stored sale).
+  final MergeNotice? mergeNotice;
+
   bool get isDraft => status == 'draft';
 
   /// Pieces in the sale; a weighed line counts as one item (Phase 12B).
@@ -193,6 +213,8 @@ class CartSale {
       shiftId: asInt(m['shift_id']),
       storeId: asInt(m['store_id']),
       registerId: asInt(m['register_id']),
+      tableRef: asString(m['table_ref']),
+      mergeNotice: MergeNotice.fromJson(m['merge_notice']),
     );
   }
 }

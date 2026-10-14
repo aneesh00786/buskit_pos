@@ -4,10 +4,14 @@ import 'package:provider/provider.dart';
 import '../../../core/network/pos_api_client.dart';
 import '../../../core/theme/pos_tokens.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/quantity.dart';
+import '../../../core/utils/server_time.dart';
 import '../../auth/models/pos_token_scope.dart';
 import '../../auth/state/session_controller.dart';
 import '../../cart/state/cart_controller.dart';
 import '../../cart/ui/quantity_dialog.dart';
+import '../../checkout/data/payment_recovery_service.dart';
+import '../data/voice_order_service.dart';
 import '../data/voice_platform.dart';
 import '../data/voice_preview_service.dart';
 import '../data/voice_tts.dart';
@@ -15,6 +19,10 @@ import '../intent/voice_intent.dart';
 import '../models/quick_bill_preview.dart';
 import '../models/voice_language.dart';
 import '../state/voice_controller.dart';
+import '../state/voice_payment_status.dart';
+import '../translation/api_translation_service.dart';
+import '../translation/translation_service.dart';
+import '../translation/translation_view.dart';
 
 /// Phase 13A — DEVELOPER test screen for the voice foundation: start / stop /
 /// cancel listening and see the recognized text with the voice session and
@@ -34,6 +42,8 @@ Future<bool> showVoiceTest(
   PosTokenScope? Function()? scope,
   VoiceTtsService? tts,
   VoiceSettings? settings,
+  VoiceOrderService? orderService,
+  TranslationService? translationService,
 }) {
   final readScope = scope ?? _sessionScope(context);
   final controller = VoiceController(
@@ -43,15 +53,32 @@ Future<bool> showVoiceTest(
     previewService:
         previewService ?? ApiVoicePreviewService(context.read<PosApiClient>()),
     cart: cart,
+    // Phase 2: existing orders by voice (operator screen only).
+    orderService:
+        orderService ?? (cart != null ? _apiOrderService(context) : null),
     // Phase 13F: spoken replies on the operator Quick Bill screen only.
     tts: tts ?? (cart != null ? FlutterTtsService() : null),
     settings: settings ?? voiceSettings,
   );
   return showDialog<bool>(
     context: context,
-    builder: (_) => ChangeNotifierProvider<VoiceController>.value(
-      value: controller,
-      child: const VoiceTestView(),
+    builder: (_) => MultiProvider(
+      providers: [
+        ChangeNotifierProvider<VoiceController>.value(value: controller),
+        // Phase 3B.1: the store server's Google Cloud Translation when the
+        // app has its API client; otherwise translation is plainly
+        // unavailable (never pretended).
+        Provider<TranslationService>.value(
+          value:
+              translationService ??
+              _apiTranslationService(context) ??
+              const UnavailableTranslationService(),
+        ),
+      ],
+      child: _CloseWhenConfirmedByVoice(
+        controller: controller,
+        child: const VoiceTestView(),
+      ),
     ),
   ).then((added) => added == true).whenComplete(controller.dispose);
 }
@@ -59,6 +86,24 @@ Future<bool> showVoiceTest(
 /// Phase 13G — the app's voice language setting (local to the app, English
 /// by default; only implemented languages can be selected).
 final voiceSettings = VoiceSettings();
+
+/// The app's API client when one is provided (null in screens / tests
+/// without one — existing orders by voice are then not offered).
+VoiceOrderService? _apiOrderService(BuildContext context) {
+  try {
+    return ApiVoiceOrderService(context.read<PosApiClient>());
+  } on ProviderNotFoundException {
+    return null;
+  }
+}
+
+TranslationService? _apiTranslationService(BuildContext context) {
+  try {
+    return ApiTranslationService(context.read<PosApiClient>());
+  } on ProviderNotFoundException {
+    return null;
+  }
+}
 
 PosTokenScope? Function() _sessionScope(BuildContext context) {
   final session = context.read<SessionController>();
@@ -69,6 +114,10 @@ PosTokenScope? Function() _sessionScope(BuildContext context) {
 /// Bill (lines go into THIS cart through its existing add path), then the
 /// EXISTING checkout opens via [openCheckout] (the cart passes `showPay`).
 /// Returns true when checkout was opened.
+///
+/// Phase 1: when checkout closes, the bill's payment status is shown, read
+/// from authoritative state only (see [voicePaymentOutcome]); [recovery]
+/// defaults to the app's read-only payment-recovery service.
 Future<bool> startVoiceBill(
   BuildContext context, {
   required Future<void> Function(BuildContext context) openCheckout,
@@ -78,20 +127,108 @@ Future<bool> startVoiceBill(
   PosTokenScope? Function()? scope,
   VoiceTtsService? tts,
   VoiceSettings? settings,
+  PaymentRecoveryService? recovery,
+  VoiceOrderService? orderService,
+  TranslationService? translationService,
 }) async {
+  final cart = context.read<CartController>();
+  // Phase 3A: the status is shown in this staff member's voice language.
+  final readScope = scope ?? _sessionScope(context);
+  final staff = readScope();
+  final statusLanguage = (settings ?? voiceSettings).languageFor(
+    staff == null ? null : '${staff.companyId}:${staff.salesmanId}',
+  );
   final added = await showVoiceTest(
     context,
     permission: permission,
     recognizer: recognizer,
     previewService: previewService,
-    cart: context.read<CartController>(),
+    cart: cart,
     scope: scope,
     tts: tts,
     settings: settings,
+    orderService: orderService,
+    translationService: translationService,
   );
   if (!added || !context.mounted) return false;
+  // The server draft the confirmed bill is now in (never a local id).
+  final saleId = cart.isLocalSale ? null : cart.sale?.id;
+  final paymentRecovery = recovery ?? _recoveryService(context);
+  final messenger = ScaffoldMessenger.maybeOf(context);
   await openCheckout(context);
+  final outcome = await voicePaymentOutcome(
+    cart: cart,
+    saleId: saleId,
+    recovery: paymentRecovery,
+  );
+  messenger?.showSnackBar(
+    SnackBar(
+      key: const Key('voice-payment-status'),
+      content: Text('Voice bill: ${outcome.messageIn(statusLanguage)}'),
+      duration: Duration(
+        seconds: outcome.status == VoicePaymentStatus.paid ? 4 : 10,
+      ),
+    ),
+  );
   return true;
+}
+
+PaymentRecoveryService? _recoveryService(BuildContext context) {
+  try {
+    return Provider.of<PaymentRecoveryService?>(context, listen: false);
+  } on ProviderNotFoundException {
+    return null;
+  }
+}
+
+/// What the cashier said, as shown on screen: the assistant's name in front
+/// ("Jacky, bill …") is left out — the name is never displayed. Display only;
+/// the parser still receives the full text.
+String shownSpeech(String text) => text.replaceFirst(
+  RegExp(r'^\s*jacky\b[\s,.:;!-]*', caseSensitive: false),
+  '',
+);
+
+/// Phase 1: a spoken "yes" confirmed the bill (through the same
+/// [VoiceController.confirmBill] as the button): close with true, exactly
+/// like the button, so the caller opens the EXISTING checkout. Once only.
+class _CloseWhenConfirmedByVoice extends StatefulWidget {
+  const _CloseWhenConfirmedByVoice({
+    required this.controller,
+    required this.child,
+  });
+  final VoiceController controller;
+  final Widget child;
+
+  @override
+  State<_CloseWhenConfirmedByVoice> createState() =>
+      _CloseWhenConfirmedByVoiceState();
+}
+
+class _CloseWhenConfirmedByVoiceState
+    extends State<_CloseWhenConfirmedByVoice> {
+  bool _closed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_check);
+  }
+
+  void _check() {
+    if (_closed || !mounted || !widget.controller.confirmedByVoice) return;
+    _closed = true;
+    Navigator.of(context).pop(true);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_check);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class VoiceTestView extends StatelessWidget {
@@ -119,7 +256,33 @@ class VoiceTestView extends StatelessWidget {
     // developer test screen.
     final operator = v.cart != null;
     return AlertDialog(
-      title: Text(operator ? 'Quick Bill' : 'Voice (developer test)'),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(operator ? 'Quick Bill' : 'Voice (developer test)'),
+          ),
+          // Phase 3B: a separate mode with its own controller — speech there
+          // never reaches this bill. Closed again with its close button.
+          IconButton(
+            key: const Key('voice-translation-mode'),
+            onPressed: v.canOpenTranslation
+                ? () {
+                    v.stopSpeaking();
+                    showTranslationMode(
+                      context,
+                      permission: v.permission,
+                      recognizer: v.recognizer,
+                      service: context.read<TranslationService>(),
+                      tts: v.tts,
+                      staffLanguage: v.language,
+                    );
+                  }
+                : null,
+            icon: const Icon(Icons.translate),
+            tooltip: 'Translation mode',
+          ),
+        ],
+      ),
       content: SizedBox(
         width: 460,
         child: SingleChildScrollView(
@@ -162,7 +325,21 @@ class VoiceTestView extends StatelessWidget {
                           : (l) => l == null ? null : v.selectLanguage(l),
                       items: [
                         for (final l in VoiceLanguage.supported)
-                          DropdownMenuItem(value: l, child: Text(l.label)),
+                          DropdownMenuItem(
+                            value: l,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(l.label),
+                                // Phase 3A: the language's own name too.
+                                if (l.nativeLabel != null)
+                                  Text(
+                                    ' ${l.nativeLabel}',
+                                    style: theme.textTheme.bodySmall,
+                                  ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                   ],
@@ -171,6 +348,19 @@ class VoiceTestView extends StatelessWidget {
                   Text(
                     'The next bill will use ${v.language.label}.',
                     key: const Key('voice-next-language'),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                // Phase 3A: what this device could not do in the language.
+                if (!v.recognitionAvailable(v.language))
+                  Text(
+                    '${v.language.label} speech recognition is not available on this device.',
+                    key: const Key('voice-recognition-unavailable'),
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
+                if (v.spokenRepliesNote != null)
+                  Text(
+                    v.spokenRepliesNote!,
+                    key: const Key('voice-spoken-unavailable'),
                     style: theme.textTheme.bodySmall,
                   ),
                 if (v.isSpeaking)
@@ -211,7 +401,7 @@ class VoiceTestView extends StatelessWidget {
               if (v.text.isNotEmpty) ...[
                 Text('Recognized text:', style: theme.textTheme.titleSmall),
                 Text(
-                  '"${v.text}"',
+                  '"${shownSpeech(v.text)}"',
                   key: const Key('voice-text'),
                   style: theme.textTheme.titleMedium,
                 ),
@@ -256,6 +446,11 @@ class VoiceTestView extends StatelessWidget {
                     'Voice commands in ${v.sessionLanguage.label} are not supported yet.',
                     key: const Key('voice-unsupported-language'),
                   ),
+              ],
+              // Phase 2: an existing order, for verification.
+              if (v.orderState != VoiceOrderState.none) ...[
+                const SizedBox(height: PosTokens.s12),
+                _OrderSection(v),
               ],
               // Phase 13C-B: the server's preview, for verification.
               if (v.previewState != VoicePreviewState.none) ...[
@@ -401,7 +596,7 @@ class _PreviewSection extends StatelessWidget {
               style: theme.textTheme.titleMedium,
             ),
             Text(
-              'You said: "${preview.recognizedText}"',
+              'You said: "${shownSpeech(preview.recognizedText)}"',
               key: const Key('voice-preview-said'),
               style: theme.textTheme.bodySmall,
             ),
@@ -439,7 +634,7 @@ class _PreviewSection extends StatelessWidget {
               ),
             if (v.billState == VoiceBillState.added)
               Text(
-                'Bill added to checkout.',
+                'Bill confirmed. Payment: unpaid — continue in checkout.',
                 key: const Key('voice-bill-added'),
                 style: TextStyle(color: theme.colorScheme.primary),
               ),
@@ -453,8 +648,22 @@ class _PreviewSection extends StatelessWidget {
               ),
             if (v.isCorrecting)
               const Text(
-                'Listening for a correction…',
+                'Listening for your answer…',
                 key: Key('voice-correction-listening'),
+              ),
+            // Phase 1: the bill is verified by the server and waits for an
+            // explicit confirmation (spoken or tapped) — nothing is billed
+            // or paid until then.
+            if (preview.isReady &&
+                v.cart != null &&
+                v.billState == VoiceBillState.none &&
+                !v.isCorrecting &&
+                v.correctionQuestion == null &&
+                v.billError == null)
+              const Text(
+                'Waiting for your confirmation. Tap Confirm Bill, or tap '
+                'Answer by voice and say yes, no or a change.',
+                key: Key('voice-awaiting-confirmation'),
               ),
             if (v.billError != null)
               Text(
@@ -489,7 +698,7 @@ class _PreviewSection extends StatelessWidget {
                     key: const Key('voice-speak-correction'),
                     onPressed: v.startCorrection,
                     icon: const Icon(Icons.record_voice_over_outlined),
-                    label: const Text('Speak correction'),
+                    label: const Text('Answer by voice'),
                   ),
                 speakAgain,
                 cancel,
@@ -499,6 +708,229 @@ class _PreviewSection extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Phase 2 — an existing order: looking it up, not found, the server's view
+/// for verification (spoken or touch confirmation), changed / no longer
+/// billable (reload), or a recoverable error (retry). Confirming opens the
+/// SAME sale in the existing checkout; nothing is paid here.
+class _OrderSection extends StatelessWidget {
+  const _OrderSection(this.v);
+  final VoiceController v;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final idle = v.billState == VoiceBillState.none && !v.isAnsweringOrder;
+    final speakAgain = OutlinedButton.icon(
+      key: const Key('voice-order-speak-again'),
+      onPressed: idle ? v.speakAgain : null,
+      icon: const Icon(Icons.mic),
+      label: const Text('Speak Again'),
+    );
+    final cancel = TextButton(
+      key: const Key('voice-order-cancel'),
+      onPressed: idle ? v.cancelBill : null,
+      child: const Text('Cancel'),
+    );
+    final o = v.order;
+    switch (v.orderState) {
+      case VoiceOrderState.loading:
+        return Row(
+          key: const Key('voice-order-loading'),
+          children: [
+            const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: PosTokens.s8),
+            Text(
+              v.orderNumber == null && v.tableRef != null
+                  ? 'Looking up the orders at table ${v.tableRef}…'
+                  : 'Looking up order ${v.orderNumber}…',
+            ),
+          ],
+        );
+      case VoiceOrderState.loaded when o != null:
+        final t = o.totals;
+        return Card(
+          key: const Key('voice-order-ready'),
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(PosTokens.s12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Verify order #${o.id}',
+                  style: theme.textTheme.titleMedium,
+                ),
+                if (o.tableRef != null)
+                  Text(
+                    'Table ${o.tableRef}',
+                    key: const Key('voice-order-table'),
+                    style: theme.textTheme.labelLarge,
+                  ),
+                const SizedBox(height: PosTokens.s8),
+                for (final line in o.items)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${formatQuantity(line.quantity)} × ${line.productName ?? 'Item'}',
+                        ),
+                      ),
+                      Text(formatMoney(line.lineTotal ?? 0)),
+                    ],
+                  ),
+                const Divider(),
+                if (t.subtotal != null) _Amount('Subtotal', t.subtotal),
+                if ((t.discountTotal ?? 0) != 0)
+                  _Amount('Discount', -(t.discountTotal ?? 0)),
+                if (t.taxTotal != null) _Amount('Tax', t.taxTotal),
+                _Amount(
+                  'Total',
+                  t.grandTotal,
+                  key: const Key('voice-order-total'),
+                  strong: true,
+                ),
+                const SizedBox(height: PosTokens.s8),
+                if (v.billState == VoiceBillState.adding)
+                  const Text(
+                    'Opening the order for checkout…',
+                    key: Key('voice-order-opening'),
+                  ),
+                if (v.isAnsweringOrder)
+                  const Text(
+                    'Listening for your answer…',
+                    key: Key('voice-order-listening'),
+                  ),
+                if (v.correctionQuestion != null)
+                  Text(
+                    v.correctionQuestion!,
+                    key: const Key('voice-order-question'),
+                    style: TextStyle(color: theme.colorScheme.tertiary),
+                  ),
+                if (v.billError != null)
+                  Text(
+                    v.billError!,
+                    key: const Key('voice-order-error'),
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
+                if (idle && v.correctionQuestion == null && v.billError == null)
+                  const Text(
+                    'Waiting for your confirmation. Tap Bill this order, or '
+                    'tap Answer by voice and say yes or cancel. Nothing is '
+                    'paid until checkout.',
+                    key: Key('voice-order-awaiting'),
+                  ),
+                Wrap(
+                  spacing: PosTokens.s8,
+                  runSpacing: PosTokens.s4,
+                  children: [
+                    FilledButton.icon(
+                      key: const Key('voice-bill-order'),
+                      onPressed: idle
+                          ? () async {
+                              if (await v.confirmOrder() && context.mounted) {
+                                Navigator.of(context).pop(true);
+                              }
+                            }
+                          : null,
+                      icon: const Icon(Icons.point_of_sale),
+                      label: const Text('Bill this order'),
+                    ),
+                    OutlinedButton.icon(
+                      key: const Key('voice-order-answer'),
+                      onPressed: idle ? v.startOrderAnswer : null,
+                      icon: const Icon(Icons.record_voice_over_outlined),
+                      label: const Text('Answer by voice'),
+                    ),
+                    speakAgain,
+                    cancel,
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      case VoiceOrderState.choosing:
+        // Phase 2.1: several held orders at the table — the cashier picks
+        // one explicitly; it is then looked up and verified as usual.
+        return Card(
+          key: const Key('voice-table-choices'),
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(PosTokens.s12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '${v.tableOrders.length} orders at table ${v.tableRef}. '
+                  'Choose the one to bill:',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const SizedBox(height: PosTokens.s8),
+                for (final c in v.tableOrders)
+                  ListTile(
+                    key: Key('voice-table-order-${c.id}'),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Order #${c.id}'),
+                    subtitle: Text(
+                      [
+                        if (c.heldAt != null)
+                          'Held ${formatTimestamp(c.heldAt!)}',
+                        if (c.itemCount != null)
+                          '${c.itemCount} item${c.itemCount == 1 ? '' : 's'}',
+                      ].join(' · '),
+                    ),
+                    trailing: Text(formatMoney(c.grandTotal ?? 0)),
+                    onTap: () => v.chooseTableOrder(c.id),
+                  ),
+                Wrap(spacing: PosTokens.s8, children: [speakAgain, cancel]),
+              ],
+            ),
+          ),
+        );
+      default:
+        final reload =
+            v.orderState == VoiceOrderState.conflict ||
+            v.orderState == VoiceOrderState.ineligible ||
+            (v.orderState == VoiceOrderState.failed && v.orderRetryable);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              v.orderMessage ?? 'The order could not be shown.',
+              key: Key('voice-order-${v.orderState.name}'),
+              style: TextStyle(
+                color: v.orderState == VoiceOrderState.unsupported
+                    ? theme.colorScheme.tertiary
+                    : theme.colorScheme.error,
+              ),
+            ),
+            const SizedBox(height: PosTokens.s8),
+            Wrap(
+              spacing: PosTokens.s8,
+              children: [
+                if (reload)
+                  FilledButton(
+                    key: const Key('voice-order-reload'),
+                    onPressed: v.retryOrder,
+                    child: Text(
+                      v.orderState == VoiceOrderState.failed
+                          ? 'Retry'
+                          : 'Reload order',
+                    ),
+                  ),
+                speakAgain,
+                cancel,
+              ],
+            ),
+          ],
+        );
+    }
   }
 }
 

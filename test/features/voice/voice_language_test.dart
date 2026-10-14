@@ -183,7 +183,7 @@ void main() {
       expect(tts.languages.every((l) => l.code == 'en-US'), isTrue);
       expect(
         tts.spoken.last,
-        'Your bill is ready. The total is 27.45. Please verify it before confirming.',
+        'The total is 27.45. Would you like to confirm this bill?',
       );
       expect(backend.lastBody.keys.toSet(), {
         'intent',

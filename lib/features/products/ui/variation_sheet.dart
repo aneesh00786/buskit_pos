@@ -73,12 +73,15 @@ class _VariationSheetState extends State<VariationSheet> {
     );
     if (ok && mounted) {
       final name = widget.group.name;
+      final merged = cart.takeMergeNotice();
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Added ${formatQuantity(quantity, weight: _selected.isWeight)} × $name to the cart',
+            'Added ${formatQuantity(quantity, weight: _selected.isWeight)} × $name to the cart'
+            '${merged == null ? '' : '. ${merged.text}'}',
           ),
+          duration: Duration(seconds: merged == null ? 4 : 8),
         ),
       );
     }

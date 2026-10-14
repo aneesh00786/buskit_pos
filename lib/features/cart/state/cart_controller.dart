@@ -10,6 +10,7 @@ import '../../offline/models/offline_sale.dart';
 import '../../offline/offline_checkout_service.dart';
 import '../data/cart_service.dart';
 import '../models/cart_sale.dart';
+import '../models/line_pricing.dart';
 
 enum CartOperation {
   add,
@@ -298,6 +299,7 @@ class CartController extends ChangeNotifier {
     String sellingMode = 'PIECE',
   }) async {
     if (_op != null) return false;
+    _mergeNotice = null; // only this add's notice may be shown after it
     final invalid = _validateQuantity(quantity, sellingMode);
     if (invalid != null) return _rejectLocally(invalid, CartOperation.add);
     final milli = quantityMilliOf(quantity)!;
@@ -330,6 +332,27 @@ class CartController extends ChangeNotifier {
         _images[productVariationId] = imageUrl;
       }
       return updated;
+    });
+  }
+
+  /// Adds to the sale through a dedicated server endpoint that decides the
+  /// product and quantity itself and returns the refreshed sale (a scale
+  /// label: the server parses the label). Same lock, draft creation and error
+  /// handling as [addItem]. Needs the server: while offline (or with an
+  /// offline cart) it is refused locally with [offlineMessage] and the cart
+  /// is left exactly as it was.
+  Future<bool> addViaServer(
+    Future<CartSale> Function(CartSale draft) request, {
+    required String offlineMessage,
+  }) async {
+    if (_op != null) return false;
+    _mergeNotice = null;
+    if (_local != null || _isOffline) {
+      return _rejectLocally(offlineMessage, CartOperation.add);
+    }
+    return _run(CartOperation.add, null, () async {
+      final sale = await _ensureSale();
+      return request(sale);
     });
   }
 
@@ -443,7 +466,8 @@ class CartController extends ChangeNotifier {
   /// draft can be held (the server would accept an empty one; the POS does
   /// not). On success the active cart is cleared — the sale is now `held` on
   /// the server and is resumed from the held-sales list.
-  Future<bool> holdCurrent() async {
+  /// Phase 2.1: [tableRef] (optional) parks the sale at that table.
+  Future<bool> holdCurrent({String? tableRef}) async {
     if (_op != null) return false;
     if (_local != null) {
       return _rejectLocally(holdOfflineMessage, CartOperation.hold);
@@ -455,7 +479,11 @@ class CartController extends ChangeNotifier {
     return _run(
       CartOperation.hold,
       null,
-      () => _service.holdSale(saleId: sale.id, expectedVersion: sale.version),
+      () => _service.holdSale(
+        saleId: sale.id,
+        expectedVersion: sale.version,
+        tableRef: tableRef,
+      ),
       onSuccess: (result) {
         final held = result as CartSale;
         if (held.status == 'held') {
@@ -479,6 +507,7 @@ class CartController extends ChangeNotifier {
     required int saleId,
     required int expectedVersion,
     bool holdCurrentFirst = false,
+    Map<String, String>? voice,
   }) async {
     if (_op != null) return false;
     if (_local != null && _local!.isNotEmpty) {
@@ -509,6 +538,7 @@ class CartController extends ChangeNotifier {
         return _service.resumeSale(
           saleId: saleId,
           expectedVersion: expectedVersion,
+          voice: voice,
         );
       },
       onSuccess: (resumed) {
@@ -596,6 +626,68 @@ class CartController extends ChangeNotifier {
         expectedVersion: sale.version,
       );
     });
+  }
+
+  // ---- line discount / per-sale price override (backend migration 055) ----
+
+  static const String linePricingOfflineMessage =
+      'Line discounts and price changes need a connection to the server. Nothing was changed.';
+  static const String linePricingUnknownMessage =
+      'The last discount or price change may or may not have reached the server. Reload the cart before trying again.';
+
+  MergeNotice? _mergeNotice;
+  bool _linePricingUnknown = false;
+
+  /// True after a line discount / price change whose outcome is unknown (the
+  /// connection failed): further changes are refused until [refresh]
+  /// succeeds, so nothing is submitted twice blind.
+  bool get linePricingOutcomeUnknown => _linePricingUnknown;
+
+  /// The merge notice of the last add, once (null afterwards).
+  MergeNotice? takeMergeNotice() {
+    final n = _mergeNotice;
+    _mergeNotice = null;
+    return n;
+  }
+
+  /// Sends one line discount / price change for line [itemId] through
+  /// [request] (which gets the current draft and must return the server's
+  /// refreshed sale). Online only: refused locally while offline or with an
+  /// offline cart, never queued. The server decides permission, limits and
+  /// every amount; a conflict reloads the cart (existing [_run] handling);
+  /// a lost connection marks the outcome unknown.
+  Future<bool> changeLinePricing(
+    int itemId,
+    Future<CartSale> Function(CartSale sale) request,
+  ) async {
+    if (_op != null) return false;
+    if (_local != null || _isOffline) {
+      return _rejectLocally(
+        linePricingOfflineMessage,
+        CartOperation.discountOverride,
+      );
+    }
+    final sale = _sale;
+    if (sale == null || !sale.isDraft) return false;
+    if (_linePricingUnknown) {
+      return _rejectLocally(
+        linePricingUnknownMessage,
+        CartOperation.discountOverride,
+      );
+    }
+    final ok = await _run(
+      CartOperation.discountOverride,
+      itemId,
+      () => request(sale),
+    );
+    final e = _error;
+    if (!ok &&
+        e != null &&
+        (e.kind == ApiErrorKind.network || e.kind == ApiErrorKind.timeout)) {
+      _linePricingUnknown = true;
+      _notify();
+    }
+    return ok;
   }
 
   /// Removes the sale's discount override, if any.
@@ -901,12 +993,16 @@ class CartController extends ChangeNotifier {
     return out;
   }
 
-  /// Promotion, loyalty (tier discount / points / wallet) or a manual
-  /// discount override: all evaluated by the server only.
+  /// Promotion, loyalty (tier discount / points / wallet), a manual
+  /// discount override, or a line discount / per-sale price override
+  /// (backend migration 055): all evaluated by the server only.
   static bool _hasServerDiscounts(CartSale draft) {
     final loyalty = draft.loyalty;
     return draft.promotion != null ||
         draft.discountOverride != null ||
+        draft.items.any(
+          (l) => l.lineDiscount != null || l.priceOverride != null,
+        ) ||
         (draft.totals.discountTotal ?? 0) != 0 ||
         (loyalty != null &&
             (loyalty.tierDiscountAmount != 0 ||
@@ -1406,6 +1502,7 @@ class CartController extends ChangeNotifier {
       // A reload superseded by a newer mutation is dropped.
       if (gen == _refreshGen) {
         _apply(fresh);
+        _linePricingUnknown = false; // the server's state is known again
       }
     } on ApiException catch (e) {
       if (gen == _refreshGen) {
@@ -1422,6 +1519,8 @@ class CartController extends ChangeNotifier {
   /// the sale on the server.
   void reset() {
     _sale = null;
+    _mergeNotice = null;
+    _linePricingUnknown = false;
     _error = null;
     _errorOp = null;
     _loadError = null;
@@ -1594,6 +1693,8 @@ class CartController extends ChangeNotifier {
       return;
     }
     _sale = incoming;
+    final notice = incoming.mergeNotice;
+    if (notice != null) _mergeNotice = notice;
     offline?.onServerSale?.call(incoming);
   }
 

@@ -14,10 +14,12 @@ import 'features/auth/data/auth_service.dart';
 import 'features/auth/state/session_controller.dart';
 import 'features/auth/ui/auth_pages.dart';
 import 'features/cart/data/cart_service.dart';
+import 'features/cart/data/line_pricing_service.dart';
 import 'features/cart/state/cart_controller.dart';
 import 'features/held_sales/data/held_sales_service.dart';
 import 'features/held_sales/state/held_sales_controller.dart';
 import 'features/barcode/camera_scanner.dart';
+import 'features/barcode/scale_label.dart';
 import 'features/products/data/product_service.dart';
 import 'features/products/state/product_list_controller.dart';
 import 'features/checkout/data/payment_exception_service.dart';
@@ -212,6 +214,20 @@ class _AuthGate extends StatelessWidget {
             ),
             Provider<ProductService>.value(value: products),
             Provider<CameraScanner>.value(value: const MobileCameraScanner()),
+            // Line discounts and per-sale price overrides (online only; the
+            // server checks permission and limits on every request).
+            Provider<LinePricingService>.value(
+              value: ApiLinePricingService(client),
+            ),
+            // Supermarket scale labels: recognised only for formats an
+            // administrator activated; the server reads every label.
+            Provider<ScaleLabelRecognizer>(
+              create: (_) => ScaleLabelRecognizer(
+                ApiScaleLabelService(client),
+                save: offline?.storage.saveScaleLabelFormats,
+                restore: offline?.storage.getScaleLabelFormats,
+              ),
+            ),
             // Card-terminal payments through the server's payment-attempt API.
             Provider<PaymentTerminalService>.value(
               value: ApiPaymentTerminalService(client),

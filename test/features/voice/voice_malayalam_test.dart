@@ -408,7 +408,7 @@ void main() {
       expect(v.session!.voiceSessionId, isNot(session));
       expect(v.session!.language, VoiceLanguage.english);
       expect(speech.languages.last.code, 'en-US');
-      expect(tts.spoken.last, startsWith('Your bill is ready.'));
+      expect(tts.spoken.last, startsWith('The total is '));
     });
 
     test('Malayalam recognition unavailable on the device: a safe error, no fallback to English, no bill or cart change', () async {
@@ -489,7 +489,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Malayalam').last);
       await tester.pumpAndSettle();
-      expect(settings.language, ml);
+      // Phase 3A: the choice is this staff member's, not the device's.
+      expect(
+        settings.languageFor('${staffA.companyId}:${staffA.salesmanId}'),
+        ml,
+      );
+      expect(settings.language, VoiceLanguage.english);
       expect(find.text('Language: Malayalam'), findsOneWidget);
       expect(find.textContaining('ml-IN'), findsNothing);
 

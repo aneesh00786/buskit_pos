@@ -18,6 +18,8 @@ import 'package:buskit_pos/features/products/state/product_list_controller.dart'
 import 'package:buskit_pos/features/products/ui/products_page.dart';
 import 'package:buskit_pos/features/receipt/state/receipt_services.dart';
 import 'package:buskit_pos/features/barcode/camera_scanner.dart';
+import 'package:buskit_pos/features/barcode/scale_label.dart';
+import 'package:buskit_pos/features/cart/data/line_pricing_service.dart';
 import 'package:buskit_pos/features/products/data/product_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -97,6 +99,14 @@ class PageHarness {
   /// The staff scope offline checkout stamps on sales (tests set it).
   PosTokenScope? offlineScope;
 
+  /// Optional scale-label recognition (null = not wired, as in every test
+  /// written before scale labels: every scan takes the ordinary path).
+  ScaleLabelRecognizer? scaleLabels;
+
+  /// Optional line discount / price override service (null = not wired, as
+  /// in every test written before it: no line pricing action is offered).
+  LinePricingService? linePricing;
+
   PageHarness({bool withHeld = true, PosApiClient? client, this.offline})
     : client = client ?? defaultTestApiClient() {
     products = FakeProductService();
@@ -174,6 +184,10 @@ Future<void> pumpProductsPage(
         Provider<ReceiptServices>.value(value: h.receipts.services),
         Provider<ProductService>.value(value: h.products),
         Provider<CameraScanner>.value(value: h.camera),
+        if (h.scaleLabels != null)
+          Provider<ScaleLabelRecognizer>.value(value: h.scaleLabels!),
+        if (h.linePricing != null)
+          Provider<LinePricingService>.value(value: h.linePricing!),
         if (h.terminal != null)
           Provider<PaymentTerminalService>.value(value: h.terminal!),
         if (h.recovery != null)

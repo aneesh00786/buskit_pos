@@ -37,6 +37,19 @@ class _Malayalam {
     'നീക്കം', 'നീക്കൂ', 'നീക്കുക', 'കളയൂ', 'കളയുക', 'ഒഴിവാക്കൂ', //
   };
   static const _add = {'ചേർക്കൂ', 'ചേർക്കുക', 'ചേർക്ക്'};
+
+  /// Phase 3A: a bill line by its place ("ആദ്യത്തെ ഇനം" = the first item).
+  static const _ordinals = {
+    'ആദ്യത്തെ': 1, 'ഒന്നാമത്തെ': 1, 'രണ്ടാമത്തെ': 2, 'മൂന്നാമത്തെ': 3, //
+    'നാലാമത്തെ': 4, 'അഞ്ചാമത്തെ': 5, 'ആറാമത്തെ': 6, 'ഏഴാമത്തെ': 7,
+    'എട്ടാമത്തെ': 8, 'ഒമ്പതാമത്തെ': 9, 'പത്താമത്തെ': 10, 'അവസാനത്തെ': -1,
+  };
+
+  static int? _position(List<String> w) {
+    final hits = [for (final x in w) ?_ordinals[x]];
+    return hits.length == 1 ? hits.single : null;
+  }
+
   static const _latinFillers = {'of', 'the', 'please', 'pls', 'x', 'bill'};
 
   static const askEnglishName =
@@ -216,11 +229,25 @@ class _Malayalam {
       List<VoiceIntentItem> items,
       String? clarification,
       ClarificationNeed? need,
+      int? orderNumber,
+      int? tableNumber,
     })
     make,
   ) {
     final w = _unaddressed(words(recognizedText));
     if (w.isEmpty) return make(VoiceIntentType.unknown);
+    // Phase 3A: an existing order / table ("ഓർഡർ 1048 ബിൽ ചെയ്യൂ",
+    // "ടേബിൾ 6 കാണിക്കൂ", "ആ ഓർഡർ ബിൽ ചെയ്യൂ").
+    final order = _orderCommand(w);
+    if (order != null) {
+      return make(
+        order.type,
+        orderNumber: order.order,
+        tableNumber: order.table,
+        clarification: order.question,
+        need: order.question == null ? null : ClarificationNeed.order,
+      );
+    }
     final triggered =
         w.any(_bill.contains) ||
         w.first == 'bill' ||
@@ -267,6 +294,169 @@ class _Malayalam {
     return make(VoiceIntentType.createQuickBill, items: items);
   }
 
+  // ---------------- Phase 3A: existing orders and tables ----------------
+
+  static const _orderWords = {
+    'ഓർഡർ', 'ഓർഡറ്', 'ഓഡർ', 'ഓർഡറിന്റെ', 'ഓർഡറിലെ', 'order', //
+  };
+  static const _tableWords = {
+    'ടേബിൾ', 'ടേബിള്', 'ടേബിളിലെ', 'ടേബിളിന്റെ', 'ടേബിളിൽ', //
+    'മേശ', 'മേശയിലെ', 'മേശയുടെ', 'മേശയിൽ', 'table',
+  };
+
+  /// Words that may stand around an order / table request (show, open,
+  /// find, bill, do, number, that, this, active, waiting).
+  static const _orderFillers = {
+    ..._bill, 'bill', 'show', 'open', 'find', 'number', 'no', //
+    'ചെയ്യൂ', 'ചെയ്യുക', 'ചെയ്യ്', 'കാണിക്കൂ', 'കാണിക്കുക', 'തുറക്കൂ',
+    'തുറക്കുക', 'കണ്ടെത്തൂ', 'കണ്ടെത്തുക', 'നമ്പർ', 'നമ്പറ്',
+    'ഉള്ള', 'ലെ', 'ഇലെ', 'സജീവ', 'കാത്തിരിക്കുന്ന', 'എല്ലാ', 'ഓർഡറുകൾ',
+    'ഓർഡറുകള്', 'orders', 'the', 'please', 'ദയവായി',
+  };
+  static const _thatWords = {'ആ', 'ഈ', 'അത്', 'ഇത്', 'that', 'this'};
+
+  static const orderExample = 'ഉദാഹരണം: "ഓർഡർ 1048 ബിൽ ചെയ്യൂ".';
+  static const askOrderNumber =
+      'ഏത് ഓർഡർ? ഓർഡർ നമ്പർ അക്കങ്ങളായി പറയുക. $orderExample';
+  static const askTableNumber =
+      'ഏത് ടേബിൾ? ടേബിൾ നമ്പർ പറയുക. ഉദാഹരണം: "ടേബിൾ 6 ബിൽ ചെയ്യൂ".';
+
+  /// An order or table request — the whole utterance must be the order /
+  /// table word, ONE number (digits, or a Malayalam / English number word
+  /// up to ten) and the words above; anything else (e.g. an English product
+  /// name) is not an order request (it may be a quick bill).
+  static ({VoiceIntentType type, int? order, int? table, String? question})?
+  _orderCommand(List<String> w) {
+    final isTable = w.any(_tableWords.contains);
+    final isOrder = w.any(_orderWords.contains);
+    if (!isTable && !isOrder) return null;
+    final numbers = <int>[];
+    var that = false;
+    var unclear = false;
+    for (final x in w) {
+      if (_orderWords.contains(x) ||
+          _tableWords.contains(x) ||
+          _orderFillers.contains(x)) {
+        continue;
+      }
+      if (_thatWords.contains(x)) {
+        that = true;
+        continue;
+      }
+      final n = _wholeNumber(x);
+      if (n != null) {
+        numbers.add(n);
+      } else if (_isLatin(x)) {
+        return null; // an English (product) word: not an order request
+      } else {
+        unclear = true; // e.g. a long number said in words: ask, never guess
+      }
+    }
+    if (unclear) {
+      return (
+        type: VoiceIntentType.needsClarification,
+        order: null,
+        table: null,
+        question: isTable ? askTableNumber : askOrderNumber,
+      );
+    }
+    if (isTable) {
+      return numbers.length == 1 && numbers.single > 0
+          ? (
+              type: VoiceIntentType.tableOrder,
+              order: null,
+              table: numbers.single,
+              question: null,
+            )
+          : (
+              type: VoiceIntentType.needsClarification,
+              order: null,
+              table: null,
+              question: askTableNumber,
+            );
+    }
+    if (numbers.isEmpty && that) {
+      return (
+        type: VoiceIntentType.billShownOrder,
+        order: null,
+        table: null,
+        question: null,
+      );
+    }
+    return numbers.length == 1 && numbers.single > 0
+        ? (
+            type: VoiceIntentType.billOrder,
+            order: numbers.single,
+            table: null,
+            question: null,
+          )
+        : (
+            type: VoiceIntentType.needsClarification,
+            order: null,
+            table: null,
+            question: askOrderNumber,
+          );
+  }
+
+  /// A whole number said as digits (any length) or one number word up to
+  /// ten; null otherwise (larger Malayalam number words are asked again).
+  static int? _wholeNumber(String x) {
+    if (RegExp(r'^\d{1,9}$').hasMatch(x)) return int.parse(x);
+    final n = _number(x);
+    return n is int && n > 0 ? n : null;
+  }
+
+  // ---------------- Phase 3A: answers (yes / no / cancel) ----------------
+
+  static const _yes = {
+    'അതെ', 'ഉവ്വ്', 'ഉവ്വ', 'ശരി', 'ശരിയാണ്', 'ഓക്കെ', 'ഓക്കേ', 'ok', 'okay', //
+    'yes', 'സ്ഥിരീകരിക്കൂ', 'സ്ഥിരീകരിക്കുക', 'കൺഫേം', 'confirm',
+  };
+  static const _no = {
+    'ഇല്ല', 'വേണ്ട', 'അല്ല', 'തെറ്റ്', 'തെറ്റാണ്', 'ശരിയല്ല', 'no', //
+  };
+  static const _cancel = {
+    'റദ്ദാക്കൂ', 'റദ്ദാക്കുക', 'റദ്ദ്', 'ക്യാൻസൽ', 'cancel', //
+  };
+  static const _answerFillers = {
+    ..._bill, 'bill', 'ചെയ്യൂ', 'ചെയ്യുക', 'ഇത്', 'ഇതു', 'അത്', 'അതു', //
+    'ആ', 'ഈ', 'ഓർഡർ', 'എനിക്ക്', 'മാറ്റണം', 'മാറ്റം', 'വേണം', 'എന്തോ',
+    'കുറച്ച്', 'ആണ്', 'ദയവായി', 'please', 'the',
+  };
+
+  /// "അതെ, ബിൽ ചെയ്യൂ" / "വേണ്ട, എനിക്ക് മാറ്റണം" / "ബിൽ റദ്ദാക്കൂ";
+  /// "വേണ്ട, coffee മൂന്ന് ആക്കൂ" is a no carrying its correction ([rest]).
+  /// A mix of yes and no is unclear; anything else is not an answer (null).
+  static ({VoiceReply reply, String? rest})? reply(String text) {
+    final w = _unaddressed(words(text)).where((x) => x != 'and').toList();
+    if (w.isEmpty) return null;
+    final saysCancel = w.any(_cancel.contains);
+    final saysYes = w.any(_yes.contains);
+    final saysNo = w.any(_no.contains);
+    if (saysCancel && !saysYes && !saysNo) {
+      return w.every((x) => _cancel.contains(x) || _answerFillers.contains(x))
+          ? (reply: VoiceReply.cancel, rest: null)
+          : (reply: VoiceReply.unclear, rest: null);
+    }
+    if (saysYes && saysNo) return (reply: VoiceReply.unclear, rest: null);
+    if (saysYes) {
+      return w.every((x) => _yes.contains(x) || _answerFillers.contains(x))
+          ? (reply: VoiceReply.confirm, rest: null)
+          : (reply: VoiceReply.unclear, rest: null);
+    }
+    if (saysNo) {
+      if (w.every((x) => _no.contains(x) || _answerFillers.contains(x))) {
+        return (reply: VoiceReply.reject, rest: null);
+      }
+      // "വേണ്ട, coffee മൂന്ന് ആക്കൂ": the correction after the no.
+      return (
+        reply: VoiceReply.reject,
+        rest: w.where((x) => !_no.contains(x)).join(' '),
+      );
+    }
+    return null;
+  }
+
   // ---------------- corrections ----------------
 
   static const exampleHint =
@@ -304,6 +494,8 @@ class _Malayalam {
           'ഒരു ഇനം മുഴുവനായി മാത്രം നീക്കാം. ഉദാഹരണം: "water നീക്കം ചെയ്യൂ".',
         );
       }
+      final position = _position(w);
+      if (position != null) return VoiceCorrection.remove(position: position);
       final target = _target(w);
       if (target == '') {
         return const VoiceCorrection.unclear(
@@ -330,6 +522,14 @@ class _Malayalam {
       if (n + 1 < w.length && _unit(w[n + 1]) != null) {
         unit = _unit(w[n + 1]);
         skip.add(n + 1);
+      }
+      final position = _position(w);
+      if (position != null) {
+        return VoiceCorrection.setQuantity(
+          position: position,
+          quantity: q,
+          unit: unit,
+        );
       }
       final target = _target([
         for (var i = 0; i < w.length; i++)

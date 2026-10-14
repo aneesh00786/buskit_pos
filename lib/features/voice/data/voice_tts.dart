@@ -38,10 +38,10 @@ class FlutterTtsService implements VoiceTtsService {
       // Phase 13H: another language needs a voice on the device; without
       // one nothing is spoken (never in a different language).
       if (language != VoiceLanguage.english &&
-          await _tts.isLanguageAvailable(language.code) != true) {
+          await _tts.isLanguageAvailable(language.ttsLocale) != true) {
         throw StateError('No ${language.label} voice on this device');
       }
-      await _tts.setLanguage(language.code);
+      await _tts.setLanguage(language.ttsLocale);
       _languageCode = language.code;
     }
   }

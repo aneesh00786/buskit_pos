@@ -330,15 +330,17 @@ Map<String, dynamic> completedJson({
 };
 
 class HoldCall {
-  HoldCall(this.saleId, this.expectedVersion);
+  HoldCall(this.saleId, this.expectedVersion, {this.tableRef});
   final int saleId;
   final int expectedVersion;
+  final String? tableRef;
 }
 
 class ResumeCall {
-  ResumeCall(this.saleId, this.expectedVersion);
+  ResumeCall(this.saleId, this.expectedVersion, {this.voice});
   final int saleId;
   final int expectedVersion;
+  final Map<String, String>? voice;
 }
 
 class ApplyPromotionCall {
@@ -403,11 +405,27 @@ Map<String, dynamic> heldRowJson({
 class FakeHeldSalesService implements HeldSalesService {
   int calls = 0;
   Future<List<HeldSaleSummary>> Function() onList = () async => [];
+  final tableCalls = <(int, int, String?)>[];
+  Future<CartSale> Function(int saleId, int version, String? tableRef)
+  onSetTable = (id, v, t) async => CartSale.fromJson({
+    ...saleJson(id: id, version: v + 1, status: 'held'),
+    'table_ref': t,
+  })!;
 
   @override
   Future<List<HeldSaleSummary>> listHeld() {
     calls++;
     return onList();
+  }
+
+  @override
+  Future<CartSale> setTable({
+    required int saleId,
+    required int expectedVersion,
+    required String? tableRef,
+  }) {
+    tableCalls.add((saleId, expectedVersion, tableRef));
+    return onSetTable(saleId, expectedVersion, tableRef);
   }
 }
 
@@ -474,8 +492,9 @@ class FakeCartService implements CartService {
   Future<CartSale> holdSale({
     required int saleId,
     required int expectedVersion,
+    String? tableRef,
   }) {
-    final c = HoldCall(saleId, expectedVersion);
+    final c = HoldCall(saleId, expectedVersion, tableRef: tableRef);
     holdCalls.add(c);
     callLog.add('hold:$saleId');
     return onHold(c);
@@ -485,8 +504,9 @@ class FakeCartService implements CartService {
   Future<CartSale> resumeSale({
     required int saleId,
     required int expectedVersion,
+    Map<String, String>? voice,
   }) {
-    final c = ResumeCall(saleId, expectedVersion);
+    final c = ResumeCall(saleId, expectedVersion, voice: voice);
     resumeCalls.add(c);
     callLog.add('resume:$saleId');
     return onResume(c);

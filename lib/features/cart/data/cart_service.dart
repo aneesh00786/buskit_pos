@@ -23,13 +23,20 @@ abstract class CartService {
     required int itemId,
     required int expectedVersion,
   });
+  /// [tableRef] (Phase 2.1, optional): parks the sale at that table; null
+  /// leaves the sale's table as it is.
   Future<CartSale> holdSale({
     required int saleId,
     required int expectedVersion,
+    String? tableRef,
   });
+  /// [voice] (Phase 2, optional): `{voice_session_id, request_id}` of the
+  /// voice request billing this order — the server records the audit link
+  /// in the same transaction. Absent: unchanged.
   Future<CartSale> resumeSale({
     required int saleId,
     required int expectedVersion,
+    Map<String, String>? voice,
   });
   Future<CartSale> cancelSale({
     required int saleId,
@@ -180,10 +187,11 @@ class ApiCartService implements CartService {
   Future<CartSale> holdSale({
     required int saleId,
     required int expectedVersion,
+    String? tableRef,
   }) async {
     final data = await _client.post(
       '/sales/$saleId/hold',
-      body: {'expected_version': expectedVersion},
+      body: {'expected_version': expectedVersion, 'table_ref': ?tableRef},
     );
     return _parse(data);
   }
@@ -194,10 +202,11 @@ class ApiCartService implements CartService {
   Future<CartSale> resumeSale({
     required int saleId,
     required int expectedVersion,
+    Map<String, String>? voice,
   }) async {
     final data = await _client.post(
       '/sales/$saleId/resume',
-      body: {'expected_version': expectedVersion},
+      body: {'expected_version': expectedVersion, 'voice': ?voice},
     );
     return _parse(data);
   }

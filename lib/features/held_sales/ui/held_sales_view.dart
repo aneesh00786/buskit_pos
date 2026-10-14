@@ -15,6 +15,7 @@ import '../../cart/ui/cart_panel.dart' show confirmVoid;
 import '../models/held_sale_summary.dart';
 import '../state/held_sales_controller.dart';
 import '../../../core/ui/safe_insets.dart';
+import 'table_ref_dialog.dart';
 
 /// Opens the held-sales list: a dialog on tablets, a tall bottom sheet on
 /// phones. The routes sit above the provider tree, so the controllers are
@@ -238,6 +239,14 @@ class _HeldSaleCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(sale.title, style: theme.textTheme.titleMedium),
+                        if (sale.tableRef != null)
+                          Text(
+                            'Table ${sale.tableRef}',
+                            key: Key('held-table-${sale.id}'),
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
                         for (final l in lines)
                           Text(l, style: theme.textTheme.bodySmall),
                       ],
@@ -336,6 +345,31 @@ class _DetailBody extends StatelessWidget {
               if (sale.totals.discountTotal != null)
                 _row(context, 'Discount', sale.totals.discountTotal),
               _row(context, 'Total', sale.totals.grandTotal, bold: true),
+              // Phase 2.1: the optional table (change / clear while held).
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      sale.tableRef == null
+                          ? 'No table'
+                          : 'Table ${sale.tableRef}',
+                      key: const Key('held-detail-table'),
+                    ),
+                  ),
+                  TextButton(
+                    key: const Key('held-change-table'),
+                    onPressed:
+                        (resumable &&
+                            !cart.isMutating &&
+                            !session.isDenied('sales.hold'))
+                        ? () => _changeTable(context, sale)
+                        : null,
+                    child: Text(
+                      sale.tableRef == null ? 'Assign table' : 'Change table',
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
               FilledButton.icon(
                 // Phase C5: disabled when the loaded permissions lack sales.resume.
@@ -414,6 +448,36 @@ class _DetailBody extends StatelessWidget {
   }
 
   /// Voids the held sale (`POST /sales/:id/cancel`) after a confirmation.
+  Future<void> _changeTable(BuildContext context, CartSale detail) async {
+    final held = context.read<HeldSalesController>();
+    final messenger = ScaffoldMessenger.of(context);
+    final choice = await showTableRefDialog(context, initial: detail.tableRef);
+    if (choice == null) return;
+    final tableRef = switch (choice) {
+      SetTable(:final tableRef) => tableRef,
+      ClearTable() => null,
+    };
+    if (tableRef == detail.tableRef) return;
+    final e = await held.setTable(detail, tableRef);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          e == null
+              ? (tableRef == null
+                    ? 'Table cleared.'
+                    : 'Sale #${detail.id} is now at table $tableRef.')
+              : e.kind == ApiErrorKind.conflict
+              ? 'This sale changed meanwhile. It has been reloaded — check it and try again.'
+              : describeApiError(e),
+        ),
+      ),
+    );
+    if (e != null && e.kind == ApiErrorKind.conflict) {
+      unawaited(held.openDetail(detail.id));
+    }
+  }
+
   Future<void> _void(BuildContext context, CartSale detail) async {
     final cart = context.read<CartController>();
     final held = context.read<HeldSalesController>();

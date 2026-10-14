@@ -5,14 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/network/error_messages.dart';
-import '../../../core/network/pos_api_client.dart';
 import '../../../core/storage/token_store.dart';
 import '../../../core/theme/pos_tokens.dart';
 import '../state/session_controller.dart';
 // TESTING ONLY (see lib/features/auth/dev/dev_credentials.dart) — delete this
 // import and every dev-gated block below before a production build.
 import '../dev/dev_credentials.dart';
-import '../dev/dev_login_helper.dart';
 
 /// Shared responsive rule for the sign-in screens (device activation and
 /// cashier sign-in). Wide windows: branding panel on the left, the form
@@ -456,7 +454,6 @@ class _DeviceLoginPageState extends State<DeviceLoginPage> {
   final _secret = TextEditingController();
 
   // ---- TESTING ONLY below (see lib/features/auth/dev/) ----
-  bool _devBusy = false;
   String? _devMessage;
   DevCredentialsStore? _devStore;
 
@@ -468,15 +465,9 @@ class _DeviceLoginPageState extends State<DeviceLoginPage> {
     }
   }
 
-  DevLoginHelper _devHelper() {
-    _devStore ??= DevCredentialsStore(SecureTokenStore());
-    return DevLoginHelper(context.read<PosApiClient>(), _devStore!);
-  }
-
   /// Local-storage only, deliberately — no network call, so this can never
   /// interfere with a widget test's mock backend (kDebugMode is also true
-  /// under `flutter test`). Live validation only happens on an explicit tap
-  /// of "Dev: generate a new test device" below.
+  /// under `flutter test`).
   Future<void> _devAutofill() async {
     if (!mounted) return;
     final saved = await (_devStore ??= DevCredentialsStore(
@@ -490,30 +481,6 @@ class _DeviceLoginPageState extends State<DeviceLoginPage> {
     });
   }
 
-  Future<void> _devRegenerate() async {
-    setState(() {
-      _devBusy = true;
-      _devMessage = null;
-    });
-    final helper = _devHelper();
-    final saved = await (_devStore ??= DevCredentialsStore(
-      SecureTokenStore(),
-    )).load();
-    final fresh = saved == null ? null : await helper.regenerate(saved);
-    if (!mounted) return;
-    setState(() {
-      _devBusy = false;
-      if (fresh != null) {
-        _id.text = fresh.deviceIdentifier;
-        _secret.text = fresh.deviceSecret;
-        _devMessage = 'Generated a new test device: ${fresh.deviceIdentifier}';
-      } else {
-        _devMessage = saved == null
-            ? 'No saved test device to regenerate from — sign in manually once first.'
-            : 'The saved test device could not be refreshed (it may have been deleted) — sign in manually once to save a new one.';
-      }
-    });
-  }
   // ---- end testing-only ----
 
   Future<void> _submit(SessionController s) async {
@@ -574,29 +541,14 @@ class _DeviceLoginPageState extends State<DeviceLoginPage> {
               : const Text('Continue'),
         ),
         // TESTING ONLY — remove this block before a production build.
-        if (kDebugMode) ...[
-          const SizedBox(height: 12),
-          const Divider(),
-          TextButton.icon(
-            onPressed: _devBusy ? null : _devRegenerate,
-            icon: _devBusy
-                ? const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.bolt_outlined),
-            label: const Text('Dev: generate a new test device'),
-          ),
-          if (_devMessage != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                _devMessage!,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+        if (kDebugMode && _devMessage != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(
+              _devMessage!,
+              style: Theme.of(context).textTheme.bodySmall,
             ),
-        ],
+          ),
       ],
     );
   }

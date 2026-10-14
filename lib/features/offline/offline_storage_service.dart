@@ -56,8 +56,10 @@ class OfflineStorageService {
   static const _tSale = 'sale';
   static const _tQueue = 'queue';
   static const _tRecovery = 'payment_recovery';
+  static const _tScaleFormats = 'scale_label_formats';
   static const _types = [
     _tRecovery,
+    _tScaleFormats,
     _tCatalogue,
     _tCustomers,
     _tInventory,
@@ -72,6 +74,7 @@ class OfflineStorageService {
   static const _customers = 'customers.json';
   static const _inventory = 'inventory.json';
   static const _settings = 'settings.json';
+  static const _scaleFormats = 'scale_label_formats.json';
   static const _shift = 'current_shift.json';
   static const _device = 'device.json';
   static const _recovery = 'payment_recovery.json';
@@ -504,6 +507,20 @@ class OfflineStorageService {
 
   Future<void> saveSettings(OfflineSettings settings) =>
       _store.write(_settings, type: _tSettings, data: settings.toJson());
+
+  // ------------------------------------------------- scale-label formats
+
+  /// The last active scale-label formats from the server (prefixes and
+  /// lengths only — no PLUs, products or prices), so a label scanned while
+  /// offline is still recognised, and refused clearly. Labels themselves
+  /// are never sold offline.
+  Future<void> saveScaleLabelFormats(Map<String, Object?> json) =>
+      _store.write(_scaleFormats, type: _tScaleFormats, data: json);
+
+  Future<Map<String, dynamic>?> getScaleLabelFormats() async {
+    final r = await _store.read(_scaleFormats, type: _tScaleFormats);
+    return r.isOk ? r.data : null;
+  }
 
   // ------------------------------------------------- payment recovery
 

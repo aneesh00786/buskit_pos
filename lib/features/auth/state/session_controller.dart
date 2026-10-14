@@ -22,6 +22,9 @@ class SessionController extends ChangeNotifier {
 
   SessionPhase _phase = SessionPhase.restoring;
   String? _deviceToken;
+  // The device's activation key, kept in secure storage so an expired
+  // 12-hour device token can be renewed without anyone re-entering it.
+  String? _deviceSecret;
   String? _staffToken;
   String? _deviceIdentifier;
   String? _salesmanId;
@@ -97,9 +100,12 @@ class SessionController extends ChangeNotifier {
   Future<void> restore() async {
     _deviceToken = await _store.read(TokenKeys.deviceToken);
     _deviceIdentifier = await _store.read(TokenKeys.deviceIdentifier);
-    _phase = (_deviceToken == null || _deviceToken!.isEmpty)
-        ? SessionPhase.deviceLogin
-        : SessionPhase.staffLogin;
+    _deviceSecret = await _store.read(TokenKeys.deviceSecret);
+    final hasToken = _deviceToken != null && _deviceToken!.isNotEmpty;
+    if (!hasToken) _deviceToken = null;
+    _phase = (hasToken || _canRenewDevice)
+        ? SessionPhase.staffLogin
+        : SessionPhase.deviceLogin;
     _notify();
   }
 
@@ -112,22 +118,93 @@ class SessionController extends ChangeNotifier {
       );
       _deviceToken = token;
       _deviceIdentifier = identifier.trim();
+      _deviceSecret = secret;
       await _store.write(TokenKeys.deviceToken, token);
       await _store.write(TokenKeys.deviceIdentifier, _deviceIdentifier!);
+      await _store.write(TokenKeys.deviceSecret, secret);
       _phase = SessionPhase.staffLogin;
     });
   }
 
-  Future<bool> loginStaff(String salesmanId, String pin) async {
+  bool get _canRenewDevice =>
+      (_deviceSecret?.isNotEmpty ?? false) &&
+      (_deviceIdentifier?.isNotEmpty ?? false);
+
+  /// Client-side code for "the stored activation key was refused while
+  /// renewing the device token" (reset by an administrator, or the device
+  /// disabled) — the device has to be activated again with the current key.
+  static const activationKeyRefused = 'POS_CLIENT_ACTIVATION_KEY_REFUSED';
+
+  static const _activationKeyRefusedMessage =
+      'This device could not sign in with its activation key. An '
+      'administrator may have reset the key or disabled the device. Enter '
+      'the current activation key to continue. Sales saved on this device '
+      'are kept.';
+
+  static bool _isDeviceTokenRefusal(ApiException e) =>
+      e.kind == ApiErrorKind.unauthorized &&
+      e.errorCode != PosErrorCodes.invalidStaffCredentials;
+
+  /// Signs the device in again with its stored activation key and keeps the
+  /// new device token. Only an `unauthorized` answer means the key itself
+  /// is no longer accepted; any other failure (offline, timeout, server
+  /// error) is rethrown untouched and nothing stored is forgotten.
+  Future<void> _renewDeviceToken() async {
+    final String token;
+    try {
+      token = await _auth.deviceLogin(
+        deviceIdentifier: _deviceIdentifier!,
+        deviceSecret: _deviceSecret!,
+      );
+    } on ApiException catch (e) {
+      if (e.kind != ApiErrorKind.unauthorized ||
+          e.errorCode == PosErrorCodes.registerInactive) {
+        rethrow;
+      }
+      throw ApiException(
+        kind: ApiErrorKind.unauthorized,
+        message: _activationKeyRefusedMessage,
+        errorCode: activationKeyRefused,
+      );
+    }
+    _deviceToken = token;
+    await _store.write(TokenKeys.deviceToken, token);
+  }
+
+  /// Staff sign-in. When the DEVICE token is refused (it expired after 12
+  /// hours, or an earlier session was ended), the device renews it once with
+  /// its stored activation key and the staff sign-in is retried once — the
+  /// cashier never has to re-activate the device just because time passed.
+  /// Sign-in only: sales and payments are never retried here.
+  Future<String> _staffLoginRenewingDevice(
+    String salesmanId,
+    String pin,
+  ) async {
     final device = _deviceToken;
-    if (_busy || device == null) return false;
-    return _run(() async {
+    if (device != null) {
       try {
-        final token = await _auth.staffLogin(
+        return await _auth.staffLogin(
           deviceToken: device,
-          salesmanId: salesmanId.trim(),
+          salesmanId: salesmanId,
           pin: pin,
         );
+      } on ApiException catch (e) {
+        if (!_isDeviceTokenRefusal(e) || !_canRenewDevice) rethrow;
+      }
+    }
+    await _renewDeviceToken();
+    return _auth.staffLogin(
+      deviceToken: _deviceToken!,
+      salesmanId: salesmanId,
+      pin: pin,
+    );
+  }
+
+  Future<bool> loginStaff(String salesmanId, String pin) async {
+    if (_busy || (_deviceToken == null && !_canRenewDevice)) return false;
+    return _run(() async {
+      try {
+        final token = await _staffLoginRenewingDevice(salesmanId.trim(), pin);
         _staffToken = token;
         _salesmanId = salesmanId.trim();
         _phase = SessionPhase.shiftOpen;
@@ -151,12 +228,19 @@ class SessionController extends ChangeNotifier {
         // already does for every other authenticated call, instead of
         // showing that raw backend message on the PIN screen as if the PIN
         // were wrong.
-        if (e.kind != ApiErrorKind.unauthorized ||
-            e.errorCode == PosErrorCodes.invalidStaffCredentials) {
+        if (!_isDeviceTokenRefusal(e)) rethrow;
+        if (e.errorCode == PosErrorCodes.registerInactive && _canRenewDevice) {
+          // The activation key is still valid — only the register is
+          // inactive. Keep the key (stay on the PIN screen, show the
+          // server's message); signing in works again once an administrator
+          // reactivates the register.
+          _deviceToken = null;
+          await _store.delete(TokenKeys.deviceToken);
           rethrow;
         }
         _forgetDevice();
         _phase = SessionPhase.deviceLogin;
+        if (e.errorCode == activationKeyRefused) rethrow;
         throw const ApiException(
           kind: ApiErrorKind.unauthorized,
           message: 'This device needs to be signed in again.',
@@ -202,6 +286,18 @@ class SessionController extends ChangeNotifier {
       _staffToken = null;
       _authContext = null;
       _authContextError = null;
+      _phase = SessionPhase.staffLogin;
+      _error = const ApiException(
+        kind: ApiErrorKind.unauthorized,
+        message: 'Your session has expired. Please sign in again.',
+      );
+    } else if (_canRenewDevice) {
+      // The device token was refused, but the device still has its
+      // activation key: back to the PIN screen; the next staff sign-in
+      // renews the device token (or asks for activation if the key was
+      // reset).
+      _deviceToken = null;
+      _store.delete(TokenKeys.deviceToken);
       _phase = SessionPhase.staffLogin;
       _error = const ApiException(
         kind: ApiErrorKind.unauthorized,
@@ -262,7 +358,9 @@ class SessionController extends ChangeNotifier {
   Future<void> changeDevice() async {
     _staffToken = null;
     await _store.delete(TokenKeys.deviceToken);
+    await _store.delete(TokenKeys.deviceSecret);
     _deviceToken = null;
+    _deviceSecret = null;
     _authContext = null;
     _authContextError = null;
     _error = null;
@@ -271,9 +369,14 @@ class SessionController extends ChangeNotifier {
     _notify();
   }
 
+  /// Forgets the device token AND its activation key (the key was refused,
+  /// or the device has no key to renew with). Offline sales, drafts and the
+  /// sync queue are kept elsewhere and never touched here.
   void _forgetDevice() {
     _deviceToken = null;
+    _deviceSecret = null;
     _store.delete(TokenKeys.deviceToken);
+    _store.delete(TokenKeys.deviceSecret);
   }
 
   void clearError() {

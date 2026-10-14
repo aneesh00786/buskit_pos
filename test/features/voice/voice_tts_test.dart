@@ -107,7 +107,7 @@ void main() {
       await bill('Jacky, bill two coffees and one water');
       expect(
         tts.spoken.last,
-        'Your bill is ready. The total is 27.45. Please verify it before confirming.',
+        'The total is 27.45. Would you like to confirm this bill?',
       );
       expect(v.isSpeaking, isFalse, reason: 'finished');
     },
@@ -145,7 +145,7 @@ void main() {
     await correct('make it three');
     expect(tts.spoken, [
       'Checking the bill.',
-      'Your bill is ready. The total is 14.175. Please verify it before confirming.',
+      'The total is 14.175. Would you like to confirm this bill?',
     ]);
     await correct('remove it');
     expect(tts.spoken.last, VoiceController.allRemovedMessage);
@@ -225,7 +225,7 @@ void main() {
     final afterB = List.of(tts.spoken);
     expect(
       afterB.last,
-      'Your bill is ready. The total is 14.175. Please verify it before confirming.',
+      'The total is 14.175. Would you like to confirm this bill?',
     );
     gated.answer(1); // A, late
     await pumpEventQueue();

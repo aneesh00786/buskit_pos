@@ -2,10 +2,16 @@ import 'dart:async';
 
 import '../../core/network/api_exception.dart';
 import '../../core/network/error_messages.dart';
+import '../../core/utils/format.dart';
+import '../../core/utils/quantity.dart';
 import '../cart/state/cart_controller.dart';
 import '../products/data/product_service.dart';
+import 'scale_label.dart';
 
-enum ScanOutcome { added, notFound, invalid, busy, error }
+/// [confirmRepeat]: the same scale label is already in this sale — the
+/// cashier must confirm a second identical pack ([BarcodeScanHandler.handle]
+/// with `confirmRepeat: true`); nothing was added.
+enum ScanOutcome { added, notFound, invalid, busy, error, confirmRepeat }
 
 class ScanResult {
   const ScanResult(this.outcome, this.message, {this.code});
@@ -31,10 +37,21 @@ class BarcodeScanHandler {
   BarcodeScanHandler({
     required this.products,
     required this.cart,
+    this.scaleLabels,
     this.cartWait = const Duration(seconds: 15),
   });
   final ProductService products;
   final CartController cart;
+
+  /// Supermarket scale labels: a code of an active format is sent to the
+  /// server as a label (the server reads the PLU and the weight); every
+  /// other code takes the ordinary barcode path below, unchanged. Null (or
+  /// no active format) = no scale labels at all.
+  final ScaleLabelRecognizer? scaleLabels;
+
+  static const scaleOfflineMessage =
+      'Scale labels need a connection to the server. Nothing was added; scan it again when the till is back online.';
+  static const repeatedLabelCode = 'POS_SCALE_LABEL_REPEATED';
 
   /// How long one scan waits for a busy cart before it gives up.
   final Duration cartWait;
@@ -60,7 +77,9 @@ class BarcodeScanHandler {
     return code;
   }
 
-  Future<ScanResult> handle(String? raw) {
+  /// [confirmRepeat]: the cashier confirmed a second identical pack after a
+  /// [ScanOutcome.confirmRepeat] answer for this scale label.
+  Future<ScanResult> handle(String? raw, {bool confirmRepeat = false}) {
     if (_pending >= maxQueued) {
       // Refused, never queued: the earlier scans keep their place.
       return Future.value(
@@ -69,7 +88,7 @@ class BarcodeScanHandler {
     }
     _pending++;
     final result = _tail
-        .then((_) => _handle(raw))
+        .then((_) => _handle(raw, confirmRepeat))
         .whenComplete(() => _pending--);
     _tail = result.then((_) {}, onError: (_) {});
     return result;
@@ -91,13 +110,20 @@ class BarcodeScanHandler {
     }
   }
 
-  Future<ScanResult> _handle(String? raw) async {
+  Future<ScanResult> _handle(String? raw, bool confirmRepeat) async {
     final code = normalize(raw);
     if (code == null) {
       return const ScanResult(
         ScanOutcome.invalid,
         'That barcode could not be read. Try again.',
       );
+    }
+    final scale = scaleLabels;
+    if (scale != null) {
+      final offline = cart.offline?.isOffline() ?? false;
+      if (await scale.matches(code, online: !offline)) {
+        return _scaleLabel(scale, code, confirmRepeat);
+      }
     }
     try {
       final item = await products.findByBarcode(code);
@@ -148,9 +174,10 @@ class BarcodeScanHandler {
         if (ok || cart.error != null || !cart.isMutating) break;
       }
       if (ok) {
+        final merged = cart.takeMergeNotice();
         return ScanResult(
           ScanOutcome.added,
-          'Added 1 × ${item.productName}',
+          'Added 1 × ${item.productName}${merged == null ? '' : '. ${merged.text}'}',
           code: code,
         );
       }
@@ -175,5 +202,75 @@ class BarcodeScanHandler {
         code: code,
       );
     }
+  }
+
+  /// A scale label: the SERVER parses it, finds the product from its PLU and
+  /// prices the weight; this only sends the barcode. A refused label leaves
+  /// the cart exactly as it was.
+  Future<ScanResult> _scaleLabel(
+    ScaleLabelRecognizer scale,
+    String code,
+    bool confirmRepeat,
+  ) async {
+    // No sale yet: let the server read the label first, so a refused label
+    // never opens an empty sale (the add below checks everything again).
+    final draft = cart.sale;
+    if ((draft == null || !draft.isDraft) &&
+        !(cart.offline?.isOffline() ?? false) &&
+        !cart.isLocalSale) {
+      try {
+        await scale.service.resolve(code);
+      } on ApiException catch (e) {
+        return ScanResult(ScanOutcome.error, describeApiError(e), code: code);
+      } catch (_) {
+        return ScanResult(
+          ScanOutcome.error,
+          'Could not read scale label $code.',
+          code: code,
+        );
+      }
+    }
+    ScaleLabelLine? read;
+    var ok = false;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (!await _cartIdle()) break;
+      cart.clearError();
+      ok = await cart.addViaServer((draft) async {
+        final (sale, line) = await scale.service.addToSale(
+          saleId: draft.id,
+          barcode: code,
+          expectedVersion: draft.version,
+          confirmRepeat: confirmRepeat,
+        );
+        read = line;
+        return sale;
+      }, offlineMessage: scaleOfflineMessage);
+      if (ok || cart.error != null || !cart.isMutating) break;
+    }
+    if (ok) {
+      final r = read;
+      final merged = cart.takeMergeNotice();
+      return ScanResult(
+        ScanOutcome.added,
+        (r == null
+                ? 'Scale label added.'
+                : 'Added ${formatQuantity(r.weightKg, weight: true)} kg × ${r.productName} — ${formatMoney(r.lineTotal)}') +
+            (merged == null ? '' : '. ${merged.text}'),
+        code: code,
+      );
+    }
+    final e = cart.error;
+    if (e != null && e.errorCode == repeatedLabelCode) {
+      cart.clearError();
+      return ScanResult(ScanOutcome.confirmRepeat, e.message, code: code);
+    }
+    if (e != null) {
+      return ScanResult(ScanOutcome.error, describeApiError(e), code: code);
+    }
+    return ScanResult(
+      ScanOutcome.busy,
+      'The cart is busy — scan the label again.',
+      code: code,
+    );
   }
 }

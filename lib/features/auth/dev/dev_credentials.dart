@@ -1,10 +1,10 @@
 // ============================================================================
 // TESTING ONLY — DELETE THIS FOLDER (lib/features/auth/dev/) BEFORE SHIPPING
-// A PRODUCTION BUILD. It autofills and self-repairs a local test device/staff
-// login so nobody has to hand-type or clipboard-paste credentials while
-// testing. It never runs unless kDebugMode is true (see dev_login_helper.dart
-// and its call sites in ../ui/auth_pages.dart), but the real removal step is
-// deleting this folder and the two call sites that reference it.
+// A PRODUCTION BUILD. It autofills a local test device/staff login (saved
+// on this machine only, no network call) so nobody has to hand-type or
+// clipboard-paste credentials while testing. It never runs unless kDebugMode
+// is true (see its call sites in ../ui/auth_pages.dart), but the real
+// removal step is deleting this folder and those call sites.
 // ============================================================================
 import '../../../core/storage/token_store.dart';
 

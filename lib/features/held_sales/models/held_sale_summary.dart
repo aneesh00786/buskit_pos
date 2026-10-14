@@ -17,7 +17,11 @@ class HeldSaleSummary {
     this.heldAt,
     this.createdAt,
     this.updatedAt,
+    this.tableRef,
   });
+
+  /// Phase 2.1: the table label this held sale is parked at (null = none).
+  final String? tableRef;
 
   final int id;
 
@@ -54,6 +58,7 @@ class HeldSaleSummary {
       heldAt: parseServerTime(m['held_at']),
       createdAt: parseServerTime(m['created_at']),
       updatedAt: parseServerTime(m['updated_at']),
+      tableRef: asString(m['table_ref']),
     );
   }
 }

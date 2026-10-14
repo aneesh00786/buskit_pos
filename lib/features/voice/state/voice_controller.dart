@@ -2,9 +2,12 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/error_messages.dart';
+import '../../../core/utils/format.dart';
 import '../../../core/utils/quantity.dart';
 import '../../auth/models/pos_token_scope.dart';
+import '../../cart/models/cart_sale.dart';
 import '../../cart/state/cart_controller.dart';
+import '../data/voice_order_service.dart';
 import '../data/voice_platform.dart';
 import '../data/voice_preview_service.dart';
 import '../data/voice_tts.dart';
@@ -32,6 +35,32 @@ enum VoicePreviewState { none, loading, loaded, failed }
 /// normal POS cart ([adding]) or put there ([added], go to checkout).
 enum VoiceBillState { none, adding, added }
 
+/// Phase 2 — an existing order looked up by voice ("bill order 1048").
+enum VoiceOrderState {
+  none,
+  loading,
+  loaded,
+
+  /// No held order with that number in this store (or out of scope).
+  notFound,
+
+  /// "bill table 6" with no table lookup available on this screen.
+  unsupported,
+
+  /// Phase 2.1: several held orders at the table — the cashier must pick
+  /// one ([VoiceController.tableOrders] / [VoiceController.chooseTableOrder]).
+  choosing,
+
+  /// The lookup failed (network / server); [VoiceController.retryOrder].
+  failed,
+
+  /// Changed or billed by someone else since it was shown — reload.
+  conflict,
+
+  /// No longer billable here (cancelled, moved, another store).
+  ineligible,
+}
+
 /// Phase 13A — the voice foundation: microphone permission (asked on first
 /// use), listening, speech-to-text, and the session / request ids. It ends
 /// at RECOGNIZED TEXT: nothing is interpreted and nothing is sent to the
@@ -50,6 +79,8 @@ class VoiceController extends ChangeNotifier {
     this.previewService,
     this.cart,
     this.correctionParser = const RuleBasedCorrectionParser(),
+    this.replyParser = const RuleBasedReplyParser(),
+    this.orderService,
     this.tts,
     this.settings,
   });
@@ -57,18 +88,49 @@ class VoiceController extends ChangeNotifier {
   /// Phase 13G: the app-local voice language setting (null = English).
   final VoiceSettings? settings;
 
-  /// The language a NEW voice session starts in.
-  VoiceLanguage get language => settings?.language ?? VoiceLanguage.english;
+  /// Phase 3A: the signed-in staff member on this device (company + staff),
+  /// the key their language choice is kept under; null when nobody is
+  /// signed in (the device default applies).
+  String? get _staffKey {
+    final s = scope();
+    return s == null ? null : '${s.companyId}:${s.salesmanId}';
+  }
+
+  /// The language a NEW voice session starts in (this staff member's
+  /// choice, else the device default).
+  VoiceLanguage get language =>
+      settings?.languageFor(_staffKey) ?? VoiceLanguage.english;
 
   /// Phase 13H: selects the language for the NEXT voice bill. An existing
-  /// session keeps its own language. False for a language without an
-  /// implementation (or with no settings attached).
+  /// session keeps its own language (a bill waiting for confirmation is
+  /// never re-read in another language). Phase 3A: kept for the signed-in
+  /// staff member only. False for a language without an implementation (or
+  /// with no settings attached).
   bool selectLanguage(VoiceLanguage l) {
     final s = settings;
-    if (s == null || !s.setLanguage(l)) return false;
+    if (s == null || !s.setLanguage(l, staff: _staffKey)) return false;
     notifyListeners();
     return true;
   }
+
+  /// Phase 3A: languages this device's recognizer reported it cannot hear.
+  final Set<VoiceLanguage> _noRecognition = {};
+
+  /// Phase 3A: languages this device could not speak (replies on screen).
+  final Set<VoiceLanguage> _noSpokenReplies = {};
+
+  /// False only when the device's recognizer said it does not support
+  /// [l] (unknown = true until checked).
+  bool recognitionAvailable(VoiceLanguage l) => !_noRecognition.contains(l);
+
+  /// False once speaking in [l] failed on this device.
+  bool spokenRepliesAvailable(VoiceLanguage l) => !_noSpokenReplies.contains(l);
+
+  /// The on-screen note when the session language cannot be spoken here.
+  String? get spokenRepliesNote =>
+      tts == null || spokenRepliesAvailable(sessionLanguage)
+      ? null
+      : _screen.spokenRepliesUnavailable(sessionLanguage.label);
 
   /// The current session's language (recognition, parsing, replies).
   VoiceLanguage get sessionLanguage => _session?.language ?? language;
@@ -79,6 +141,14 @@ class VoiceController extends ChangeNotifier {
 
   /// Phase 13E: spoken corrections of the Quick Bill on screen.
   final RuleBasedCorrectionParser correctionParser;
+
+  /// Phase 1 (English): spoken yes / no / cancel to "Would you like to
+  /// confirm this bill?".
+  final RuleBasedReplyParser replyParser;
+
+  /// Phase 2: existing orders by voice and the voice audit link (null = not
+  /// available on this screen).
+  final VoiceOrderService? orderService;
 
   /// Phase 13C-C: the normal POS cart a confirmed bill is added to (through
   /// its existing add-item path). Null: Confirm Bill cannot continue.
@@ -126,6 +196,37 @@ class VoiceController extends ChangeNotifier {
   bool _speaking = false;
   int _sayGen = 0; // bumps on every say / stop: an older reply's end is ignored
   String? _billError;
+  bool _confirmedByVoice = false;
+
+  // Phase 2 — the existing order on screen.
+  VoiceOrderState _orderState = VoiceOrderState.none;
+  CartSale? _order;
+  int? _orderNumber;
+  String? _orderMessage;
+  bool _orderRetryable = false;
+
+  /// While listening for / interpreting a spoken answer about the order on
+  /// screen: the order's own request (restored when nothing is decided).
+  VoiceRequest? _orderAnswerBase;
+
+  // Phase 2.1 — a table lookup.
+  String? _tableRef;
+  List<TableOrderSummary> _tableOrders = const [];
+
+  /// The table asked for ("bill table 6" -> "6"), while its result is shown.
+  String? get tableRef => _tableRef;
+
+  /// The held orders at [tableRef] when there are several to choose from.
+  List<TableOrderSummary> get tableOrders => _tableOrders;
+
+  VoiceOrderState get orderState => _orderState;
+
+  /// The server's view of the held order (lines, prices, tax, total, version).
+  CartSale? get order => _order;
+  int? get orderNumber => _orderNumber;
+  String? get orderMessage => _orderMessage;
+  bool get orderRetryable => _orderRetryable;
+  bool get isAnsweringOrder => _orderAnswerBase != null;
 
   VoiceState get state => _state;
   VoiceSession? get session => _session;
@@ -173,6 +274,7 @@ class VoiceController extends ChangeNotifier {
     // A spoken correction that failed (nothing heard, recognizer error)
     // leaves the bill exactly as it was.
     if (s == VoiceState.error && _correctionBase != null) _restoreBill();
+    if (s == VoiceState.error && _orderAnswerBase != null) _restoreOrder();
     _state = s;
     _error = error;
     notifyListeners();
@@ -244,6 +346,28 @@ class VoiceController extends ChangeNotifier {
         }
       }
 
+      // Phase 3A: never listen in a language the device's recognizer says
+      // it cannot hear (and never fall back to another language). A
+      // recognizer that cannot tell (null) is tried as before.
+      final r = recognizer;
+      if (r is LocaleAwareRecognizer) {
+        final supported = await (r as LocaleAwareRecognizer).supportsLanguage(
+          lang,
+        );
+        if (supported == false) {
+          _noRecognition.add(lang);
+          _set(
+            VoiceState.error,
+            error:
+                (VoiceResponses.forLanguage(lang) ??
+                        const EnglishVoiceResponses())
+                    .recognitionUnavailable(lang.label),
+          );
+          return false;
+        }
+        _noRecognition.remove(lang);
+      }
+
       // Session isolation: a different staff member / device / company never
       // continues someone else's session.
       final current = scope();
@@ -304,6 +428,9 @@ class VoiceController extends ChangeNotifier {
         // Cancelling a spoken correction keeps the bill as it was.
         _restoreBill();
         _set(VoiceState.recognized);
+      } else if (_orderAnswerBase != null) {
+        _restoreOrder(); // the order stays on screen, unchanged
+        _set(VoiceState.recognized);
       } else {
         _request = null;
         _intent = null;
@@ -342,6 +469,7 @@ class VoiceController extends ChangeNotifier {
   /// UNKNOWN (never an exception, never a POS action).
   Future<void> _interpret(VoiceRequest r) async {
     if (_correctionBase != null) return _interpretCorrection(r);
+    if (_orderAnswerBase != null) return _interpretOrderAnswer(r);
     VoiceIntent result;
     try {
       result = await intentParser.parse(
@@ -361,6 +489,26 @@ class VoiceController extends ChangeNotifier {
     if (_disposed || !identical(_request, r)) return;
     _intent = result;
     notifyListeners();
+    // Phase 2: an existing order.
+    if (result.type == VoiceIntentType.billOrder && orderService != null) {
+      return _loadOrder(r, result.orderNumber!);
+    }
+    if (result.type == VoiceIntentType.tableOrder) {
+      if (orderService != null) return _loadTable(r, '${result.tableNumber}');
+      _clearPreview();
+      _orderState = VoiceOrderState.unsupported;
+      _orderMessage = _screen.tableUnsupported();
+      notifyListeners();
+      if (_responses != null) _say(_screen.tableUnsupported());
+      return;
+    }
+    if (result.type == VoiceIntentType.billShownOrder) {
+      _clearPreview();
+      _orderState = VoiceOrderState.notFound;
+      _orderMessage = _screen.whichOrder();
+      notifyListeners();
+      return;
+    }
     if (result.type == VoiceIntentType.createQuickBill &&
         previewService != null) {
       final req = _billRequest = QuickBillRequest.fromIntent(result);
@@ -378,7 +526,32 @@ class VoiceController extends ChangeNotifier {
     _billState = VoiceBillState.none;
     _billError = null;
     _correctionQuestion = null;
+    _confirmedByVoice = false;
+    _orderState = VoiceOrderState.none;
+    _order = null;
+    _orderNumber = null;
+    _orderMessage = null;
+    _orderRetryable = false;
+    _tableRef = null;
+    _tableOrders = const [];
   }
+
+  /// Phase 1: the current bill was confirmed by a spoken "yes" (through
+  /// [confirmBill], exactly like the button) — the screen then continues to
+  /// the existing checkout.
+  bool get confirmedByVoice =>
+      _confirmedByVoice && _billState == VoiceBillState.added;
+
+  /// Phase 1 (English) — asked after a spoken "no".
+  static const whatToChangeQuestion =
+      'What would you like to change? ${RuleBasedCorrectionParser.exampleHint}';
+
+  /// Phase 1 (English) — asked when the answer was not a clear yes or no.
+  static const yesOrNoQuestion =
+      'Please say yes to confirm the bill, or no to change it.';
+
+  static const notReadyToConfirmMessage =
+      'This bill still needs a clarification before it can be confirmed.';
 
   /// Sends [req] (what was said + the voice ids only) for a server-side
   /// preview. The answer is kept only while [r] / [req] are still the current
@@ -455,7 +628,7 @@ class VoiceController extends ChangeNotifier {
       _billRequest = null;
       _clearPreview();
       _previewState = VoicePreviewState.failed;
-      _previewError = staleBillMessage;
+      _previewError = _screen.staleBill();
       notifyListeners();
       return;
     }
@@ -591,13 +764,36 @@ class VoiceController extends ChangeNotifier {
     notifyListeners();
     final lang = sessionLanguage;
     Future<void>.sync(() => t.speak(text, language: lang))
-        .catchError((Object _) {})
+        .then((_) => _noSpokenReplies.remove(lang))
+        .catchError((Object _) {
+          // Phase 3A: not spoken (e.g. no voice for this language): the
+          // reply stays on screen and the screen says speech is off.
+          if (_noSpokenReplies.add(lang) && !_disposed) notifyListeners();
+          return false;
+        })
         .whenComplete(() {
           if (_disposed || gen != _sayGen) return;
           _speaking = false;
           notifyListeners();
         });
   }
+
+  /// Phase 3B: stops Jacky's current reply (before switching to translation
+  /// mode). Nothing else about the bill changes.
+  void stopSpeaking() => _stopSpeaking();
+
+  /// Phase 3B: translation mode may open only while nothing is in progress
+  /// here (not listening, not adding a bill, not waiting for a spoken
+  /// answer). A bill waiting for confirmation stays exactly as it is; when
+  /// the staff member returns, confirming it goes through the usual checks.
+  bool get canOpenTranslation =>
+      !_disposed &&
+      _state != VoiceState.listening &&
+      _state != VoiceState.processing &&
+      _state != VoiceState.requestingPermission &&
+      _billState == VoiceBillState.none &&
+      _correctionBase == null &&
+      _orderAnswerBase == null;
 
   void _stopSpeaking() {
     final t = tts;
@@ -660,7 +856,7 @@ class VoiceController extends ChangeNotifier {
       _billRequest = null;
       _clearPreview();
       _previewState = VoicePreviewState.failed;
-      _previewError = staleBillMessage;
+      _previewError = _screen.staleBill();
       notifyListeners();
       return;
     }
@@ -673,14 +869,46 @@ class VoiceController extends ChangeNotifier {
       if (say != null) _say(spoken ?? say.question(question));
     }
 
+    // Phase 1 (English): first, a spoken answer to "Would you like to
+    // confirm this bill?" — yes / no / cancel.
+    ({VoiceReply reply, String? rest})? answer;
+    try {
+      answer = replyParser.parse(r.text, language: s.language);
+    } catch (_) {
+      answer = null;
+    }
+    var said = r.text;
+    if (answer != null) {
+      switch (answer.reply) {
+        case VoiceReply.confirm:
+          return _confirmByVoice(base.request, ask);
+        case VoiceReply.cancel:
+          cancelBill();
+          if (_responses != null) {
+            _say(_screen.billCancelled());
+          }
+          return;
+        case VoiceReply.unclear:
+          return ask(_screen.yesOrNo());
+        case VoiceReply.reject:
+          final rest = answer.rest;
+          if (rest == null || rest.isEmpty) return ask(_screen.whatToChange());
+          said = rest; // "no, make the coffee three"
+      }
+    }
+
     VoiceCorrection? c;
     try {
-      c = correctionParser.parse(r.text, language: s.language);
+      c = correctionParser.parse(said, language: s.language);
     } catch (_) {
       c = null;
     }
     if (c == null) {
-      return ask(_screen.notACorrection());
+      return ask(
+        answer?.reply == VoiceReply.reject
+            ? _screen.whatToChange()
+            : _screen.notACorrection(),
+      );
     }
     final bill = base.bill;
     final preview = base.preview;
@@ -688,12 +916,12 @@ class VoiceController extends ChangeNotifier {
       case VoiceCorrectionKind.unclear:
         return ask(c.question ?? RuleBasedCorrectionParser.exampleHint);
       case VoiceCorrectionKind.setQuantity:
-        final i = _targetLine(c.target, bill, preview, ask);
+        final i = _targetLine(c.target, bill, preview, ask, c.position);
         if (i == null) return;
         final problem = await _setQuantity(i, c.quantity!, unit: c.unit);
         if (problem != null) ask(problem);
       case VoiceCorrectionKind.remove:
-        final i = _targetLine(c.target, bill, preview, ask);
+        final i = _targetLine(c.target, bill, preview, ask, c.position);
         if (i == null) return;
         await removeLine(i);
       case VoiceCorrectionKind.add:
@@ -744,9 +972,21 @@ class VoiceController extends ChangeNotifier {
     String? target,
     QuickBillRequest bill,
     QuickBillPreview preview,
-    void Function(String, {String? spoken}) ask,
-  ) {
+    void Function(String, {String? spoken}) ask, [
+    int? position,
+  ]) {
     final all = [for (var i = 0; i < bill.items.length; i++) i];
+    if (position != null) {
+      // Phase 1: "the first item" / "the last one" — the bill's own order.
+      final n = bill.items.length;
+      final i = position == -1 ? n - 1 : position - 1;
+      if (i >= 0 && i < n) return i;
+      ask(
+        _screen.noSuchLineScreen('item $position', _labels(all, bill, preview)),
+        spoken: _responses?.noSuchLine('item $position'),
+      );
+      return null;
+    }
     if (target == null) {
       if (bill.items.length == 1) return 0;
       ask(
@@ -823,6 +1063,26 @@ class VoiceController extends ChangeNotifier {
       },
   ].join(', ');
 
+  /// Phase 1: a spoken "yes" confirms the bill that was on screen when the
+  /// answer was asked for ([reviewed]) — through [confirmBill], so the same
+  /// checks apply as for the button (current revision, not stale, nothing
+  /// added twice). It only puts the lines into the cart for the existing
+  /// checkout: it never completes the sale or takes a payment.
+  Future<void> _confirmByVoice(
+    VoiceRequest reviewed,
+    void Function(String, {String? spoken}) ask,
+  ) async {
+    _request = reviewed;
+    final p = _preview;
+    if (p == null || !p.isReady) return ask(_screen.notReadyToConfirm());
+    if (await confirmBill()) {
+      _confirmedByVoice = true;
+      notifyListeners();
+    } else if (_billError != null && _responses != null) {
+      _say(_billError!);
+    }
+  }
+
   /// A correction is a NEW request in the SAME voice session: the old
   /// preview is cleared at once (never confirmable) and only the newest
   /// request's answer may update the screen.
@@ -835,7 +1095,7 @@ class VoiceController extends ChangeNotifier {
       _billRequest = null;
       _clearPreview();
       _previewState = VoicePreviewState.failed;
-      _previewError = staleBillMessage;
+      _previewError = _screen.staleBill();
       notifyListeners();
       return;
     }
@@ -900,20 +1160,20 @@ class VoiceController extends ChangeNotifier {
       // Nothing is added: back to the voice input safely.
       _clearPreview();
       _previewState = VoicePreviewState.failed;
-      _previewError = staleBillMessage;
+      _previewError = _screen.staleBill();
       notifyListeners();
       return false;
     }
     final cart = this.cart;
     final open = cart?.sale;
     final refusal = cart == null
-        ? noCartMessage
+        ? _screen.noCart()
         : (cart.isLocalSale || cart.offline?.isOffline() == true)
-        ? offlineMessage
+        ? _screen.offline()
         : (cart.isMutating ||
               cart.hasPendingCompletion ||
               (open != null && (!open.isDraft || open.items.isNotEmpty)))
-        ? busyCartMessage
+        ? _screen.busyCart()
         : null;
     if (refusal != null) {
       _billError = refusal;
@@ -945,7 +1205,24 @@ class VoiceController extends ChangeNotifier {
     if (_disposed) return false;
     _billState = VoiceBillState.added;
     notifyListeners();
+    _linkQuickBill(cart!, s, r);
     return true;
+  }
+
+  /// Phase 2: records which voice request this confirmed quick bill came
+  /// from (the server checks it is this cashier's own current draft).
+  /// Best effort: never blocks or changes the bill.
+  void _linkQuickBill(CartController cart, VoiceSession s, VoiceRequest r) {
+    final service = orderService;
+    final saleId = cart.isLocalSale ? null : cart.sale?.id;
+    if (service == null || saleId == null) return;
+    Future<void>.sync(
+      () => service.linkQuickBill(
+        saleId: saleId,
+        voiceSessionId: s.voiceSessionId,
+        requestId: r.requestId,
+      ),
+    ).catchError((Object _) {});
   }
 
   /// An add failed: stop (never skip a line), show the cart's own error, and
@@ -974,6 +1251,363 @@ class VoiceController extends ChangeNotifier {
     _preview = p;
     _previewState = VoicePreviewState.loaded;
     notifyListeners();
+  }
+
+  // --- Phase 2: existing order -> existing checkout ---------------------
+
+  static const tableUnsupportedMessage =
+      'Table orders are not available here. Say "bill order" and the order '
+      'number, for example "bill order 1048".';
+
+  static String noTableOrdersMessage(String table) =>
+      'No held orders are waiting for billing at table $table.';
+
+  /// Phase 2.1 — "bill table 6": the server lists this store's held orders
+  /// at the table (read only). None: said so. One: shown for verification
+  /// through the normal order lookup. Several: listed — the cashier must
+  /// choose one ([chooseTableOrder]); none is ever picked automatically.
+  Future<void> _loadTable(VoiceRequest r, String table) async {
+    _clearPreview();
+    _tableRef = table;
+    _orderState = VoiceOrderState.loading;
+    notifyListeners();
+    VoiceTableLookup? found;
+    String? message;
+    var retryable = false;
+    try {
+      found = await orderService!.lookupTable(
+        tableRef: table,
+        voiceSessionId: r.voiceSessionId,
+        requestId: r.requestId,
+      );
+      if (found.voiceSessionId != r.voiceSessionId ||
+          found.requestId != r.requestId) {
+        found = null; // another request's answer: never shown
+        retryable = true;
+        message = _screen.tableMismatch();
+      }
+    } on ApiException catch (e) {
+      retryable = e.isRetryable;
+      message = switch (e.kind) {
+        ApiErrorKind.network ||
+        ApiErrorKind.timeout => _screen.tableNetwork(table),
+        _ => describeApiError(e),
+      };
+    } catch (_) {
+      retryable = true;
+      message = _screen.tableLoadFailed(table);
+    }
+    if (_disposed || !identical(_request, r)) return; // a newer request won
+    if (found == null) {
+      _orderState = VoiceOrderState.failed;
+      _orderMessage = message;
+      _orderRetryable = retryable;
+      notifyListeners();
+      if (_responses != null) _say(message!);
+      return;
+    }
+    final orders = found.orders;
+    if (orders.isEmpty) {
+      _orderState = VoiceOrderState.notFound;
+      _orderMessage = _screen.noTableOrders(table);
+      notifyListeners();
+      if (_responses != null) _say(_orderMessage!);
+      return;
+    }
+    if (orders.length == 1) {
+      // Exactly one match: shown for verification (not billed) through the
+      // same lookup as "bill order N".
+      final tableRef = _tableRef;
+      await _loadOrder(r, orders.single.id);
+      _tableRef = tableRef;
+      return;
+    }
+    _tableOrders = orders;
+    _orderState = VoiceOrderState.choosing;
+    notifyListeners();
+    if (_responses != null) {
+      _say(_screen.tableChoose(orders.length, table));
+    }
+  }
+
+  /// Phase 2.1 — the cashier picked [saleId] from the table list: it is
+  /// looked up as a NEW request (server-checked again, audited) and shown
+  /// for verification like "bill order N".
+  Future<void> chooseTableOrder(int saleId) async {
+    final s = _session;
+    if (_disposed ||
+        s == null ||
+        orderService == null ||
+        _orderState != VoiceOrderState.choosing ||
+        !_tableOrders.any((o) => o.id == saleId)) {
+      return;
+    }
+    if (!s.belongsTo(scope())) {
+      _clearPreview();
+      _previewState = VoicePreviewState.failed;
+      _previewError = _screen.staleBill();
+      notifyListeners();
+      return;
+    }
+    final table = _tableRef;
+    final previous = _request;
+    final r = _request = VoiceRequest.start(s)
+      ..text = previous?.text ?? ''
+      ..recognizedAt = previous?.recognizedAt;
+    await _loadOrder(r, saleId);
+    _tableRef = table;
+  }
+
+  static const orderChangedMessage =
+      'This order was changed or billed by someone else after it was shown. '
+      'Reload it to review it again.';
+  static const orderIneligibleMessage =
+      'This order can no longer be billed here. Reload it, or check Orders.';
+  static const orderUncertainMessage =
+      'Could not reach the server to open this order. Reload it to check '
+      'whether it was opened before trying again.';
+
+  /// Finds held order [n] for request [r]; only the current request's answer
+  /// is shown. Read only on the server.
+  Future<void> _loadOrder(VoiceRequest r, int n) async {
+    _clearPreview();
+    _orderState = VoiceOrderState.loading;
+    _orderNumber = n;
+    notifyListeners();
+    VoiceOrderLookup? found;
+    String? message;
+    var state = VoiceOrderState.failed;
+    var retryable = false;
+    try {
+      found = await orderService!.lookup(
+        orderNumber: n,
+        voiceSessionId: r.voiceSessionId,
+        requestId: r.requestId,
+      );
+      if (found.voiceSessionId != r.voiceSessionId ||
+          found.requestId != r.requestId ||
+          found.order.id != n) {
+        found = null; // another request's answer: never shown
+        retryable = true;
+        message = _screen.orderMismatch();
+      } else {
+        state = VoiceOrderState.loaded;
+      }
+    } on ApiException catch (e) {
+      if (e.kind == ApiErrorKind.notFound) {
+        state = VoiceOrderState.notFound;
+        message = _screen.orderNotFound(n);
+      } else {
+        retryable = e.isRetryable;
+        message = switch (e.kind) {
+          ApiErrorKind.network ||
+          ApiErrorKind.timeout => _screen.orderNetwork(),
+          _ => describeApiError(e),
+        };
+      }
+    } catch (_) {
+      retryable = true;
+      message = _screen.orderLoadFailed();
+    }
+    if (_disposed || !identical(_request, r)) return; // a newer request won
+    _order = found?.order;
+    _orderState = state;
+    _orderMessage = message;
+    _orderRetryable = retryable;
+    notifyListeners();
+    final say = _responses;
+    if (say == null) return;
+    final o = _order;
+    _say(
+      o == null
+          ? message!
+          : say.orderPrompt(n, formatMoney(o.totals.grandTotal ?? 0)),
+    );
+  }
+
+  /// Retry after a failed lookup, or Reload after a conflict: the same order
+  /// number as a NEW request (same voice session).
+  Future<void> retryOrder() async {
+    final s = _session;
+    final n = _orderNumber;
+    final table = _tableRef;
+    final previous = _request;
+    if (_disposed ||
+        s == null ||
+        (n == null && table == null) ||
+        orderService == null ||
+        _billState != VoiceBillState.none ||
+        _orderAnswerBase != null) {
+      return;
+    }
+    if (!s.belongsTo(scope())) {
+      _clearPreview();
+      _previewState = VoicePreviewState.failed;
+      _previewError = _screen.staleBill();
+      notifyListeners();
+      return;
+    }
+    final r = _request = VoiceRequest.start(s)
+      ..text = previous?.text ?? ''
+      ..recognizedAt = previous?.recognizedAt;
+    if (n == null) return _loadTable(r, table!);
+    await _loadOrder(r, n);
+    _tableRef = table;
+  }
+
+  /// "Bill this order" (touch) or a spoken "yes": the EXISTING resume of the
+  /// held sale (server lock + version + store checks; the order shown must
+  /// still be the current one), recorded against this voice request. The
+  /// same sale then goes to the existing checkout — nothing is paid or
+  /// completed here, and no second sale is created.
+  Future<bool> confirmOrder({bool byVoice = false}) async {
+    final o = _order;
+    final s = _session;
+    if (_disposed ||
+        o == null ||
+        s == null ||
+        _orderState != VoiceOrderState.loaded ||
+        _billState != VoiceBillState.none ||
+        _orderAnswerBase != null) {
+      return false;
+    }
+    if (!s.belongsTo(scope())) {
+      _clearPreview();
+      _previewState = VoicePreviewState.failed;
+      _previewError = _screen.staleBill();
+      notifyListeners();
+      return false;
+    }
+    final cart = this.cart;
+    final refusal = cart == null
+        ? _screen.noCart()
+        : (cart.isLocalSale || cart.offline?.isOffline() == true)
+        ? _screen.offline()
+        : (cart.isMutating || cart.hasPendingCompletion)
+        ? _screen.busyCart()
+        : null;
+    if (refusal != null) {
+      _billError = refusal;
+      notifyListeners();
+      return false;
+    }
+    _billState = VoiceBillState.adding;
+    _billError = null;
+    notifyListeners();
+    final action = VoiceRequest.start(s); // the bill action's own request id
+    final ok = await cart!.resumeHeldSale(
+      saleId: o.id,
+      expectedVersion: o.version,
+      voice: {
+        'voice_session_id': s.voiceSessionId,
+        'request_id': action.requestId,
+      },
+    );
+    if (_disposed) return false;
+    if (ok) {
+      _billState = VoiceBillState.added;
+      _confirmedByVoice = byVoice;
+      notifyListeners();
+      return true;
+    }
+    _billState = VoiceBillState.none;
+    final e = cart.error;
+    switch (e?.kind) {
+      case ApiErrorKind.conflict:
+        _orderState = VoiceOrderState.conflict;
+        _orderMessage = _screen.orderChanged();
+      case ApiErrorKind.forbidden || ApiErrorKind.notFound:
+        _orderState = VoiceOrderState.ineligible;
+        _orderMessage = _screen.orderIneligible();
+      case ApiErrorKind.network || ApiErrorKind.timeout:
+        _orderState = VoiceOrderState.conflict; // outcome unknown: reload first
+        _orderMessage = _screen.orderUncertain();
+      default:
+        _billError = e == null
+            ? _screen.orderOpenFailed()
+            : describeApiError(e);
+    }
+    notifyListeners();
+    final spoken = _orderMessage ?? _billError;
+    if (_responses != null && spoken != null) _say(spoken);
+    return false;
+  }
+
+  /// "Answer by voice" on an order: listens for yes / no / cancel / "bill
+  /// that order" while the order stays on screen.
+  Future<bool> startOrderAnswer() async {
+    if (_orderState != VoiceOrderState.loaded ||
+        _billState != VoiceBillState.none ||
+        _orderAnswerBase != null ||
+        _request == null) {
+      return false;
+    }
+    _orderAnswerBase = _request;
+    _correctionQuestion = null;
+    _billError = null;
+    final ok = await _start(keepBill: true);
+    if (!ok && _orderAnswerBase != null) {
+      _restoreOrder();
+      notifyListeners();
+    }
+    return ok;
+  }
+
+  void _restoreOrder() {
+    _request = _orderAnswerBase;
+    _orderAnswerBase = null;
+  }
+
+  Future<void> _interpretOrderAnswer(VoiceRequest r) async {
+    final base = _orderAnswerBase!;
+    _orderAnswerBase = null;
+    if (_disposed || !identical(_request, r)) return;
+    _request = base;
+    void ask(String q) {
+      _correctionQuestion = q;
+      notifyListeners();
+      final say = _responses;
+      if (say != null) _say(say.question(q));
+    }
+
+    final s = _session;
+    ({VoiceReply reply, String? rest})? answer;
+    try {
+      answer = replyParser.parse(r.text, language: s?.language ?? language);
+    } catch (_) {
+      answer = null;
+    }
+    var bill = answer?.reply == VoiceReply.confirm;
+    if (answer == null) {
+      VoiceIntent? said;
+      try {
+        said = await intentParser.parse(
+          r.text,
+          voiceSessionId: r.voiceSessionId,
+          requestId: r.requestId,
+          language: s?.language ?? language,
+        );
+      } catch (_) {
+        said = null;
+      }
+      if (_disposed || !identical(_request, base)) return;
+      bill = said?.type == VoiceIntentType.billShownOrder;
+      if (!bill) {
+        return ask(_screen.orderAnswerHint());
+      }
+    }
+    switch (answer?.reply) {
+      case VoiceReply.cancel || VoiceReply.reject:
+        cancelBill();
+        if (_responses != null) {
+          _say(_screen.orderLeftAsIs());
+        }
+        return;
+      case VoiceReply.unclear:
+        return ask(_screen.yesOrNo());
+      default:
+        if (bill) await confirmOrder(byVoice: true);
+    }
   }
 
   /// "Edit / Speak Again": discards this preview and listens for a new

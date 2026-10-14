@@ -297,7 +297,7 @@ void main() {
       expect(v.isCorrecting, isFalse);
       expect(v.preview!.isReady, isTrue);
       await correct('what time is it');
-      expect(v.correctionQuestion, startsWith("That wasn't a correction."));
+      expect(v.correctionQuestion, startsWith("I didn't understand that."));
       expect(backend.requests, hasLength(1));
       expect(await v.confirmBill(), isTrue);
     });

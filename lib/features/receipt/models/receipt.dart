@@ -10,6 +10,7 @@ class ReceiptLine {
     this.variant,
     this.taxNote,
     this.barcode,
+    this.notes = const [],
   });
 
   final String name;
@@ -29,6 +30,12 @@ class ReceiptLine {
   final String unitPrice;
   final String lineTotal;
   final String? taxNote;
+
+  /// Backend migration 055: (label, amount) rows printed under the line — a
+  /// per-sale price change ("Price changed from 200.00", "") and the line's
+  /// own discount ("Line discount 10%", "-30.00"). Empty for ordinary lines,
+  /// which therefore print exactly as before.
+  final List<(String, String)> notes;
 }
 
 class ReceiptPayment {

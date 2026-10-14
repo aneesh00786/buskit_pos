@@ -62,7 +62,7 @@ void main() {
     ]);
   });
 
-  test('only the device token and identifier are persisted — never the staff token, PIN or secret', () async {
+  test('persisted: device token, identifier and the device activation key (so the token can be renewed) — never the staff token or PIN', () async {
     await s.restore();
     await s.loginDevice('REG-1', 'the-secret');
     await s.loginStaff('S1', '9999');
@@ -76,10 +76,16 @@ void main() {
         'pin',
         'secret',
         'pos_staff_token',
+        'pos_device_secret',
       ])
         await store.read(k),
     ];
-    expect(all.whereType<String>().toSet(), {'device-token', 'REG-1'});
+    expect(all.whereType<String>().toSet(), {
+      'device-token',
+      'REG-1',
+      'the-secret',
+    });
+    expect(await store.read(TokenKeys.deviceSecret), 'the-secret');
   });
 
   test('bad device credentials: error kept, stays on device login', () async {
@@ -231,8 +237,25 @@ void main() {
     });
 
     test(
-      'device token expiry returns to device login and clears the stored token',
+      'device token refused while the activation key is stored: back to the '
+      'PIN screen (no re-activation); the dead token is dropped, the key kept',
       () async {
+        s.handleUnauthorized(); // staff -> pin screen
+        s.handleUnauthorized(); // device token refused
+        expect(s.phase, SessionPhase.staffLogin);
+        await Future<void>.delayed(Duration.zero);
+        expect(await store.read(TokenKeys.deviceToken), isNull);
+        expect(await store.read(TokenKeys.deviceSecret), 's');
+      },
+    );
+
+    test(
+      'device token refused with NO stored key (activated before keys were '
+      'kept): returns to device login and clears the stored token',
+      () async {
+        await store.delete(TokenKeys.deviceSecret);
+        await s.restore();
+        await s.loginStaff('S1', '1');
         s.handleUnauthorized(); // staff -> pin screen
         s.handleUnauthorized(); // device -> device login
         expect(s.phase, SessionPhase.deviceLogin);
@@ -251,12 +274,13 @@ void main() {
     expect(s.activeToken, 'device-token');
   });
 
-  test('changeDevice forgets the device', () async {
+  test('changeDevice forgets the device and its activation key', () async {
     await s.restore();
     await s.loginDevice('REG-1', 's');
     await s.changeDevice();
     expect(s.phase, SessionPhase.deviceLogin);
     expect(await store.read(TokenKeys.deviceToken), isNull);
+    expect(await store.read(TokenKeys.deviceSecret), isNull);
   });
 
   group('auth context (Phase 17.1)', () {

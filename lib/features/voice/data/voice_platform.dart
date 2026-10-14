@@ -116,9 +116,20 @@ abstract class SpeechRecognizer {
   Future<void> cancel();
 }
 
+/// Phase 3A — a recognizer that can say whether the DEVICE recognises a
+/// language. true = supported, false = definitely not (voice is then not
+/// started in that language — never another language instead), null = the
+/// engine could not tell.
+abstract class LocaleAwareRecognizer {
+  Future<bool?> supportsLanguage(VoiceLanguage language);
+}
+
 /// The `speech_to_text` package: the device's own speech recognition
-/// service (Android SpeechRecognizer / iOS Speech framework).
-class SpeechToTextRecognizer implements SpeechRecognizer {
+/// service (Android SpeechRecognizer / iOS Speech framework). Whether audio
+/// is processed on the device or by the platform vendor's service is the
+/// device's choice; no app-specific service or key is involved.
+class SpeechToTextRecognizer
+    implements SpeechRecognizer, LocaleAwareRecognizer {
   SpeechToTextRecognizer([stt.SpeechToText? speech])
     : _speech = speech ?? stt.SpeechToText();
   final stt.SpeechToText _speech;
@@ -143,9 +154,26 @@ class SpeechToTextRecognizer implements SpeechRecognizer {
       partialResults: true,
       cancelOnError: true,
       listenMode: stt.ListenMode.confirmation,
-      localeId: language.code, // en-US for English
+      localeId: language.speechLocale, // en-US / ml-IN
     ),
   );
+
+  /// Phase 3A: the recognizer's own list of locales (after initialize).
+  /// Matches the language part ("ml" in "ml_IN" / "ml-IN"); an empty or
+  /// failing list means "cannot tell" (null).
+  @override
+  Future<bool?> supportsLanguage(VoiceLanguage language) async {
+    try {
+      final locales = await _speech.locales();
+      if (locales.isEmpty) return null;
+      String lang(String id) =>
+          id.replaceAll('_', '-').split('-').first.toLowerCase();
+      final want = lang(language.speechLocale);
+      return locales.any((l) => lang(l.localeId) == want);
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   Future<void> stop() => _speech.stop();

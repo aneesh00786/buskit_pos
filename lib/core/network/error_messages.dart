@@ -17,6 +17,11 @@ class PosErrorCodes {
   /// code means the device token itself was rejected, not the PIN.
   static const invalidStaffCredentials = 'POS_INVALID_STAFF_CREDENTIALS';
 
+  /// The device's register is inactive (device sign-in or any device-scoped
+  /// request). The device's activation key is still valid; an administrator
+  /// has to reactivate the register.
+  static const registerInactive = 'POS_REGISTER_INACTIVE';
+
   /// A customer create/update collided with another customer's mobile/email
   /// in the same company. `e.dataMap?['existing_customer_id']` carries the
   /// customer that already has it, so the UI can offer to use that one

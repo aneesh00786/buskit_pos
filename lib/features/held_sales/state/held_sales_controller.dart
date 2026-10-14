@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_exception.dart';
@@ -125,6 +127,28 @@ class HeldSalesController extends ChangeNotifier {
     } finally {
       if (gen == _detailGen) _detailLoading = false;
       _notify();
+    }
+  }
+
+  /// Phase 2.1: assigns / changes / clears (null) the table of held sale
+  /// [sale] using the version the cashier saw. On success the detail and the
+  /// list are refreshed; on failure the error is returned (nothing retried).
+  Future<ApiException?> setTable(CartSale sale, String? tableRef) async {
+    try {
+      final updated = await _list.setTable(
+        saleId: sale.id,
+        expectedVersion: sale.version,
+        tableRef: tableRef,
+      );
+      if (_detailId == sale.id) {
+        _detailGen++;
+        _detail = updated;
+        _notify();
+      }
+      unawaited(refresh());
+      return null;
+    } on ApiException catch (e) {
+      return e;
     }
   }
 

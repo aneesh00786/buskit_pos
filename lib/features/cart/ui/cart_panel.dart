@@ -18,6 +18,7 @@ import 'cart_item_tile.dart';
 import 'customer_dialog.dart';
 import 'discount_override_dialog.dart';
 import 'promotion_picker.dart';
+import '../../held_sales/ui/table_ref_dialog.dart';
 
 /// "Current Sale": the draft sale exactly as the server computed it, with
 /// quantity update, remove, clear all and hold. Every price, tax figure and
@@ -780,7 +781,16 @@ class _Actions extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: PosTokens.s12),
+              // Phase 2.1: optional — park the sale at a table (icon only, so
+              // the row keeps its height; normal holds stay one tap).
+              IconButton(
+                key: const Key('hold-for-table'),
+                tooltip: 'Hold for table',
+                onPressed: disabled || session.isDenied('sales.hold')
+                    ? null
+                    : () => _holdForTable(context),
+                icon: const Icon(Icons.table_restaurant_outlined),
+              ),
               Expanded(
                 child: FilledButton.icon(
                   onPressed: disabled ? null : () => showPay(context),
@@ -826,6 +836,28 @@ class _Actions extends StatelessWidget {
         SnackBar(
           content: Text(
             'Sale #${cart.lastHeldSaleId} is on hold. Resume it from Held sales.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _holdForTable(BuildContext context) async {
+    final cart = context.read<CartController>();
+    final messenger = ScaffoldMessenger.of(context);
+    final choice = await showTableRefDialog(
+      context,
+      title: 'Hold for table',
+      confirmLabel: 'Hold',
+    );
+    if (choice is! SetTable) return;
+    final ok = await cart.holdCurrent(tableRef: choice.tableRef);
+    if (ok && cart.lastHeldSaleId != null) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Sale #${cart.lastHeldSaleId} is on hold at table ${choice.tableRef}.',
           ),
         ),
       );

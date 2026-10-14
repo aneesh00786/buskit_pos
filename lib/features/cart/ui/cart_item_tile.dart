@@ -6,8 +6,11 @@ import '../../../core/ui/product_image.dart';
 import '../../../core/ui/quantity_stepper.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/quantity.dart';
+import '../../auth/state/session_controller.dart';
+import '../data/line_pricing_service.dart';
 import '../models/cart_sale.dart';
 import '../state/cart_controller.dart';
+import 'line_pricing_dialog.dart';
 import 'quantity_dialog.dart';
 
 /// One line of the current sale: thumbnail, name, variation, quantity stepper,
@@ -91,9 +94,26 @@ class CartItemTile extends StatelessWidget {
       else
         '${line.quantityText} × ${formatMoney(line.unitPrice)}',
       ?tax,
+      // Backend migration 055: this line's price change / line discount.
+      ...linePricingLabels(line),
       if (discount != null && discount != 0)
         'Discount ${formatMoney(discount)}',
     ];
+    // The price / discount action: offered when line pricing is wired and the
+    // signed-in staff member may have SOME such permission (server-provided
+    // permission keys, never a role name). The dialog asks the server what
+    // exactly is allowed; the server checks every request.
+    final pricing = context.read<LinePricingService?>();
+    final session = context.read<SessionController?>();
+    final mayPrice =
+        pricing != null &&
+        !line.isUnavailable &&
+        !(session?.isDeniedAll(const [
+              'discounts.apply',
+              'discounts.override',
+              'sales.price_override',
+            ]) ??
+            true);
 
     return Semantics(
       container: true,
@@ -176,6 +196,24 @@ class CartItemTile extends StatelessWidget {
                     enabled: enabled && !line.isUnavailable,
                     onChanged: (q) => cart.updateQuantity(line.id, q),
                     onTapValue: () => _editQuantity(context),
+                  ),
+                if (mayPrice)
+                  IconButton(
+                    key: Key('line-pricing-${line.id}'),
+                    tooltip: 'Discount or price for $_name',
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    onPressed: enabled
+                        ? () => showLinePricingDialog(
+                            context,
+                            cart: cart,
+                            service: pricing,
+                            lineId: line.id,
+                          )
+                        : null,
+                    icon: const Icon(Icons.sell_outlined),
                   ),
                 IconButton(
                   tooltip: 'Remove $_name',

@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Minimal key/value persistence for the device credentials. Only the device
-/// token and identifier are persisted; the staff token and PIN are never
-/// written to disk.
+/// Minimal key/value persistence for the device credentials, kept in the
+/// platform's secure storage (Keychain / Keystore). Persisted: the device
+/// token, identifier and activation key (device secret). The staff token and
+/// PIN are never written to disk.
 abstract class TokenStore {
   Future<String?> read(String key);
   Future<void> write(String key, String value);
@@ -13,6 +14,13 @@ abstract class TokenStore {
 class TokenKeys {
   static const deviceToken = 'pos_device_token';
   static const deviceIdentifier = 'pos_device_identifier';
+
+  /// The device's activation key (device secret). Kept so the device can
+  /// renew its 12-hour device token by itself: the key never expires; it
+  /// stops working only when an administrator resets it or disables the
+  /// device. It only ever buys a normal device token through the server's
+  /// full device checks — it is never sent as an API token.
+  static const deviceSecret = 'pos_device_secret';
 }
 
 /// Phase 6ZA — the secure storage for the platform the app runs on. macOS

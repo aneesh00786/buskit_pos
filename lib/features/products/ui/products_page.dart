@@ -18,6 +18,7 @@ import '../../auth/state/session_controller.dart';
 import '../../barcode/barcode_key_listener.dart';
 import '../../barcode/barcode_scan_handler.dart';
 import '../../barcode/camera_scanner.dart';
+import '../../barcode/scale_label.dart';
 import '../../cart/state/cart_controller.dart';
 import '../../cart/ui/quantity_dialog.dart';
 import '../../cart/ui/cart_panel.dart';
@@ -252,9 +253,12 @@ class _ProductsPageState extends State<ProductsPage>
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     if (ok) {
+      final merged = cart.takeMergeNotice();
       messenger.showSnackBar(
         _snackBar(
-          'Added ${formatQuantity(quantity, weight: first.isWeight)} × ${g.name}',
+          'Added ${formatQuantity(quantity, weight: first.isWeight)} × ${g.name}'
+          '${merged == null ? '' : '. ${merged.text}'}',
+          duration: Duration(seconds: merged == null ? 3 : 8),
         ),
       );
     } else if (cart.error != null) {
@@ -273,14 +277,53 @@ class _ProductsPageState extends State<ProductsPage>
   BarcodeScanHandler get _scans => _scanHandler ??= BarcodeScanHandler(
     products: context.read<ProductService>(),
     cart: context.read<CartController>(),
+    scaleLabels: context.read<ScaleLabelRecognizer?>(),
   );
 
   /// A scanner-speed burst ending in Enter was typed (hardware scanner), or the
   /// camera read a code: look it up and add it to the cart.
   Future<void> _onBarcode(String code) async {
     final list = context.read<ProductListController>();
-    final result = await _scans.handle(code);
+    var result = await _scans.handle(code);
     if (!mounted) return;
+    // The same scale label is already in this sale: never charged twice
+    // silently — the cashier confirms a second identical pack, or nothing
+    // is added.
+    if (result.outcome == ScanOutcome.confirmRepeat) {
+      final again = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          key: const Key('scale-label-repeat-dialog'),
+          title: const Text('Same label scanned again'),
+          content: Text(
+            '${result.message}\n\nAdd it again only if this is a second pack with an identical label.',
+          ),
+          actions: [
+            TextButton(
+              key: const Key('scale-label-repeat-cancel'),
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Do not add'),
+            ),
+            FilledButton(
+              key: const Key('scale-label-repeat-confirm'),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Add second pack'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      if (again != true) {
+        result = ScanResult(
+          ScanOutcome.invalid,
+          'Not added again.',
+          code: code,
+        );
+      } else {
+        result = await _scans.handle(code, confirmRepeat: true);
+        if (!mounted) return;
+      }
+    }
     // A scanner types into a focused search box too; don't leave the code there.
     if (_search.text.trim() == code) {
       _search.clear();

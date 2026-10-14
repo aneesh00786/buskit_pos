@@ -40,6 +40,23 @@ class ReceiptFormatter {
             unitPrice: money(l.unitPrice),
             lineTotal: money(l.lineTotal),
             barcode: l.barcode,
+            // Only what the completed sale stored: the price actually
+            // charged is l.unitPrice; the original price and the line
+            // discount come from its frozen line_discount / price_override.
+            notes: [
+              if (l.priceOverride != null)
+                (
+                  'Price changed from ${money(l.priceOverride!.originalUnitPrice)}',
+                  '',
+                ),
+              if (l.lineDiscount != null && (l.lineDiscount!.amount ?? 0) != 0)
+                (
+                  l.lineDiscount!.isPercentage
+                      ? 'Line discount ${formatQty(l.lineDiscount!.value)}%'
+                      : 'Line discount',
+                  '-${money(l.lineDiscount!.amount)}',
+                ),
+            ],
           ),
       ],
       subtotal: money(sale.totals.subtotal),
@@ -165,6 +182,13 @@ extension ReceiptText on ReceiptData {
           columns,
         ),
       );
+      for (final (label, amount) in l.notes) {
+        out.add(
+          amount.isEmpty
+              ? '  ${_ascii(label)}'
+              : _pair('  ${_ascii(label)}', _ascii(amount), columns),
+        );
+      }
     }
     out.add(rule);
     out.add(_pair('Subtotal', subtotal, columns));
