@@ -14,7 +14,7 @@
 class AppConfig {
   static const String baseUrl = String.fromEnvironment(
     'POS_BASE_URL',
-    defaultValue: 'http://localhost:3000',
+    defaultValue: 'https://test.thrivewoo.com',
   );
 
   /// Shown in the sidebar. Keep in step with pubspec.yaml, or pass

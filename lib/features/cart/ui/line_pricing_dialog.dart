@@ -312,21 +312,10 @@ class _LinePricingDialogState extends State<LinePricingDialog> {
           ),
         ),
     ];
-    if (cart.offline?.isOffline() == true || cart.isLocalSale) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ...header,
-          const SizedBox(height: PosTokens.s12),
-          const Text(
-            CartController.linePricingOfflineMessage,
-            key: Key('line-pricing-offline'),
-          ),
-        ],
-      );
-    }
-    if (cart.linePricingOutcomeUnknown) {
+    // A lost response also marks the server unreachable, and only a
+    // successful request clears that: the reload IS that request, so the
+    // unknown outcome is shown (with Reload) before the offline message.
+    if (cart.linePricingOutcomeUnknown && !cart.isLocalSale) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -343,6 +332,20 @@ class _LinePricingDialogState extends State<LinePricingDialog> {
             onPressed: busy || cart.isRefreshing ? null : () => cart.refresh(),
             icon: const Icon(Icons.refresh),
             label: const Text('Reload cart'),
+          ),
+        ],
+      );
+    }
+    if (cart.offline?.isOffline() == true || cart.isLocalSale) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ...header,
+          const SizedBox(height: PosTokens.s12),
+          const Text(
+            CartController.linePricingOfflineMessage,
+            key: Key('line-pricing-offline'),
           ),
         ],
       );

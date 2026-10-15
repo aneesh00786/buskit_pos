@@ -13,6 +13,24 @@ import '../../../core/storage/token_store.dart';
 /// these keys) — this is throwaway local testing convenience, not part of
 /// the app's real credential model.
 class DevCredentials {
+  static const String defaultDeviceIdentifier = String.fromEnvironment(
+    'POS_DEVICE_ID',
+    defaultValue: 'COUNTER-1',
+  );
+  static const String defaultDeviceSecret = String.fromEnvironment(
+    'POS_DEVICE_SECRET',
+    defaultValue: '0d4b3d83182b792ff6f62150ac764f8aa56b37ad88d3ac59',
+  );
+
+  static const String defaultStaffId = String.fromEnvironment(
+    'POS_STAFF_ID',
+    defaultValue: 'SALES175',
+  );
+  static const String defaultPin = String.fromEnvironment(
+    'POS_STAFF_PIN',
+    defaultValue: '1234',
+  );
+
   const DevCredentials({
     required this.deviceIdentifier,
     required this.deviceSecret,

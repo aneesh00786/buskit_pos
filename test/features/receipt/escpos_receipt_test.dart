@@ -3,10 +3,12 @@
 // mm paper as ESC/POS text commands, sent through a PrinterAdapter. Only the
 // in-memory MockPrinterAdapter is used — no printer, no network, no drawer.
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:buskit_pos/features/checkout/models/payment.dart';
 import 'package:buskit_pos/features/receipt/data/printer_settings.dart';
+import 'package:buskit_pos/features/receipt/data/receipt_pdf.dart';
 import 'package:buskit_pos/features/receipt/models/receipt.dart';
 import 'package:buskit_pos/features/receipt/models/receipt_formatter.dart';
 import 'package:buskit_pos/features/receipt/printing/escpos_commands.dart';
@@ -249,7 +251,9 @@ void main() {
     () {
       final job = service().render(receiptOf(saleJson(discount: 10)));
       expect(
-        job.lines.any((l) => l.startsWith('Discount') && l.endsWith('-10.00')),
+        job.lines.any(
+          (l) => l.startsWith('Total discounts') && l.endsWith('-10.00'),
+        ),
         isTrue,
       );
       expect(
@@ -447,6 +451,57 @@ void main() {
       EscPosCommands.asciiBytes('Rice × 2 — ₹50 · é'),
       ascii.encode('Rice x 2 - Rs50 - ?'),
     );
+  });
+
+  test('the aggregated discount row reads "Total discounts" (not a promotion title) on text, thermal and PDF; amounts unchanged', () async {
+    final json = saleJson(discount: 10)
+      ..['promotion'] = {
+        'id': 5,
+        'title': 'Summer Saver',
+        'discount_type': 'percentage',
+        'discount_value': 5,
+        'discount_amount': 6,
+        'eligible': true,
+      };
+    final receipt = receiptOf(json);
+    bool labelled(List<String> lines) => lines.any(
+      (l) => l.startsWith('Total discounts') && l.endsWith('-10.00'),
+    );
+    bool titled(List<String> lines) =>
+        lines.any((l) => l.contains('Summer Saver'));
+    // Text receipt.
+    final text = receipt.toLines();
+    expect(labelled(text), isTrue);
+    expect(titled(text), isFalse);
+    expect(
+      text.any((l) => l.startsWith('TOTAL') && l.endsWith('122.00')),
+      isTrue,
+    );
+    // Thermal (80 mm, its own column count).
+    final job = service().render(receipt);
+    expect(labelled(job.lines), isTrue);
+    expect(titled(job.lines), isFalse);
+    // PDF: decode the page content and read the printed strings.
+    final pdf = await buildReceiptPdf(receipt);
+    final raw = latin1.decode(pdf);
+    final content = StringBuffer();
+    for (final m in RegExp(r'(?<!end)stream\r?\n').allMatches(raw)) {
+      final end = raw.indexOf('endstream', m.end);
+      final bytes = pdf.sublist(m.end, end);
+      try {
+        content.write(latin1.decode(zlib.decode(bytes)));
+      } catch (_) {
+        content.write(latin1.decode(bytes));
+      }
+    }
+    // Each word is its own text run: (Total) (discounts) ...
+    final printed = RegExp(r'\(([^)]*)\)')
+        .allMatches(content.toString())
+        .map((m) => m.group(1))
+        .join(' ');
+    expect(printed, contains('Total discounts -10.00'));
+    expect(printed, isNot(contains('Summer')));
+    expect(printed, contains('TOTAL 122.00'));
   });
 }
 

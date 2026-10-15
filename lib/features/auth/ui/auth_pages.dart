@@ -470,15 +470,35 @@ class _DeviceLoginPageState extends State<DeviceLoginPage> {
   /// under `flutter test`).
   Future<void> _devAutofill() async {
     if (!mounted) return;
-    final saved = await (_devStore ??= DevCredentialsStore(
-      SecureTokenStore(),
-    )).load();
-    if (!mounted || saved == null) return;
-    setState(() {
-      _id.text = saved.deviceIdentifier;
-      _secret.text = saved.deviceSecret;
-      _devMessage = 'Autofilled from the saved test device.';
-    });
+    final store = (_devStore ??= DevCredentialsStore(SecureTokenStore()));
+    final saved = await store.load();
+    if (!mounted) return;
+    if (saved != null) {
+      final isLegacy = saved.deviceIdentifier == 'E2E-TILL-1';
+      final id = isLegacy
+          ? DevCredentials.defaultDeviceIdentifier
+          : saved.deviceIdentifier;
+      final secret = isLegacy
+          ? DevCredentials.defaultDeviceSecret
+          : saved.deviceSecret;
+      if (isLegacy) {
+        await store.rememberDevice(id, secret);
+      }
+      setState(() {
+        _id.text = id;
+        _secret.text = secret;
+        _devMessage = 'Autofilled from the saved test device.';
+      });
+      return;
+    }
+    if (DevCredentials.defaultDeviceIdentifier.isNotEmpty &&
+        DevCredentials.defaultDeviceSecret.isNotEmpty) {
+      setState(() {
+        _id.text = DevCredentials.defaultDeviceIdentifier;
+        _secret.text = DevCredentials.defaultDeviceSecret;
+        _devMessage = 'Autofilled from default test device.';
+      });
+    }
   }
 
   // ---- end testing-only ----
@@ -576,12 +596,29 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
   }
 
   Future<void> _devAutofill() async {
-    final saved = await DevCredentialsStore(SecureTokenStore()).load();
-    if (!mounted || saved == null) return;
-    setState(() {
-      _id.text = saved.staffId;
-      _pin.text = saved.pin;
-    });
+    final store = DevCredentialsStore(SecureTokenStore());
+    final saved = await store.load();
+    if (!mounted) return;
+    if (saved != null) {
+      final isLegacy = saved.staffId == 'E2E-SEN';
+      final id = isLegacy ? DevCredentials.defaultStaffId : saved.staffId;
+      final pin = isLegacy ? DevCredentials.defaultPin : saved.pin;
+      if (isLegacy) {
+        await store.rememberStaff(id, pin);
+      }
+      setState(() {
+        _id.text = id;
+        _pin.text = pin;
+      });
+      return;
+    }
+    if (DevCredentials.defaultStaffId.isNotEmpty &&
+        DevCredentials.defaultPin.isNotEmpty) {
+      setState(() {
+        _id.text = DevCredentials.defaultStaffId;
+        _pin.text = DevCredentials.defaultPin;
+      });
+    }
   }
 
   Future<void> _submit(SessionController s) async {

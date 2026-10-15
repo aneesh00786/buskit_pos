@@ -65,7 +65,10 @@ class ReceiptFormatter {
           (sale.totals.discountTotal != null && sale.totals.discountTotal != 0)
           ? money(sale.totals.discountTotal)
           : null,
-      discountLabel: sale.promotion?.title ?? 'Discount',
+      // The row is the sale's whole discount_total (line discounts, promotion,
+      // tier, points and any whole-sale discount), so it is never labelled
+      // with just one of them (e.g. the promotion's title).
+      discountLabel: ReceiptData.totalDiscountsLabel,
       pointsEarned: (sale.loyalty?.pointsEarned ?? 0) > 0
           ? '+${formatQty(sale.loyalty!.pointsEarned)}'
           : null,

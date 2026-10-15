@@ -65,7 +65,7 @@ class ReceiptData {
     required this.total,
     required this.payments,
     this.discount,
-    this.discountLabel = 'Discount',
+    this.discountLabel = totalDiscountsLabel,
     this.pointsEarned,
     this.cashbackEarned,
     this.walletRedeemed,
@@ -99,6 +99,9 @@ class ReceiptData {
   /// The line label shown next to [discount] — the applied promotion's name
   /// when known (e.g. "10% OFF"), else the generic "Discount".
   final String discountLabel;
+
+  /// Label of the aggregated discount row (all discounts on the sale).
+  static const String totalDiscountsLabel = 'Total discounts';
 
   /// Loyalty figures from this sale, already formatted — `null` when not
   /// applicable. There is no "new balance" here (the completed-sale snapshot

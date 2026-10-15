@@ -14,6 +14,7 @@ import 'package:buskit_pos/features/cart/state/cart_controller.dart';
 import 'package:buskit_pos/features/cart/ui/line_pricing_dialog.dart';
 import 'package:buskit_pos/features/checkout/models/payment.dart';
 import 'package:buskit_pos/features/offline/offline_checkout_service.dart';
+import 'package:buskit_pos/features/offline/offline_services.dart';
 import 'package:buskit_pos/features/offline/offline_storage_service.dart';
 import 'package:buskit_pos/features/receipt/models/receipt_formatter.dart';
 import 'package:flutter/material.dart';
@@ -436,8 +437,9 @@ void main() {
       CartSale? start,
       double width = 1400,
       List<String>? permissions,
+      OfflineServices? offline,
     }) async {
-      final h = PageHarness();
+      final h = PageHarness(offline: offline);
       h.linePricing = pricing;
       final s = start ?? sale();
       h.carts.onAdd = (_) async => s;
@@ -466,6 +468,44 @@ void main() {
       await tester.tap(find.byKey(const Key('line-pricing-1')));
       await tester.pumpAndSettle();
     }
+
+    testWidgets(
+      'lost response while the server is now marked unreachable: the dialog offers Reload (not only the offline message) and Reload reconciles',
+      (tester) async {
+        late OfflineStorageService storage;
+        late Directory root;
+        await tester.runAsync(() async {
+          root = await Directory.systemTemp.createTemp('pos_lp_unknown_');
+          storage = OfflineStorageService(root);
+          await storage.initialize();
+        });
+        addTearDown(() => root.delete(recursive: true));
+        final p = FakeLinePricing()..error = lost;
+        final h = await pump(tester, p, offline: OfflineServices(storage));
+        var reloads = 0;
+        h.carts.onGet = (_) async {
+          reloads++;
+          return sale(version: 9, discount: tenPercent);
+        };
+        await open(tester);
+        await tester.enterText(find.byKey(const Key('line-discount-value')), '10');
+        await tester.enterText(find.byKey(const Key('line-discount-reason')), 'dent');
+        await tester.tap(find.byKey(const Key('line-discount-apply')));
+        // The real client marks itself unreachable on a network error.
+        h.client.reachable.value = false;
+        await tester.pumpAndSettle();
+        expect(h.cart.linePricingOutcomeUnknown, isTrue);
+        expect(find.byKey(const Key('line-pricing-unknown')), findsOneWidget);
+        expect(find.byKey(const Key('line-pricing-offline')), findsNothing);
+        expect(find.byKey(const Key('line-discount-apply')), findsNothing, reason: 'still blocked');
+        expect(p.calls, hasLength(1), reason: 'never re-sent');
+        await tester.tap(find.byKey(const Key('line-pricing-reload')));
+        await tester.pumpAndSettle();
+        expect(reloads, greaterThan(0), reason: 'Reload asks the server');
+        expect(h.cart.linePricingOutcomeUnknown, isFalse);
+        expect(p.calls, hasLength(1));
+      },
+    );
 
     testWidgets(
       'the action follows the server-provided permissions (any of apply / override / price_override), never a role name',
