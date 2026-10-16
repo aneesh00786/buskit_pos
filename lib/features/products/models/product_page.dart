@@ -33,12 +33,13 @@ class ProductPage {
     Object? json, {
     int requestedPage = 1,
     int requestedLimit = 20,
+    String? baseUrl,
   }) {
     final m = asMap(json) ?? const <String, dynamic>{};
     final raw = asList(m['items']);
     final items = <ProductItem>[];
     for (final r in raw) {
-      final p = ProductItem.fromJson(r);
+      final p = ProductItem.fromJson(r, baseUrl: baseUrl);
       if (p != null) items.add(p);
     }
     final pg = asMap(m['pagination']) ?? const <String, dynamic>{};

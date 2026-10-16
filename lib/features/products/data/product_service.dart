@@ -55,6 +55,7 @@ class ApiProductService implements ProductService {
       data,
       requestedPage: page,
       requestedLimit: limit,
+      baseUrl: _client.baseUrl,
     );
   }
 
@@ -74,7 +75,7 @@ class ApiProductService implements ProductService {
       final data = await _client.get(
         '/products/barcode/${Uri.encodeComponent(barcode)}',
       );
-      return ProductItem.fromJson(data);
+      return ProductItem.fromJson(data, baseUrl: _client.baseUrl);
     } on ApiException catch (e) {
       if (e.kind == ApiErrorKind.notFound) return null;
       rethrow;
@@ -86,7 +87,7 @@ class ApiProductService implements ProductService {
   Future<ProductItem?> findById(int id) async {
     try {
       final data = await _client.get('/products/$id');
-      return ProductItem.fromJson(data);
+      return ProductItem.fromJson(data, baseUrl: _client.baseUrl);
     } on ApiException catch (e) {
       if (e.kind == ApiErrorKind.notFound) return null;
       rethrow;

@@ -25,6 +25,7 @@ class OfflineProduct {
     this.barcode,
     this.unitType,
     this.categoryId,
+    this.imageUrl,
     this.active = true,
   });
 
@@ -48,6 +49,7 @@ class OfflineProduct {
   /// 'inclusive' | 'exclusive' | 'none' (server tax mode).
   final String taxMode;
   final int? categoryId;
+  final String? imageUrl;
   final bool active;
 
   bool get isPosSellable => active && sellingMode == 'PIECE';
@@ -73,6 +75,7 @@ class OfflineProduct {
           p.pricing.taxMode ??
           (p.pricing.taxIncluded == true ? 'inclusive' : 'exclusive'),
       categoryId: p.category?.id,
+      imageUrl: p.imageUrl,
     );
   }
 
@@ -89,6 +92,7 @@ class OfflineProduct {
     barcode: barcode,
     unitType: unitType,
     sellingMode: sellingMode,
+    imageUrl: imageUrl,
     category: categoryId == null ? null : CategoryRef(id: categoryId!),
     currentStock: stock,
     pricing: ProductPricing(
@@ -113,6 +117,7 @@ class OfflineProduct {
     'tax_percent': taxPercent,
     'tax_mode': taxMode,
     'category_id': categoryId,
+    'image_url': imageUrl,
     'active': active,
   };
 
@@ -136,6 +141,7 @@ class OfflineProduct {
       taxPercent: asDouble(m['tax_percent']) ?? 0,
       taxMode: asString(m['tax_mode']) ?? 'exclusive',
       categoryId: asInt(m['category_id']),
+      imageUrl: asString(m['image_url']),
       active: asBool(m['active']) ?? true,
     );
   }

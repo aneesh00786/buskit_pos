@@ -1,3 +1,4 @@
+import '../../../core/config/app_config.dart';
 import '../../../core/utils/json_read.dart';
 
 class CategoryRef {
@@ -122,7 +123,7 @@ class ProductItem {
 
   /// Rows without a usable numeric id cannot be added to a cart and are
   /// dropped by the caller.
-  static ProductItem? fromJson(Object? json) {
+  static ProductItem? fromJson(Object? json, {String? baseUrl}) {
     final m = asMap(json);
     if (m == null) return null;
     final id = asInt(m['id']);
@@ -139,20 +140,107 @@ class ProductItem {
       barcode: asString(m['barcode']),
       unitType: asString(m['unit_type']),
       sellingMode: (asString(m['selling_mode']) ?? 'PIECE').toUpperCase(),
-      imageUrl: _cleanUrl(asString(m['image_url'])),
+      imageUrl: cleanUrl(_extractImageString(m), baseUrl: baseUrl),
       category: CategoryRef.fromJson(m['category']),
       currentStock: asDouble(asMap(m['stock'])?['current_stock']),
       pricing: ProductPricing.fromJson(m['pricing']),
     );
   }
 
-  static String? _cleanUrl(String? u) {
+  static String? _extractImageString(Map<String, dynamic> m) {
+    final direct = asString(m['image_url']) ??
+        asString(m['image']) ??
+        asString(m['image_path']) ??
+        asString(m['product_image']) ??
+        asString(m['thumbnail']) ??
+        asString(m['img']) ??
+        asString(m['photo']);
+    if (direct != null && direct.trim().isNotEmpty) return direct.trim();
+
+    final images = m['images'] ?? m['media'] ?? m['photos'];
+    if (images is List && images.isNotEmpty) {
+      final first = images.first;
+      if (first is String && first.trim().isNotEmpty) return first.trim();
+      if (first is Map) {
+        final nested = asString(first['url']) ??
+            asString(first['src']) ??
+            asString(first['image_url']) ??
+            asString(first['image_path']) ??
+            asString(first['path']);
+        if (nested != null && nested.trim().isNotEmpty) return nested.trim();
+      }
+    }
+    return null;
+  }
+
+  /// Cleans and resolves a product image URL or relative file path to a fully
+  /// qualified web address.
+  static String? cleanUrl(String? u, {String? baseUrl}) {
     if (u == null) return null;
-    final t = u.trim();
-    if (t.isEmpty) return null;
-    final uri = Uri.tryParse(t);
-    return (uri != null && (uri.scheme == 'http' || uri.scheme == 'https'))
-        ? t
-        : null;
+    var t = u.trim();
+    if (t.isEmpty ||
+        t.toLowerCase() == 'null' ||
+        t.toLowerCase() == 'undefined') {
+      return null;
+    }
+
+    final lower = t.toLowerCase();
+    if (lower.startsWith('javascript:') ||
+        lower.startsWith('file:') ||
+        lower.startsWith('data:') ||
+        lower.startsWith('about:')) {
+      return null;
+    }
+
+    final rawBase = (baseUrl != null && baseUrl.trim().isNotEmpty)
+        ? baseUrl.trim()
+        : AppConfig.baseUrl;
+    final baseOrigin = rawBase.replaceAll(RegExp(r'/+$'), '');
+
+    // Already an absolute HTTP/HTTPS URL
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      if (lower.startsWith('http://')) {
+        // Upgrade to https for ATS / cleartext compliance
+        t = 'https://${t.substring(7)}';
+      }
+      if (t.contains('/uploads/')) {
+        final uri = Uri.tryParse(t);
+        if (uri != null &&
+            (RegExp(r'^\d+\.\d+\.\d+\.\d+').hasMatch(uri.host) ||
+                uri.host == 'localhost' ||
+                (uri.port != 80 && uri.port != 443 && uri.port != 0))) {
+          final uploadPath = t.split('/uploads/').last;
+          return '$baseOrigin/uploads/$uploadPath';
+        }
+      }
+      return t;
+    }
+
+    // Relative path validation: ensure it has an image extension or path prefix.
+    final hasImageExt = RegExp(
+      r'\.(jpg|jpeg|png|webp|gif|svg|bmp|avif)(\?.*)?$',
+      caseSensitive: false,
+    ).hasMatch(t);
+    final hasPathPrefix = t.startsWith('/') ||
+        lower.startsWith('uploads/') ||
+        lower.startsWith('product/') ||
+        lower.startsWith('products/') ||
+        lower.startsWith('media/') ||
+        lower.startsWith('images/');
+
+    if (!hasImageExt && !hasPathPrefix) {
+      return null;
+    }
+    if (t.contains(' ') && !t.contains('/')) {
+      return null;
+    }
+
+    // Relative path or filename: normalize and mount under uploads/
+    var path = t.replaceAll(RegExp(r'^/+'), '');
+    if (path.toLowerCase().startsWith('uploads/')) {
+      path = path.substring(8).replaceAll(RegExp(r'^/+'), '');
+    }
+
+    return '$baseOrigin/uploads/$path';
   }
 }

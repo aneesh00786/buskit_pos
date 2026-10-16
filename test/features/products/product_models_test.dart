@@ -94,6 +94,43 @@ void main() {
         isNull,
       );
     });
+
+    test('resolves relative image URLs and alternative image keys', () {
+      expect(
+        ProductItem.fromJson(
+          {'id': 1, 'image_url': 'product/1686914853650.jpg'},
+          baseUrl: 'https://test.thrivewoo.com',
+        )!.imageUrl,
+        'https://test.thrivewoo.com/uploads/product/1686914853650.jpg',
+      );
+      expect(
+        ProductItem.fromJson(
+          {'id': 2, 'image_url': '/uploads/product/sample.png'},
+          baseUrl: 'https://test.thrivewoo.com',
+        )!.imageUrl,
+        'https://test.thrivewoo.com/uploads/product/sample.png',
+      );
+      expect(
+        ProductItem.fromJson(
+          {'id': 3, 'image_path': 'product/item.webp'},
+          baseUrl: 'https://test.thrivewoo.com',
+        )!.imageUrl,
+        'https://test.thrivewoo.com/uploads/product/item.webp',
+      );
+      expect(
+        ProductItem.fromJson(
+          {'id': 4, 'product_image': 'uploads/item.jpg'},
+          baseUrl: 'https://test.thrivewoo.com',
+        )!.imageUrl,
+        'https://test.thrivewoo.com/uploads/item.jpg',
+      );
+      expect(
+        ProductItem.fromJson(
+          {'id': 5, 'image_url': 'http://test.thrivewoo.com/uploads/item.png'},
+        )!.imageUrl,
+        'https://test.thrivewoo.com/uploads/item.png',
+      );
+    });
   });
 
   group('ProductPage.fromJson', () {
