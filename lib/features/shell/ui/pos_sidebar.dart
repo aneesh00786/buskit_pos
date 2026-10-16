@@ -143,8 +143,10 @@ class PosSidebar extends StatelessWidget {
     this.onSignOut,
     this.onCloseShift,
     this.active = PosSection.sales,
+    this.showFooter,
   });
 
+  final bool? showFooter;
   final bool collapsed;
   final String brandTitle;
   final String? brandSubtitle;
@@ -180,6 +182,7 @@ class PosSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final businessType = _sessionBusinessType(context);
     final t = PosTokens.of(context);
+    final shouldShowFooter = showFooter ?? !collapsed;
     return Semantics(
       container: true,
       label: 'Navigation',
@@ -197,79 +200,105 @@ class PosSidebar extends StatelessWidget {
               ),
               const SizedBox(height: PosTokens.s8),
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: PosTokens.s12,
-                  ),
-                  children: [
-                    for (final item in _items.where(
-                      (i) =>
-                          PosModules.isAvailable(
-                            moduleOf(i.section),
-                            businessType,
-                          ) &&
-                          (i.section != PosSection.paymentExceptions ||
-                              onOpenPaymentExceptions != null) &&
-                          (i.section != PosSection.reports ||
-                              onOpenReports != null),
-                    ))
-                      _NavTile(
-                        item: item,
-                        collapsed: collapsed,
-                        selected: item.section == active,
-                        badge: item.section == PosSection.orders
-                            ? heldCount
-                            : null,
-                        onTap: switch (item.section) {
-                          PosSection.orders => onOpenOrders,
-                          PosSection.history => onOpenHistory,
-                          PosSection.customers => onOpenCustomers,
-                          PosSection.inventory => onOpenInventory,
-                          PosSection.promotions => onOpenPromotions,
-                          PosSection.analytics => onOpenAnalytics,
-                          PosSection.reports => onOpenReports,
-                          PosSection.settings => onOpenSettings,
-                          PosSection.paymentExceptions =>
-                            onOpenPaymentExceptions,
-                          _ => null,
-                        },
-                        tooltip: _tooltip(item),
-                      ),
-                  ],
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final availableHeight = constraints.maxHeight;
+                    final navItems = [
+                      for (final item in _items.where(
+                        (i) =>
+                            PosModules.isAvailable(
+                              moduleOf(i.section),
+                              businessType,
+                            ) &&
+                            (i.section != PosSection.paymentExceptions ||
+                                onOpenPaymentExceptions != null) &&
+                            (i.section != PosSection.reports ||
+                                onOpenReports != null),
+                      ))
+                        _NavTile(
+                          item: item,
+                          collapsed: collapsed,
+                          selected: item.section == active,
+                          badge: item.section == PosSection.orders
+                              ? heldCount
+                              : null,
+                          onTap: switch (item.section) {
+                            PosSection.orders => onOpenOrders,
+                            PosSection.history => onOpenHistory,
+                            PosSection.customers => onOpenCustomers,
+                            PosSection.inventory => onOpenInventory,
+                            PosSection.promotions => onOpenPromotions,
+                            PosSection.analytics => onOpenAnalytics,
+                            PosSection.reports => onOpenReports,
+                            PosSection.settings => onOpenSettings,
+                            PosSection.paymentExceptions =>
+                              onOpenPaymentExceptions,
+                            _ => null,
+                          },
+                          tooltip: _tooltip(item),
+                        ),
+                    ];
+
+                    if (navItems.isEmpty) return const SizedBox.shrink();
+
+                    const itemMinHeight = 54.0;
+                    final totalMinHeight = navItems.length * itemMinHeight;
+
+                    if (availableHeight >= totalMinHeight) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: PosTokens.s12,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: navItems,
+                        ),
+                      );
+                    } else {
+                      return ListView(
+                        physics: const ClampingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: PosTokens.s12,
+                        ),
+                        children: navItems,
+                      );
+                    }
+                  },
                 ),
               ),
-              Divider(color: t.onSidebar.withValues(alpha: 0.14)),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  PosTokens.s12,
-                  PosTokens.s4,
-                  PosTokens.s12,
-                  PosTokens.s12,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _FooterTile(
-                      icon: Icons.help_outline,
-                      label: 'Help',
-                      collapsed: collapsed,
-                      onTap: onHelp,
-                    ),
-                    if (onCloseShift != null)
+              if (shouldShowFooter) ...[
+                Divider(color: t.onSidebar.withValues(alpha: 0.14)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    PosTokens.s12,
+                    PosTokens.s4,
+                    PosTokens.s12,
+                    PosTokens.s12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                       _FooterTile(
-                        icon: Icons.lock_clock,
-                        label: 'Close shift',
+                        icon: Icons.help_outline,
+                        label: 'Help',
                         collapsed: collapsed,
-                        onTap: onCloseShift,
+                        onTap: onHelp,
                       ),
-                    _FooterTile(
-                      icon: Icons.logout,
-                      label: 'Sign out',
-                      collapsed: collapsed,
-                      onTap: onSignOut,
-                    ),
-                    if (!collapsed &&
-                        (deviceLabel != null || appVersion != null))
+                      if (onCloseShift != null)
+                        _FooterTile(
+                          icon: Icons.lock_clock,
+                          label: 'Close shift',
+                          collapsed: collapsed,
+                          onTap: onCloseShift,
+                        ),
+                      _FooterTile(
+                        icon: Icons.logout,
+                        label: 'Sign out',
+                        collapsed: collapsed,
+                        onTap: onSignOut,
+                      ),
+                      if (!collapsed &&
+                          (deviceLabel != null || appVersion != null))
                       Padding(
                         padding: const EdgeInsets.fromLTRB(
                           PosTokens.s12,
@@ -304,6 +333,7 @@ class PosSidebar extends StatelessWidget {
                   ],
                 ),
               ),
+            ],
             ],
           ),
         ),
@@ -504,7 +534,7 @@ class _FooterTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Tooltip(
-        message: label,
+        message: collapsed ? label : '',
         child: Semantics(
           button: true,
           label: label,

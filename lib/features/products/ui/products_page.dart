@@ -451,6 +451,7 @@ class _ProductsPageState extends State<ProductsPage>
               ],
               sidebarBuilder: (collapsed) => PosSidebar(
                 collapsed: collapsed,
+                showFooter: !collapsed,
                 brandTitle: 'ThriveWoo POS',
                 brandSubtitle: 'Point of sale',
                 deviceLabel: session.deviceIdentifier,
@@ -567,6 +568,39 @@ class _ProductsPageState extends State<ProductsPage>
                     ? null
                     : () => showReports(context),
               ),
+              cartHeader: layout.hasSideCart
+                  ? _CartHeader(
+                      onHelp: () =>
+                          _showHelp(context, session.deviceIdentifier),
+                      onCloseShift: session.isDenied('shifts.view')
+                          ? null
+                          : () async {
+                              var unsynced = 0;
+                              try {
+                                unsynced =
+                                    (await readOfflineServices(context)?.storage
+                                                .getPendingSales() ??
+                                            const [])
+                                        .length;
+                              } catch (_) {}
+                              if (!context.mounted) return;
+                              showShiftClose(
+                                context,
+                                cartHasItems: cart.hasActiveDraftWithItems,
+                                unsyncedOfflineSales: unsynced,
+                                onClosed: (result) {
+                                  readOfflineServices(context)?.cache
+                                      .markShiftClosed(result.shiftId);
+                                  session.logoutStaff(
+                                    notice:
+                                        'Shift #${result.shiftId} closed. Sign in to open the next shift.',
+                                  );
+                                },
+                              );
+                            },
+                      onSignOut: session.logoutStaff,
+                    )
+                  : null,
               banner: OfflineBanner(reachable: client?.reachable),
               body: _Catalog(
                 layout: layout,
@@ -982,3 +1016,73 @@ class _HeldSalesAction extends StatelessWidget {
     );
   }
 }
+
+class _CartHeader extends StatelessWidget {
+  const _CartHeader({
+    required this.onHelp,
+    required this.onCloseShift,
+    required this.onSignOut,
+  });
+
+  final VoidCallback? onHelp;
+  final VoidCallback? onCloseShift;
+  final VoidCallback? onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = PosTokens.of(context);
+    return Container(
+      height: 69,
+      padding: const EdgeInsets.symmetric(
+        horizontal: PosTokens.s12,
+        vertical: PosTokens.s8,
+      ),
+      decoration: BoxDecoration(
+        color: t.surface,
+        border: Border(
+          bottom: BorderSide(color: t.border),
+          left: BorderSide(color: t.border),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (onHelp != null)
+            IconButton(
+              key: const Key('cart-header-help'),
+              tooltip: 'Help',
+              constraints: const BoxConstraints(
+                minWidth: 44,
+                minHeight: 44,
+              ),
+              onPressed: onHelp,
+              icon: const Icon(Icons.help_outline),
+            ),
+          if (onCloseShift != null)
+            IconButton(
+              key: const Key('cart-header-close-shift'),
+              tooltip: 'Close shift',
+              constraints: const BoxConstraints(
+                minWidth: 44,
+                minHeight: 44,
+              ),
+              onPressed: onCloseShift,
+              icon: const Icon(Icons.lock_clock),
+            ),
+          if (onSignOut != null)
+            IconButton(
+              key: const Key('cart-header-sign-out'),
+              tooltip: 'Sign out',
+              constraints: const BoxConstraints(
+                minWidth: 44,
+                minHeight: 44,
+              ),
+              onPressed: onSignOut,
+              icon: const Icon(Icons.logout),
+            ),
+        ],
+      ),
+    );
+  }
+}
+

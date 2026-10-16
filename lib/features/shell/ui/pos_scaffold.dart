@@ -24,6 +24,7 @@ class PosScaffold extends StatelessWidget {
     this.bottomBar,
     this.summary,
     this.banner,
+    this.cartHeader,
   });
 
   final PosLayoutClass layout;
@@ -43,6 +44,9 @@ class PosScaffold extends StatelessWidget {
   /// A full-width notice shown above [body] in every layout (e.g. the
   /// offline banner). Should size itself to nothing when not needed.
   final Widget? banner;
+
+  /// Header shown at the top of the current-sale section (non-compact layouts).
+  final Widget? cartHeader;
 
   @override
   Widget build(BuildContext context) {
@@ -105,14 +109,17 @@ class PosScaffold extends StatelessWidget {
                   ),
                   SizedBox(
                     width: layout.sideCartWidth,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        0,
-                        PosTokens.s12,
-                        PosTokens.s12,
-                        PosTokens.s12,
-                      ),
-                      child: cart,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ?cartHeader,
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(PosTokens.s12),
+                            child: cart,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (layout.hasSummary && summary != null)
